@@ -1,0 +1,5 @@
+**build
+**.cache
+.clangd
+.env
+compile_commands.json
