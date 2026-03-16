@@ -1,11 +1,53 @@
 #include <spear/spear.hh>
 
+#include <nexilis/client/packet.hh>
+#include <nexilis/protocol_manager.hh>
+#include <nexilis/tcp_client.hh>
+
+#include <atomic>
 #include <iostream>
+#include <thread>
 
 int main()
 {
     const std::string window_name = "Spear application-vulkan";
     const spear::BaseWindow::Size window_size = {820, 640};
+
+    nexilis::ProtocolManager protocolManager;
+    nexilis::TCPClient nexilisClient(&protocolManager, "127.0.0.1", "password");
+
+    std::atomic<bool> nexilisReady = false;
+
+    // clang-format off
+    std::thread nexilisThread([&]()
+    {
+        nexilisClient.start();
+
+        nexilisClient.sendMessage(nexilis::client::Packet::Get::clientId());
+        while (!nexilisClient.getClientAPI().isInitialized())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        nexilisClient.sendMessage(nexilis::client::Packet::Info::rooms());
+
+        std::promise<void> roomsPromise;
+        auto roomsFuture = roomsPromise.get_future();
+        auto waitFn = nexilisClient.getClientAPI().waitUntilRoomsCreated(roomsPromise);
+        waitFn();
+        roomsFuture.wait();
+
+        auto& rooms = nexilisClient.getClientAPI().getActiveRooms();
+        if (!rooms.empty())
+        {
+            nexilisClient.sendMessage(
+                nexilis::client::Packet::Room::Management::join(rooms.front().getId()));
+        }
+
+        nexilisReady = true;
+    });
+    // clang-format on
+    nexilisThread.detach();
 
     spear::VulkanWindow window(window_name, window_size);
     auto w_size = window.getSize();
@@ -15,14 +57,14 @@ int main()
     spear::MovementController movement_controller(camera);
     spear::SceneManager scene_manager;
 
-    namespace bullet = spear::physics::bullet;
-    namespace vulkan = spear::rendering::vulkan;
+    namespace blt = spear::physics::bullet;
+    namespace vk = spear::rendering::vulkan;
 
-    bullet::World bullet_world;
+    blt::World bullet_world;
     auto shared_bullet_world = std::make_shared<btDiscreteDynamicsWorld>(*bullet_world.getDynamicsWorld());
     auto default_size = glm::vec3(1.0f, 1.0f, 1.0f);
 
-    vulkan::Renderer renderer(window);
+    vk::Renderer renderer(window);
     renderer.init();
     renderer.setBackgroundColor(0.1f, 0.1f, 0.15f, 1.0f);
     renderer.setCamera(&camera);
@@ -31,24 +73,24 @@ int main()
     VkPhysicalDevice physDevice = renderer.getPhysicalDevice();
 
     // --- Descriptor pool + layout (owned here, lifetime matches the app) ---
-    VkDescriptorPool descriptorPool = vulkan::Texture::createDescriptorPool(device, 8);
-    VkDescriptorSetLayout descriptorSetLayout = vulkan::Texture::createDescriptorSetLayout(device);
+    VkDescriptorPool descriptorPool = vk::Texture::createDescriptorPool(device, 8);
+    VkDescriptorSetLayout descriptorSetLayout = vk::Texture::createDescriptorSetLayout(device);
 
     // Initialize the textured pipeline using the sampler layout.
     renderer.initializeTexturedPipeline(descriptorSetLayout);
 
     // --- Texture ---
-    auto texture = std::make_shared<vulkan::STBTexture>(
+    auto texture = std::make_shared<vk::STBTexture>(
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
     texture->loadFromFile(spear::getAssetPath("wallnut.jpg"));
 
     // clang-format off
     auto scene_objects = spear::Scene::Container{
-        std::make_shared<vulkan::TexturedCube>(
+        std::make_shared<vk::TexturedCube>(
             device, physDevice,
             texture,
             descriptorPool, descriptorSetLayout,
-            bullet::ObjectData(shared_bullet_world, 1.0f, glm::vec3(1.5f, 0.0f, 0.0f), default_size)),
+            blt::ObjectData(shared_bullet_world, 1.0f, glm::vec3(1.5f, 0.0f, 0.0f), default_size)),
     };
     // clang-format on
 
@@ -96,6 +138,13 @@ int main()
         renderer.render();
 
         bullet_world.stepSimulation(1.0f / 60.f);
+
+        if (nexilisReady && nexilisClient.getClientAPI().clientInRoom())
+        {
+            auto pos = camera.getPosition();
+            nexilisClient.sendMessage(
+                    nexilis::client::Packet::Room::Player3D::position({pos.x, pos.y, pos.z}));
+        }
 
         window.update();
 
