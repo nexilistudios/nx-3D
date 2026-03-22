@@ -7,11 +7,14 @@
 #include <atomic>
 #include <iostream>
 #include <thread>
+#include <unordered_map>
 
 int main()
 {
-    const std::string window_name = "Spear application-vulkan";
+    const std::string window_name = "nx_3D game";
     const spear::BaseWindow::Size window_size = {820, 640};
+
+    using packet = nexilis::client::Packet;
 
     nexilis::ProtocolManager protocolManager;
     nexilis::TCPClient nexilisClient(&protocolManager, "127.0.0.1", "password");
@@ -23,13 +26,13 @@ int main()
     {
         nexilisClient.start();
 
-        nexilisClient.sendMessage(nexilis::client::Packet::Get::clientId());
+        nexilisClient.sendMessage(packet::Get::clientId());
         while (!nexilisClient.getClientAPI().isInitialized())
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
-        nexilisClient.sendMessage(nexilis::client::Packet::Info::rooms());
+        nexilisClient.sendMessage(packet::Info::rooms());
 
         std::promise<void> roomsPromise;
         auto roomsFuture = roomsPromise.get_future();
@@ -41,7 +44,7 @@ int main()
         if (!rooms.empty())
         {
             nexilisClient.sendMessage(
-                nexilis::client::Packet::Room::Management::join(rooms.front().getId()));
+                packet::Room::Management::join(rooms.front().getId()));
         }
 
         nexilisReady = true;
@@ -66,7 +69,7 @@ int main()
 
     vk::Renderer renderer(window);
     renderer.init();
-    renderer.setBackgroundColor(0.1f, 0.1f, 0.15f, 1.0f);
+    renderer.setBackgroundColor(0.1f, 0.5f, 0.85f, 1.0f);
     renderer.setCamera(&camera);
 
     VkDevice device = renderer.getDevice();
@@ -86,6 +89,14 @@ int main()
 
     // clang-format off
     auto scene_objects = spear::Scene::Container{
+        // Player
+        std::make_shared<vk::OBJModel>(
+        device, physDevice,
+        "/cube_pets/Models/OBJ-format/animal-bunny.obj", "/cube_pets/Models/OBJ-format/animal-bunny.mtl",
+        texture,
+        descriptorPool, descriptorSetLayout,
+        blt::ObjectData(shared_bullet_world, 0.0f, glm::vec3(0.0f, 0.0f, -7.0f), default_size)),
+
         std::make_shared<vk::TexturedCube>(
             device, physDevice,
             texture,
@@ -127,6 +138,10 @@ int main()
     });
     // clang-format on
 
+    renderer.setScene(scene_manager.getCurrentScene());
+
+    std::unordered_map<uint64_t, std::shared_ptr<vk::OBJModel>> remote_players;
+
     while (true)
     {
         float delta_time = time_interface.getDeltaTime();
@@ -134,16 +149,60 @@ int main()
 
         eventHandler.handleEvents(movement_controller, delta_time);
 
-        renderer.setScene(scene_manager.getCurrentScene());
         renderer.render();
 
         bullet_world.stepSimulation(1.0f / 60.f);
 
+        auto pos = camera.getPosition();
+        scene_objects[0]->translate(pos);
+
         if (nexilisReady && nexilisClient.getClientAPI().clientInRoom())
         {
-            auto pos = camera.getPosition();
             nexilisClient.sendMessage(
-                    nexilis::client::Packet::Room::Player3D::position({pos.x, pos.y, pos.z}));
+                    packet::Room::Player3D::position({pos.x, pos.y, pos.z}));
+
+            auto& api = nexilisClient.getClientAPI();
+            auto* room = api.getRoom(api.clientRoomId());
+            if (room)
+            {
+                auto my_id = api.getClientId();
+
+                for (auto& client : room->getClients())
+                {
+                    auto id = client.getId();
+                    if (id == my_id)
+                        continue;
+
+                    if (remote_players.find(id) == remote_players.end())
+                    {
+                        auto obj = std::make_shared<vk::OBJModel>(
+                                device, physDevice,
+                                "/cube_pets/Models/OBJ-format/animal-bunny.obj",
+                                "/cube_pets/Models/OBJ-format/animal-bunny.mtl",
+                                texture, descriptorPool, descriptorSetLayout,
+                                blt::ObjectData(shared_bullet_world, 0.0f,
+                                                glm::vec3(0.f, 0.f, 0.f), default_size));
+                        remote_players[id] = obj;
+                        scene_manager.getCurrentScene()->addObject(obj);
+                    }
+                }
+
+                std::vector<uint64_t> to_remove;
+                for (auto& [id, obj] : remote_players)
+                {
+                    auto* session = api.getClientFromRoom(id);
+                    if (!session)
+                    {
+                        scene_manager.getCurrentScene()->removeObject(obj->getId());
+                        to_remove.push_back(id);
+                        continue;
+                    }
+                    auto p = session->getPosition3D();
+                    obj->translate({p.x, p.y, p.z});
+                }
+                for (auto id : to_remove)
+                    remote_players.erase(id);
+            }
         }
 
         window.update();
