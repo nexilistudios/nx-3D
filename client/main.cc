@@ -26,13 +26,13 @@ int main()
     {
         nexilisClient.start();
 
-        nexilisClient.sendMessage(packet::Get::clientId());
+        nexilisClient.sendMessage(packet::Get::General::clientId());
         while (!nexilisClient.getClientAPI().isInitialized())
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
-        nexilisClient.sendMessage(packet::Info::rooms());
+        nexilisClient.sendMessage(packet::Get::Info::rooms());
 
         std::promise<void> roomsPromise;
         auto roomsFuture = roomsPromise.get_future();
@@ -153,13 +153,15 @@ int main()
 
         bullet_world.stepSimulation(1.0f / 60.f);
 
-        auto pos = camera.getPosition();
-        scene_objects[0]->translate(pos);
+        auto cam_pos = camera.getPosition();
+        auto pos = nexilis::Vector3f({cam_pos.x, cam_pos.y, cam_pos.z});
+
+        scene_objects[0]->translate(cam_pos);
 
         if (nexilisReady && nexilisClient.getClientAPI().clientInRoom())
         {
             nexilisClient.sendMessage(
-                    packet::Room::Player3D::position({pos.x, pos.y, pos.z}));
+                    packet::Room::Player3D::position(pos));
 
             auto& api = nexilisClient.getClientAPI();
             auto* room = api.getRoom(api.clientRoomId());
