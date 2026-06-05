@@ -89,14 +89,6 @@ int main()
 
     // clang-format off
     auto scene_objects = spear::Scene::Container{
-        // Player
-        std::make_shared<vk::OBJModel>(
-        device, physDevice,
-        "/cube_pets/Models/OBJ-format/animal-bunny.obj", "/cube_pets/Models/OBJ-format/animal-bunny.mtl",
-        texture,
-        descriptorPool, descriptorSetLayout,
-        blt::ObjectData(shared_bullet_world, 0.0f, glm::vec3(0.0f, 0.0f, -7.0f), default_size)),
-
         std::make_shared<vk::TexturedCube>(
             device, physDevice,
             texture,
@@ -140,7 +132,7 @@ int main()
 
     renderer.setScene(scene_manager.getCurrentScene());
 
-    std::unordered_map<uint64_t, std::shared_ptr<vk::OBJModel>> remote_players;
+    std::unordered_map<uint64_t, std::shared_ptr<vk::TexturedCube>> remote_players;
 
     while (true)
     {
@@ -155,8 +147,6 @@ int main()
 
         auto cam_pos = camera.getPosition();
         auto pos = nexilis::Vector3f({cam_pos.x, cam_pos.y, cam_pos.z});
-
-        scene_objects[0]->translate(cam_pos);
 
         if (nexilisReady && nexilisClient.getClientAPI().clientInRoom())
         {
@@ -177,10 +167,8 @@ int main()
 
                     if (remote_players.find(id) == remote_players.end())
                     {
-                        auto obj = std::make_shared<vk::OBJModel>(
+                        auto obj = std::make_shared<vk::TexturedCube>(
                                 device, physDevice,
-                                "/cube_pets/Models/OBJ-format/animal-bunny.obj",
-                                "/cube_pets/Models/OBJ-format/animal-bunny.mtl",
                                 texture, descriptorPool, descriptorSetLayout,
                                 blt::ObjectData(shared_bullet_world, 0.0f,
                                                 glm::vec3(0.f, 0.f, 0.f), default_size));
@@ -200,7 +188,7 @@ int main()
                         continue;
                     }
                     auto p = session->getPosition3D();
-                    obj->translate({p.x, p.y, p.z});
+                    obj->setPosition({p.x, p.y, p.z});
                 }
                 for (auto id : to_remove)
                     remote_players.erase(id);
