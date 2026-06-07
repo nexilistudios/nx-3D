@@ -89,11 +89,14 @@ int main()
 
     // clang-format off
     auto scene_objects = spear::Scene::Container{
-        std::make_shared<vk::TexturedCube>(
+        std::make_shared<vk::OBJModel>(
             device, physDevice,
+            "/cube_pets/Models/OBJ-format/animal-bunny.obj", "/cube_pets/Models/OBJ-format/animal-bunny.mtl",
             texture,
             descriptorPool, descriptorSetLayout,
-            blt::ObjectData(shared_bullet_world, 1.0f, glm::vec3(1.5f, 0.0f, 0.0f), default_size)),
+            blt::ObjectData(shared_bullet_world, 0.0f,
+            glm::vec3(0.0f, 0.0f, -7.0f), default_size)
+        )
     };
     // clang-format on
 
