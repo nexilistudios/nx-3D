@@ -4,6 +4,7 @@
 #include <nexilis/protocol_manager.hh>
 #include <nexilis/tcp_client.hh>
 
+#include <algorithm>
 #include <atomic>
 #include <iostream>
 #include <thread>
@@ -157,44 +158,47 @@ int main()
                     packet::Room::Player3D::position(pos));
 
             auto& api = nexilisClient.getClientAPI();
-            auto* room = api.getRoom(api.clientRoomId());
-            if (room)
+            auto room_id = api.clientRoomId();
+            auto my_id = api.getClientId();
+
+            auto players = api.getRemotePlayersSnapshot(room_id, my_id);
+
+            for (auto& player : players)
             {
-                auto my_id = api.getClientId();
-
-                for (auto& client : room->getClients())
+                if (remote_players.find(player.id) == remote_players.end())
                 {
-                    auto id = client.getId();
-                    if (id == my_id)
-                        continue;
-
-                    if (remote_players.find(id) == remote_players.end())
-                    {
-                        auto obj = std::make_shared<vk::TexturedCube>(
-                                device, physDevice,
-                                texture, descriptorPool, descriptorSetLayout,
-                                blt::ObjectData(shared_bullet_world, 0.0f,
-                                                glm::vec3(0.f, 0.f, 0.f), default_size));
-                        remote_players[id] = obj;
-                        scene_manager.getCurrentScene()->addObject(obj);
-                    }
+                    auto obj = std::make_shared<vk::TexturedCube>(
+                            device, physDevice,
+                            texture, descriptorPool, descriptorSetLayout,
+                            blt::ObjectData(shared_bullet_world, 0.0f,
+                                            glm::vec3(0.f, 0.f, 0.f), default_size));
+                    remote_players[player.id] = obj;
+                    scene_manager.getCurrentScene()->addObject(obj);
                 }
+            }
 
-                std::vector<uint64_t> to_remove;
-                for (auto& [id, obj] : remote_players)
+            std::vector<uint64_t> to_remove;
+            for (auto& [id, obj] : remote_players)
+            {
+                auto it = std::find_if(players.begin(), players.end(),
+                                       [id](const auto& p) { return p.id == id; });
+                if (it == players.end())
                 {
-                    auto* session = api.getClientFromRoom(id);
-                    if (!session)
-                    {
-                        scene_manager.getCurrentScene()->removeObject(obj->getId());
-                        to_remove.push_back(id);
-                        continue;
-                    }
-                    auto p = session->getPosition3D();
-                    obj->setPosition({p.x, p.y, p.z});
+                    scene_manager.getCurrentScene()->removeObject(obj->getId());
+                    to_remove.push_back(id);
                 }
-                for (auto id : to_remove)
-                    remote_players.erase(id);
+            }
+            for (auto id : to_remove)
+                remote_players.erase(id);
+
+            for (auto& player : players)
+            {
+                auto it = remote_players.find(player.id);
+                if (it != remote_players.end())
+                {
+                    it->second->setPosition(
+                            {player.x, player.y, player.z});
+                }
             }
         }
 

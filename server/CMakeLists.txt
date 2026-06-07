@@ -4,7 +4,7 @@ project(nx-3D-server)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_BUILD_TYPE Debug)
 
-set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/../../nexilis/nexilis/build")
+set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/../nexilis/nexilis/build")
 find_package(Nexilis REQUIRED CONFIG)
 
 add_executable(nx-3D-server server.cc)
