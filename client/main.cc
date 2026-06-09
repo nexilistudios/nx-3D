@@ -77,7 +77,7 @@ int main()
     VkPhysicalDevice physDevice = renderer.getPhysicalDevice();
 
     // --- Descriptor pool + layout (owned here, lifetime matches the app) ---
-    VkDescriptorPool descriptorPool = vk::Texture::createDescriptorPool(device, 8);
+    VkDescriptorPool descriptorPool = vk::Texture::createDescriptorPool(device, 128);
     VkDescriptorSetLayout descriptorSetLayout = vk::Texture::createDescriptorSetLayout(device);
 
     // Initialize the textured pipeline using the sampler layout.
@@ -87,6 +87,10 @@ int main()
     auto texture = std::make_shared<vk::STBTexture>(
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
     texture->loadFromFile(spear::getAssetPath("wallnut.jpg"));
+
+    auto niiloTexture = std::make_shared<vk::STBTexture>(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
+    niiloTexture->loadFromFile(spear::getAssetPath("niilo.jpg"));
 
     // clang-format off
     auto scene_objects = spear::Scene::Container{
@@ -116,6 +120,20 @@ int main()
         exit(0);
     });
 
+    eventHandler.handleInput(SDLK_P, [&nexilisReady, &nexilisClient, &camera]()
+    {
+        if (nexilisReady && nexilisClient.getClientAPI().clientInRoom())
+        {
+            auto cam_pos = camera.getPosition();
+            auto cam_front = camera.getFront();
+            glm::vec3 spawn_pos = cam_pos + cam_front;
+            auto pos = nexilis::Vector3f({spawn_pos.x, spawn_pos.y, spawn_pos.z});
+            auto dim = nexilis::Vector3f({1.0f, 1.0f, 1.0f});
+            nexilisClient.sendMessage(
+                    packet::Room::Object3D::create(pos, dim, ""));
+        }
+    });
+
     eventHandler.registerCallback(SDL_EVENT_QUIT, [&device, &descriptorPool, &descriptorSetLayout](const SDL_Event&)
     {
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
@@ -137,6 +155,7 @@ int main()
     renderer.setScene(scene_manager.getCurrentScene());
 
     std::unordered_map<uint64_t, std::shared_ptr<vk::TexturedCube>> remote_players;
+    std::unordered_map<uint64_t, std::shared_ptr<vk::TexturedCube>> remote_objects;
 
     while (true)
     {
@@ -181,7 +200,8 @@ int main()
             for (auto& [id, obj] : remote_players)
             {
                 auto it = std::find_if(players.begin(), players.end(),
-                                       [id](const auto& p) { return p.id == id; });
+                                       [id](const auto& p)
+                                       { return p.id == id; });
                 if (it == players.end())
                 {
                     scene_manager.getCurrentScene()->removeObject(obj->getId());
@@ -198,6 +218,46 @@ int main()
                 {
                     it->second->setPosition(
                             {player.x, player.y, player.z});
+                }
+            }
+
+            auto objects = api.getRemoteObjects3DSnapshot(room_id);
+
+            for (auto& obj : objects)
+            {
+                if (remote_objects.find(obj.id) == remote_objects.end())
+                {
+                    auto cube = std::make_shared<vk::TexturedCube>(
+                            device, physDevice,
+                            niiloTexture, descriptorPool, descriptorSetLayout,
+                            blt::ObjectData(shared_bullet_world, 0.0f,
+                                            glm::vec3(0.f, 0.f, 0.f), default_size));
+                    remote_objects[obj.id] = cube;
+                    scene_manager.getCurrentScene()->addObject(cube);
+                }
+            }
+
+            std::vector<uint64_t> objects_to_remove;
+            for (auto& [id, cube] : remote_objects)
+            {
+                auto it = std::find_if(objects.begin(), objects.end(),
+                                       [id](const auto& o)
+                                       { return o.id == id; });
+                if (it == objects.end())
+                {
+                    scene_manager.getCurrentScene()->removeObject(cube->getId());
+                    objects_to_remove.push_back(id);
+                }
+            }
+            for (auto id : objects_to_remove)
+                remote_objects.erase(id);
+
+            for (auto& obj : objects)
+            {
+                auto it = remote_objects.find(obj.id);
+                if (it != remote_objects.end())
+                {
+                    it->second->setPosition({obj.x, obj.y, obj.z});
                 }
             }
         }
