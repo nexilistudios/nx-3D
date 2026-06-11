@@ -18,13 +18,21 @@ int main()
     auth.setPassphrase("password");
     auth.setRootPassword("root");
 
-    // Create a room.
-    auto room =
-            Room(nexilis::RoomData(0, "ExampleRoom", nexilis::Util::getRandomUint64(),
+    // Some initial rooms.
+    auto room1 =
+            Room(nexilis::RoomData(0, "Room 1", nexilis::Util::getRandomUint64(),
                                    nexilis::RoomData::Context::_3D));
-    auto id = room.getId();
-    RoomStorage::add(std::move(room));
-    assert(RoomStorage::contains(id));
+    RoomStorage::add(std::move(room1));
+
+    auto room2 =
+            Room(nexilis::RoomData(0, "Room 2", nexilis::Util::getRandomUint64(),
+                                   nexilis::RoomData::Context::_3D));
+    RoomStorage::add(std::move(room2));
+
+    auto room3 =
+            Room(nexilis::RoomData(0, "Room 3", nexilis::Util::getRandomUint64(),
+                                   nexilis::RoomData::Context::_3D));
+    RoomStorage::add(std::move(room3));
 
     nexilis::ProtocolManager protocolManager;
 

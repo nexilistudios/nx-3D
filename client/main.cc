@@ -7,8 +7,29 @@
 #include <algorithm>
 #include <atomic>
 #include <iostream>
+#include <mutex>
 #include <thread>
 #include <unordered_map>
+#include <vector>
+
+namespace
+{
+
+enum class State
+{
+    Connecting,
+    Lobby,
+    Joining,
+    Game
+};
+
+struct RoomInfo
+{
+    uint64_t id;
+    std::string name;
+};
+
+} // namespace
 
 int main()
 {
@@ -21,6 +42,8 @@ int main()
     nexilis::TCPClient nexilisClient(&protocolManager, "127.0.0.1", "password");
 
     std::atomic<bool> nexilisReady = false;
+    std::mutex roomsMutex;
+    std::vector<RoomInfo> availableRooms;
 
     // clang-format off
     std::thread nexilisThread([&]()
@@ -41,11 +64,13 @@ int main()
         waitFn();
         roomsFuture.wait();
 
-        auto& rooms = nexilisClient.getClientAPI().getActiveRooms();
-        if (!rooms.empty())
         {
-            nexilisClient.sendMessage(
-                packet::Room::Management::join(rooms.front().getId()));
+            std::lock_guard<std::mutex> lock(roomsMutex);
+            auto& rooms = nexilisClient.getClientAPI().getActiveRooms();
+            for (auto& room : rooms)
+            {
+                availableRooms.push_back({room.getId(), room.getName()});
+            }
         }
 
         nexilisReady = true;
@@ -70,20 +95,20 @@ int main()
 
     vk::Renderer renderer(window);
     renderer.init();
-    renderer.setBackgroundColor(0.1f, 0.5f, 0.85f, 1.0f);
+    renderer.setBackgroundColor(0.1f, 0.1f, 0.2f, 1.0f);
     renderer.setCamera(&camera);
 
     VkDevice device = renderer.getDevice();
     VkPhysicalDevice physDevice = renderer.getPhysicalDevice();
 
-    // --- Descriptor pool + layout (owned here, lifetime matches the app) ---
-    VkDescriptorPool descriptorPool = vk::Texture::createDescriptorPool(device, 128);
+    // --- Descriptor pool + layout ---
+    VkDescriptorPool descriptorPool = vk::Texture::createDescriptorPool(device, 256);
     VkDescriptorSetLayout descriptorSetLayout = vk::Texture::createDescriptorSetLayout(device);
 
-    // Initialize the textured pipeline using the sampler layout.
     renderer.initializeTexturedPipeline(descriptorSetLayout);
+    renderer.initializeUIPipeline(descriptorSetLayout);
 
-    // --- Texture ---
+    // --- Textures ---
     auto texture = std::make_shared<vk::STBTexture>(
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
     texture->loadFromFile(spear::getAssetPath("wallnut.jpg"));
@@ -92,8 +117,16 @@ int main()
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
     niiloTexture->loadFromFile(spear::getAssetPath("niilo.jpg"));
 
+    // --- Scenes ---
+    // Lobby scene: empty (just background)
+    auto lobby_objects = spear::Scene::Container{};
+    auto lobby_function = [](spear::Scene::Container&) {};
+    auto lobby_scene_id = spear::createScene(lobby_objects, lobby_function, scene_manager);
+    scene_manager.getSceneById(lobby_scene_id)->setName("lobby");
+
+    // Game scene: with bunny model
     // clang-format off
-    auto scene_objects = spear::Scene::Container{
+    auto game_objects = spear::Scene::Container{
         std::make_shared<vk::OBJModel>(
             device, physDevice,
             "/cube_pets/Models/OBJ-format/animal-bunny.obj", "/cube_pets/Models/OBJ-format/animal-bunny.mtl",
@@ -104,13 +137,55 @@ int main()
         )
     };
     // clang-format on
+    auto game_function = [](spear::Scene::Container&) {};
+    auto game_scene_id = spear::createScene(game_objects, game_function, scene_manager);
+    scene_manager.getSceneById(game_scene_id)->setName("game");
 
-    auto scene_function = [](spear::Scene::Container&) {};
-    auto scene_id = spear::createScene(scene_objects, scene_function, scene_manager);
-    scene_manager.loadScene(scene_id);
+    // Start in lobby
+    scene_manager.loadScene(lobby_scene_id);
     spear::Time time_interface;
 
-    // clang-format off
+    // --- UI Renderer ---
+    std::string fontPath = "/usr/share/fonts/TTF/FiraCode-Retina.ttf";
+    spear::ui::UIRenderer uiRenderer(
+        device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+        descriptorPool, descriptorSetLayout, fontPath, 24);
+
+    spear::ui::Text titleText(
+        device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+        descriptorPool, descriptorSetLayout, fontPath, 32);
+    titleText.setString("nx-3D Lobby");
+    titleText.setColor(SDL_Color{0, 200, 255, 255});
+    titleText.setPosition(glm::vec2(-0.8f, 0.7f));
+
+    spear::ui::Text statusText(
+        device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+        descriptorPool, descriptorSetLayout, fontPath, 20);
+    statusText.setString("Connecting to server...");
+    statusText.setColor(SDL_Color{200, 200, 200, 255});
+    statusText.setPosition(glm::vec2(-0.8f, 0.5f));
+
+    spear::ui::Text instructionsText(
+        device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+        descriptorPool, descriptorSetLayout, fontPath, 16);
+    instructionsText.setString("");
+    instructionsText.setPosition(glm::vec2(-0.8f, -0.8f));
+
+    // Menu list for rooms
+    spear::ui::MenuList* roomMenu = nullptr;
+
+    renderer.setUIRenderer(&uiRenderer);
+
+    uiRenderer.addExternalText(titleText);
+    uiRenderer.addExternalText(statusText);
+    uiRenderer.addExternalText(instructionsText);
+
+    bool menuPopulated = false;
+    std::atomic<bool> joiningRoom = false;
+    uint64_t selectedRoomId = 0;
+    State currentState = State::Connecting;
+
+    // --- Event Handlers ---
     spear::EventHandler eventHandler;
 
     eventHandler.handleInput(SDLK_ESCAPE, [&device, &descriptorPool, &descriptorSetLayout]()
@@ -120,9 +195,9 @@ int main()
         exit(0);
     });
 
-    eventHandler.handleInput(SDLK_P, [&nexilisReady, &nexilisClient, &camera]()
+    eventHandler.handleInput(SDLK_P, [&nexilisReady, &nexilisClient, &camera, &currentState]()
     {
-        if (nexilisReady && nexilisClient.getClientAPI().clientInRoom())
+        if (currentState == State::Game && nexilisReady && nexilisClient.getClientAPI().clientInRoom())
         {
             auto cam_pos = camera.getPosition();
             auto cam_front = camera.getFront();
@@ -150,7 +225,6 @@ int main()
         auto s = window.getSize();
         renderer.setViewPort(s.x, s.y);
     });
-    // clang-format on
 
     renderer.setScene(scene_manager.getCurrentScene());
 
@@ -162,17 +236,119 @@ int main()
         float delta_time = time_interface.getDeltaTime();
         time_interface.updateFromMain(delta_time);
 
-        eventHandler.handleEvents(movement_controller, delta_time);
+        // --- State machine ---
+        if (currentState == State::Connecting && nexilisReady && !menuPopulated)
+        {
+            std::lock_guard<std::mutex> lock(roomsMutex);
+            if (!availableRooms.empty())
+            {
+                roomMenu = &uiRenderer.createMenuList();
+                roomMenu->setPosition(glm::vec2(-0.8f, 0.3f));
+                roomMenu->setSpacing(40.0f);
+                for (auto& room : availableRooms)
+                    roomMenu->addItem(room.name);
+                statusText.setString("Select a room and press Enter to join");
+                instructionsText.setString("Arrow keys: Navigate   |   Enter: Join   |   ESC: Quit");
+            }
+            else
+            {
+                statusText.setString("No rooms available");
+            }
+            menuPopulated = true;
+            currentState = State::Lobby;
+        }
 
+        if (currentState == State::Joining && nexilisClient.getClientAPI().clientInRoom())
+        {
+            scene_manager.loadScene(game_scene_id);
+            renderer.setScene(scene_manager.getCurrentScene());
+            renderer.setUIRenderer(nullptr);
+            currentState = State::Game;
+        }
+
+        // --- Event handling ---
+        if (currentState == State::Lobby || currentState == State::Connecting)
+        {
+            SDL_Event event;
+            while (SDL_PollEvent(&event))
+            {
+                if (event.type == SDL_EVENT_QUIT)
+                {
+                    vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+                    vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+                    exit(0);
+                }
+                if (event.type == SDL_EVENT_KEY_DOWN)
+                {
+                    if (event.key.key == SDLK_ESCAPE)
+                    {
+                        vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+                        vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+                        exit(0);
+                    }
+                    if (currentState == State::Lobby && roomMenu && !joiningRoom)
+                    {
+                        if (event.key.key == SDLK_UP)
+                            roomMenu->selectPrevious();
+                        else if (event.key.key == SDLK_DOWN)
+                            roomMenu->selectNext();
+                        else if (event.key.key == SDLK_RETURN)
+                        {
+                            std::lock_guard<std::mutex> lock(roomsMutex);
+                            if (!availableRooms.empty())
+                            {
+                                int idx = roomMenu->getSelectedIndex();
+                                if (idx >= 0 && idx < static_cast<int>(availableRooms.size()))
+                                {
+                                    selectedRoomId = availableRooms[idx].id;
+                                    nexilisClient.sendMessage(
+                                        packet::Room::Management::join(selectedRoomId));
+                                    joiningRoom = true;
+                                    statusText.setString("Joining room...");
+                                    currentState = State::Joining;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (event.type == SDL_EVENT_WINDOW_RESIZED)
+                {
+                    window.resize();
+                    auto s = window.getSize();
+                    renderer.setViewPort(s.x, s.y);
+                }
+                if (event.type == SDL_EVENT_MOUSE_MOTION && currentState == State::Game)
+                {
+                    camera.rotate(event.motion.xrel, event.motion.yrel);
+                }
+            }
+        }
+        else
+        {
+            eventHandler.handleEvents(movement_controller, delta_time);
+        }
+
+        // --- Render ---
         renderer.render();
 
+        // --- Physics ---
         bullet_world.stepSimulation(1.0f / 60.f);
 
-        auto cam_pos = camera.getPosition();
-        auto pos = nexilis::Vector3f({cam_pos.x, cam_pos.y, cam_pos.z});
-
-        if (nexilisReady && nexilisClient.getClientAPI().clientInRoom())
+        // --- UI ---
+        if (currentState == State::Connecting || currentState == State::Lobby ||
+            currentState == State::Joining)
         {
+            // Render text directly using the renderer's command buffer
+            // UI elements are rendered by the renderer's post-scene pass
+            // We just need to tell the renderer what to draw
+        }
+
+        // --- Network sync (game only) ---
+        if (currentState == State::Game && nexilisReady && nexilisClient.getClientAPI().clientInRoom())
+        {
+            auto cam_pos = camera.getPosition();
+            auto pos = nexilis::Vector3f({cam_pos.x, cam_pos.y, cam_pos.z});
+
             nexilisClient.sendMessage(
                     packet::Room::Player3D::position(pos));
 
@@ -263,7 +439,6 @@ int main()
         }
 
         window.update();
-
         time_interface.delay(16);
     }
 }
