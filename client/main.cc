@@ -2,6 +2,8 @@
 
 #include <nexilis/client/packet.hh>
 #include <nexilis/protocol_manager.hh>
+#include <nexilis/room_info.hh>
+#include <nexilis/start_client.hh>
 #include <nexilis/tcp_client.hh>
 
 #include <algorithm>
@@ -23,60 +25,23 @@ enum class State
     Game
 };
 
-struct RoomInfo
-{
-    uint64_t id;
-    std::string name;
-};
-
 } // namespace
 
 int main()
 {
     const std::string window_name = "nx_3D game";
     const spear::BaseWindow::Size window_size = {820, 640};
+    std::atomic<bool> ready = false;
+    std::mutex mtx;
+    std::vector<nexilis::RoomInfo> rooms;
 
     using packet = nexilis::client::Packet;
 
     nexilis::ProtocolManager protocolManager;
-    nexilis::TCPClient nexilisClient(&protocolManager, "127.0.0.1", "password");
+    nexilis::TCPClient tcp_client(&protocolManager, "127.0.0.1", "password");
 
-    std::atomic<bool> nexilisReady = false;
-    std::mutex roomsMutex;
-    std::vector<RoomInfo> availableRooms;
-
-    // clang-format off
-    std::thread nexilisThread([&]()
-    {
-        nexilisClient.start();
-
-        nexilisClient.sendMessage(packet::Get::General::clientId());
-        while (!nexilisClient.getClientAPI().isInitialized())
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-
-        nexilisClient.sendMessage(packet::Get::Info::rooms());
-
-        std::promise<void> roomsPromise;
-        auto roomsFuture = roomsPromise.get_future();
-        auto waitFn = nexilisClient.getClientAPI().waitUntilRoomsCreated(roomsPromise);
-        waitFn();
-        roomsFuture.wait();
-
-        {
-            std::lock_guard<std::mutex> lock(roomsMutex);
-            auto& rooms = nexilisClient.getClientAPI().getActiveRooms();
-            for (auto& room : rooms)
-            {
-                availableRooms.push_back({room.getId(), room.getName()});
-            }
-        }
-
-        nexilisReady = true;
-    });
-    // clang-format on
-    nexilisThread.detach();
+    auto start_client = nexilis::startClient(tcp_client, rooms, ready, mtx);
+    start_client.detach();
 
     spear::VulkanWindow window(window_name, window_size);
     auto w_size = window.getSize();
@@ -134,6 +99,14 @@ int main()
             descriptorPool, descriptorSetLayout,
             blt::ObjectData(shared_bullet_world, 0.0f,
             glm::vec3(0.0f, 0.0f, -7.0f), default_size)
+        ),
+        std::make_shared<vk::OBJModel>(
+            device, physDevice,
+            "/home/valtteri/code/nx-3D/assets/source/de_dust2.obj", "/home/valtteri/code/nx-3D/assets/source/de_dust2.mtl",
+            texture,
+            descriptorPool, descriptorSetLayout,
+            blt::ObjectData(shared_bullet_world, 0.0f,
+            glm::vec3(0.0f, 0.0f, -7.0f), default_size)
         )
     };
     // clang-format on
@@ -148,26 +121,26 @@ int main()
     // --- UI Renderer ---
     std::string fontPath = "/usr/share/fonts/TTF/FiraCode-Retina.ttf";
     spear::ui::UIRenderer uiRenderer(
-        device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
-        descriptorPool, descriptorSetLayout, fontPath, 24);
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 24);
 
     spear::ui::Text titleText(
-        device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
-        descriptorPool, descriptorSetLayout, fontPath, 32);
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 32);
     titleText.setString("nx-3D Lobby");
     titleText.setColor(SDL_Color{0, 200, 255, 255});
     titleText.setPosition(glm::vec2(-0.8f, 0.7f));
 
     spear::ui::Text statusText(
-        device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
-        descriptorPool, descriptorSetLayout, fontPath, 20);
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 20);
     statusText.setString("Connecting to server...");
     statusText.setColor(SDL_Color{200, 200, 200, 255});
     statusText.setPosition(glm::vec2(-0.8f, 0.5f));
 
     spear::ui::Text instructionsText(
-        device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
-        descriptorPool, descriptorSetLayout, fontPath, 16);
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 16);
     instructionsText.setString("");
     instructionsText.setPosition(glm::vec2(-0.8f, -0.8f));
 
@@ -189,42 +162,38 @@ int main()
     spear::EventHandler eventHandler;
 
     eventHandler.handleInput(SDLK_ESCAPE, [&device, &descriptorPool, &descriptorSetLayout]()
-    {
+                             {
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
         vkDestroyDescriptorPool(device, descriptorPool, nullptr);
-        exit(0);
-    });
+        exit(0); });
 
-    eventHandler.handleInput(SDLK_P, [&nexilisReady, &nexilisClient, &camera, &currentState]()
-    {
-        if (currentState == State::Game && nexilisReady && nexilisClient.getClientAPI().clientInRoom())
+    eventHandler.handleInput(SDLK_P, [&ready, &tcp_client, &camera, &currentState]()
+                             {
+        if (currentState == State::Game && ready && tcp_client.getClientAPI().clientInRoom())
         {
             auto cam_pos = camera.getPosition();
             auto cam_front = camera.getFront();
             glm::vec3 spawn_pos = cam_pos + cam_front;
             auto pos = nexilis::Vector3f({spawn_pos.x, spawn_pos.y, spawn_pos.z});
             auto dim = nexilis::Vector3f({1.0f, 1.0f, 1.0f});
-            nexilisClient.sendMessage(
+            tcp_client.sendMessage(
                     packet::Room::Object3D::create(pos, dim, ""));
-        }
-    });
+        } });
 
     eventHandler.registerCallback(SDL_EVENT_QUIT, [&device, &descriptorPool, &descriptorSetLayout](const SDL_Event&)
-    {
+                                  {
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
         vkDestroyDescriptorPool(device, descriptorPool, nullptr);
-        exit(0);
-    });
+        exit(0); });
 
     eventHandler.registerCallback(SDL_EVENT_MOUSE_MOTION, [&camera](const SDL_Event& event)
                                   { camera.rotate(event.motion.xrel, event.motion.yrel); });
 
     eventHandler.registerCallback(SDL_EVENT_WINDOW_RESIZED, [&window, &renderer](const SDL_Event&)
-    {
+                                  {
         window.resize();
         auto s = window.getSize();
-        renderer.setViewPort(s.x, s.y);
-    });
+        renderer.setViewPort(s.x, s.y); });
 
     renderer.setScene(scene_manager.getCurrentScene());
 
@@ -237,16 +206,16 @@ int main()
         time_interface.updateFromMain(delta_time);
 
         // --- State machine ---
-        if (currentState == State::Connecting && nexilisReady && !menuPopulated)
+        if (currentState == State::Connecting && ready && !menuPopulated)
         {
-            std::lock_guard<std::mutex> lock(roomsMutex);
-            if (!availableRooms.empty())
+            std::lock_guard<std::mutex> lock(mtx);
+            if (!rooms.empty())
             {
                 roomMenu = &uiRenderer.createMenuList();
                 roomMenu->setPosition(glm::vec2(-0.8f, 0.3f));
                 roomMenu->setSpacing(40.0f);
-                for (auto& room : availableRooms)
-                    roomMenu->addItem(room.name);
+                for (auto& room : rooms)
+                    roomMenu->addItem(room.getName());
                 statusText.setString("Select a room and press Enter to join");
                 instructionsText.setString("Arrow keys: Navigate   |   Enter: Join   |   ESC: Quit");
             }
@@ -258,7 +227,7 @@ int main()
             currentState = State::Lobby;
         }
 
-        if (currentState == State::Joining && nexilisClient.getClientAPI().clientInRoom())
+        if (currentState == State::Joining && tcp_client.getClientAPI().clientInRoom())
         {
             scene_manager.loadScene(game_scene_id);
             renderer.setScene(scene_manager.getCurrentScene());
@@ -294,15 +263,15 @@ int main()
                             roomMenu->selectNext();
                         else if (event.key.key == SDLK_RETURN)
                         {
-                            std::lock_guard<std::mutex> lock(roomsMutex);
-                            if (!availableRooms.empty())
+                            std::lock_guard<std::mutex> lock(mtx);
+                            if (!rooms.empty())
                             {
                                 int idx = roomMenu->getSelectedIndex();
-                                if (idx >= 0 && idx < static_cast<int>(availableRooms.size()))
+                                if (idx >= 0 && idx < static_cast<int>(rooms.size()))
                                 {
-                                    selectedRoomId = availableRooms[idx].id;
-                                    nexilisClient.sendMessage(
-                                        packet::Room::Management::join(selectedRoomId));
+                                    selectedRoomId = rooms[idx].getId();
+                                    tcp_client.sendMessage(
+                                            packet::Room::Management::join(selectedRoomId));
                                     joiningRoom = true;
                                     statusText.setString("Joining room...");
                                     currentState = State::Joining;
@@ -344,15 +313,15 @@ int main()
         }
 
         // --- Network sync (game only) ---
-        if (currentState == State::Game && nexilisReady && nexilisClient.getClientAPI().clientInRoom())
+        if (currentState == State::Game && ready && tcp_client.getClientAPI().clientInRoom())
         {
             auto cam_pos = camera.getPosition();
             auto pos = nexilis::Vector3f({cam_pos.x, cam_pos.y, cam_pos.z});
 
-            nexilisClient.sendMessage(
+            tcp_client.sendMessage(
                     packet::Room::Player3D::position(pos));
 
-            auto& api = nexilisClient.getClientAPI();
+            auto& api = tcp_client.getClientAPI();
             auto room_id = api.clientRoomId();
             auto my_id = api.getClientId();
 
