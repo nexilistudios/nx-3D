@@ -47,7 +47,7 @@ int main()
     auto w_size = window.getSize();
     std::cout << "Window size x: " << w_size.x << " y: " << w_size.y << std::endl;
 
-    spear::Camera camera(glm::vec3(0.0f, 0.0f, 4.0f));
+    spear::Camera camera(glm::vec3(-1600.0f, 64.0f, -2600.0f), glm::vec3(0.f, 1.f, 0.f), 90.0f);
     spear::MovementController movement_controller(camera);
     spear::SceneManager scene_manager;
 
@@ -89,25 +89,22 @@ int main()
     auto lobby_scene_id = spear::createScene(lobby_objects, lobby_function, scene_manager);
     scene_manager.getSceneById(lobby_scene_id)->setName("lobby");
 
-    // Game scene: with bunny model
+    // Game scene: de_dust2 map
+    auto dust2_model = std::make_shared<vk::OBJModel>(
+        device, physDevice,
+        "/home/valtteri/code/nx-3D/assets/source/de_dust2.obj", "/home/valtteri/code/nx-3D/assets/source/de_dust2.mtl",
+        texture,
+        descriptorPool, descriptorSetLayout,
+        blt::ObjectData(shared_bullet_world, 0.0f,
+        glm::vec3(0.0f, 0.0f, 0.0f), default_size)
+    );
+    // Rotate the map: de_dust2 OBJ uses Z as vertical (CS:GO convention),
+    // but the engine uses Y as vertical (OpenGL convention).
+    dust2_model->rotate(glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
     // clang-format off
     auto game_objects = spear::Scene::Container{
-        std::make_shared<vk::OBJModel>(
-            device, physDevice,
-            "/cube_pets/Models/OBJ-format/animal-bunny.obj", "/cube_pets/Models/OBJ-format/animal-bunny.mtl",
-            texture,
-            descriptorPool, descriptorSetLayout,
-            blt::ObjectData(shared_bullet_world, 0.0f,
-            glm::vec3(0.0f, 0.0f, -7.0f), default_size)
-        ),
-        std::make_shared<vk::OBJModel>(
-            device, physDevice,
-            "/home/valtteri/code/nx-3D/assets/source/de_dust2.obj", "/home/valtteri/code/nx-3D/assets/source/de_dust2.mtl",
-            texture,
-            descriptorPool, descriptorSetLayout,
-            blt::ObjectData(shared_bullet_world, 0.0f,
-            glm::vec3(0.0f, 0.0f, -7.0f), default_size)
-        )
+        dust2_model
     };
     // clang-format on
     auto game_function = [](spear::Scene::Container&) {};
