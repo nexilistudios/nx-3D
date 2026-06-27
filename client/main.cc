@@ -6,9 +6,12 @@
 #include <nexilis/start_client.hh>
 #include <nexilis/tcp_client.hh>
 
+#include <btBulletDynamicsCommon.h>
+
 #include <algorithm>
 #include <atomic>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
@@ -48,7 +51,6 @@ int main()
     std::cout << "Window size x: " << w_size.x << " y: " << w_size.y << std::endl;
 
     spear::Camera camera(glm::vec3(-1600.0f, 64.0f, -2600.0f), glm::vec3(0.f, 1.f, 0.f), 90.0f);
-    spear::MovementController movement_controller(camera);
     spear::SceneManager scene_manager;
 
     namespace blt = spear::physics::bullet;
@@ -56,6 +58,7 @@ int main()
 
     blt::World bullet_world;
     auto shared_bullet_world = std::make_shared<btDiscreteDynamicsWorld>(*bullet_world.getDynamicsWorld());
+    spear::MovementController movement_controller(camera, shared_bullet_world.get());
     auto default_size = glm::vec3(1.0f, 1.0f, 1.0f);
 
     vk::Renderer renderer(window);
@@ -101,6 +104,42 @@ int main()
     // Rotate the map: de_dust2 OBJ uses Z as vertical (CS:GO convention),
     // but the engine uses Y as vertical (OpenGL convention).
     dust2_model->rotate(glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+    // Build triangle mesh from OBJ for ground collision (leaked intentionally at exit)
+    auto& loader = dust2_model->getLoader();
+    const auto& vertices = loader.getVertices();
+    const auto& facesByMaterial = loader.getFacesByMaterial();
+    auto* triMesh = new btTriangleMesh();
+    for (const auto& faces : facesByMaterial)
+    {
+        for (const auto& face : faces)
+        {
+            if (face.vertexIndices.size() >= 3)
+            {
+                auto& v0 = vertices[face.vertexIndices[0]];
+                auto& v1 = vertices[face.vertexIndices[1]];
+                auto& v2 = vertices[face.vertexIndices[2]];
+                // OBJ (x, y, z-up) -> OpenGL (x, y-up, z): (x, z, -y)
+                btVector3 b0(v0.x, v0.z, -v0.y);
+                btVector3 b1(v1.x, v1.z, -v1.y);
+                btVector3 b2(v2.x, v2.z, -v2.y);
+                triMesh->addTriangle(b0, b1, b2);
+                if (face.vertexIndices.size() == 4)
+                {
+                    auto& v3 = vertices[face.vertexIndices[3]];
+                    btVector3 b3(v3.x, v3.z, -v3.y);
+                    triMesh->addTriangle(b0, b2, b3);
+                }
+            }
+        }
+    }
+    auto* meshShape = new btBvhTriangleMeshShape(triMesh, true);
+    btTransform groundTransform;
+    groundTransform.setIdentity();
+    auto* meshMotionState = new btDefaultMotionState(groundTransform);
+    btRigidBody::btRigidBodyConstructionInfo meshRbInfo(0.0f, meshMotionState, meshShape);
+    auto* meshRigidBody = new btRigidBody(meshRbInfo);
+    shared_bullet_world->addRigidBody(meshRigidBody);
 
     // clang-format off
     auto game_objects = spear::Scene::Container{
@@ -298,7 +337,7 @@ int main()
         renderer.render();
 
         // --- Physics ---
-        bullet_world.stepSimulation(1.0f / 60.f);
+        shared_bullet_world->stepSimulation(1.0f / 60.f);
 
         // --- UI ---
         if (currentState == State::Connecting || currentState == State::Lobby ||
