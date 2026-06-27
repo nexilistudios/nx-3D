@@ -92,8 +92,8 @@ int main()
     // Game scene: de_dust2 map
     auto dust2_model = std::make_shared<vk::OBJModel>(
         device, physDevice,
+        renderer.getCommandPool(), renderer.getGraphicsQueue(),
         "/home/valtteri/code/nx-3D/assets/source/de_dust2.obj", "/home/valtteri/code/nx-3D/assets/source/de_dust2.mtl",
-        texture,
         descriptorPool, descriptorSetLayout,
         blt::ObjectData(shared_bullet_world, 0.0f,
         glm::vec3(0.0f, 0.0f, 0.0f), default_size)
