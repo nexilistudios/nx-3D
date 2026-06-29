@@ -5,6 +5,8 @@
 #include <nexilis/server/room_storage.hh>
 #include <nexilis/server/runtime.hh>
 
+#include <server/gun/gun_manager.hh>
+
 #include <iostream>
 
 int main()
@@ -44,9 +46,17 @@ int main()
     // clang-format off
     auto condition = [](size_t){ return true; };
 
-    auto f = std::function<bool()>([]()
+    // Gun system
+    nx3d::server::gun::GunManager gunManager;
+    std::cout << "[Guns] Loaded " << gunManager.getDefs().size() << " gun definitions" << std::endl;
+    for (auto& def : gunManager.getDefs())
+        std::cout << "  - " << def.name << " (dmg:" << def.damage
+                  << " rpm:" << def.fire_rate * 60.0f
+                  << " mag:" << def.magazine_size << ")" << std::endl;
+
+    auto f = std::function<bool()>([&gunManager]()
     {
-        std::cout << "Updating nx3D server" << std::endl;
+        gunManager.update(1.0f / 60.0f);
         return true;
     });
 

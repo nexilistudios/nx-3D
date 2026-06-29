@@ -50,7 +50,7 @@ int main()
     auto w_size = window.getSize();
     std::cout << "Window size x: " << w_size.x << " y: " << w_size.y << std::endl;
 
-    spear::Camera camera(glm::vec3(-1600.0f, 64.0f, -2600.0f), glm::vec3(0.f, 1.f, 0.f), 90.0f);
+    spear::Camera camera(glm::vec3(-1600.0f, 64.0f, -2600.0f), glm::vec3(0.f, 1.f, 0.f), 90.0f, 0.f, 250.f);
     spear::SceneManager scene_manager;
 
     namespace blt = spear::physics::bullet;
@@ -58,7 +58,7 @@ int main()
 
     blt::World bullet_world;
     auto shared_bullet_world = std::make_shared<btDiscreteDynamicsWorld>(*bullet_world.getDynamicsWorld());
-    spear::MovementController movement_controller(camera, shared_bullet_world.get());
+    spear::MovementController movement_controller(camera, shared_bullet_world.get(), 64.0f);
     auto default_size = glm::vec3(1.0f, 1.0f, 1.0f);
 
     vk::Renderer renderer(window);
@@ -94,13 +94,12 @@ int main()
 
     // Game scene: de_dust2 map
     auto dust2_model = std::make_shared<vk::OBJModel>(
-        device, physDevice,
-        renderer.getCommandPool(), renderer.getGraphicsQueue(),
-        "/home/valtteri/code/nx-3D/assets/source/de_dust2.obj", "/home/valtteri/code/nx-3D/assets/source/de_dust2.mtl",
-        descriptorPool, descriptorSetLayout,
-        blt::ObjectData(shared_bullet_world, 0.0f,
-        glm::vec3(0.0f, 0.0f, 0.0f), default_size)
-    );
+            device, physDevice,
+            renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            "/home/valtteri/code/nx-3D/assets/de_dust2/source/de_dust2.obj", "/home/valtteri/code/nx-3D/assets/de_dust2/source/de_dust2.mtl",
+            descriptorPool, descriptorSetLayout,
+            blt::ObjectData(shared_bullet_world, 0.0f,
+                            glm::vec3(0.0f, 0.0f, 0.0f), default_size));
     // Rotate the map: de_dust2 OBJ uses Z as vertical (CS:GO convention),
     // but the engine uses Y as vertical (OpenGL convention).
     dust2_model->rotate(glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
@@ -141,14 +140,28 @@ int main()
     auto* meshRigidBody = new btRigidBody(meshRbInfo);
     shared_bullet_world->addRigidBody(meshRigidBody);
 
+    auto ak47Texture = std::make_shared<vk::STBTexture>(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
+    ak47Texture->loadFromFile("/home/valtteri/code/nx-3D/assets/ak47/textures/low_AK47_BaseColor.png");
+
+    auto ak47_cube = std::make_shared<vk::TexturedCube>(
+            device, physDevice,
+            ak47Texture, descriptorPool, descriptorSetLayout,
+            blt::ObjectData(shared_bullet_world, 0.0f,
+                            glm::vec3(-1600.0f, 60.0f, -2400.0f), glm::vec3(33.0f, 33.0f, 33.0f)));
+
     // clang-format off
     auto game_objects = spear::Scene::Container{
-        dust2_model
+        dust2_model,
+        ak47_cube
     };
     // clang-format on
     auto game_function = [](spear::Scene::Container&) {};
     auto game_scene_id = spear::createScene(game_objects, game_function, scene_manager);
     scene_manager.getSceneById(game_scene_id)->setName("game");
+
+    // --- Gun (disabled - using world AK-47 model instead) ---
+    // auto firstPersonGun = ...
 
     // Start in lobby
     scene_manager.loadScene(lobby_scene_id);
@@ -225,6 +238,13 @@ int main()
     eventHandler.registerCallback(SDL_EVENT_MOUSE_MOTION, [&camera](const SDL_Event& event)
                                   { camera.rotate(event.motion.xrel, event.motion.yrel); });
 
+    eventHandler.registerCallback(SDL_EVENT_MOUSE_BUTTON_DOWN,
+                                  [&currentState](const SDL_Event& event)
+                                  {
+                                      if (currentState == State::Game && event.button.button == SDL_BUTTON_LEFT)
+                                          ;
+                                  });
+
     eventHandler.registerCallback(SDL_EVENT_WINDOW_RESIZED, [&window, &renderer](const SDL_Event&)
                                   {
         window.resize();
@@ -235,6 +255,8 @@ int main()
 
     std::unordered_map<uint64_t, std::shared_ptr<vk::TexturedCube>> remote_players;
     std::unordered_map<uint64_t, std::shared_ptr<vk::TexturedCube>> remote_objects;
+
+    glm::vec3 prevCamPos = camera.getPosition();
 
     while (true)
     {
@@ -346,6 +368,15 @@ int main()
             // Render text directly using the renderer's command buffer
             // UI elements are rendered by the renderer's post-scene pass
             // We just need to tell the renderer what to draw
+        }
+
+        // --- Gun animation (game only) ---
+        if (currentState == State::Game)
+        {
+            glm::vec3 cam_pos = camera.getPosition();
+            glm::vec3 velocity = (cam_pos - prevCamPos) / std::max(delta_time, 0.001f);
+            prevCamPos = cam_pos;
+            (void)velocity;
         }
 
         // --- Network sync (game only) ---
