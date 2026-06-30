@@ -8,6 +8,8 @@
 
 #include <btBulletDynamicsCommon.h>
 
+#include <client/gun/first_person_gun.hh>
+
 #include <algorithm>
 #include <atomic>
 #include <iostream>
@@ -160,8 +162,10 @@ int main()
     auto game_scene_id = spear::createScene(game_objects, game_function, scene_manager);
     scene_manager.getSceneById(game_scene_id)->setName("game");
 
-    // --- Gun (disabled - using world AK-47 model instead) ---
-    // auto firstPersonGun = ...
+    // --- Weapon state ---
+    bool weaponPickedUp = false;
+    glm::vec3 weaponFloorPos(-1600.0f, 60.0f, -2400.0f);
+    std::shared_ptr<nx3d::client::gun::FirstPersonGun> firstPersonGun;
 
     // Start in lobby
     scene_manager.loadScene(lobby_scene_id);
@@ -192,6 +196,14 @@ int main()
             descriptorPool, descriptorSetLayout, fontPath, 16);
     instructionsText.setString("");
     instructionsText.setPosition(glm::vec2(-0.8f, -0.8f));
+
+    // HUD texts (used during Game state, top-left corner)
+    spear::ui::Text weaponHudText(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 20);
+    weaponHudText.setString("");
+    weaponHudText.setColor(SDL_Color{0, 255, 0, 255});
+    weaponHudText.setPosition(glm::vec2(-0.98f, -0.85f));
 
     // Menu list for rooms
     spear::ui::MenuList* roomMenu = nullptr;
@@ -289,7 +301,10 @@ int main()
         {
             scene_manager.loadScene(game_scene_id);
             renderer.setScene(scene_manager.getCurrentScene());
-            renderer.setUIRenderer(nullptr);
+            // Switch UI from lobby to HUD
+            uiRenderer.clear();
+            uiRenderer.addExternalText(weaponHudText);
+            renderer.setUIRenderer(&uiRenderer);
             currentState = State::Game;
         }
 
@@ -377,6 +392,31 @@ int main()
             glm::vec3 velocity = (cam_pos - prevCamPos) / std::max(delta_time, 0.001f);
             prevCamPos = cam_pos;
             (void)velocity;
+
+            if (firstPersonGun)
+                firstPersonGun->addBob(delta_time, velocity);
+        }
+
+        // --- Pickup ---
+        if (currentState == State::Game && !weaponPickedUp)
+        {
+            glm::vec3 camPos = camera.getPosition();
+            float dist = glm::distance(camPos, weaponFloorPos);
+
+            if (dist < 100.0f)
+            {
+                weaponPickedUp = true;
+                scene_manager.getCurrentScene()->removeObject(ak47_cube->getId());
+
+                firstPersonGun = std::make_shared<nx3d::client::gun::FirstPersonGun>(
+                        device, physDevice,
+                        ak47Texture, descriptorPool, descriptorSetLayout,
+                        blt::ObjectData(shared_bullet_world, 0.0f,
+                                        glm::vec3(0.0f, 0.0f, 0.0f), default_size));
+                scene_manager.getCurrentScene()->addObject(firstPersonGun);
+
+                weaponHudText.setString("AK-47");
+            }
         }
 
         // --- Network sync (game only) ---
