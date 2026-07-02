@@ -442,7 +442,7 @@ int main()
                             device, physDevice,
                             texture, descriptorPool, descriptorSetLayout,
                             blt::ObjectData(shared_bullet_world, 0.0f,
-                                            glm::vec3(0.f, 0.f, 0.f), default_size));
+                                            glm::vec3(0.f, 0.f, 0.f), glm::vec3(10.0f, 10.0f, 10.0f)));
                     remote_players[player.id] = obj;
                     scene_manager.getCurrentScene()->addObject(obj);
                 }
