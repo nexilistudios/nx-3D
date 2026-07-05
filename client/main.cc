@@ -83,9 +83,9 @@ int main()
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
     texture->loadFromFile(spear::getAssetPath("wallnut.jpg"));
 
-    auto niiloTexture = std::make_shared<vk::STBTexture>(
+    auto niilo_texture = std::make_shared<vk::STBTexture>(
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
-    niiloTexture->loadFromFile(spear::getAssetPath("niilo.jpg"));
+    niilo_texture->loadFromFile(spear::getAssetPath("niilo.jpg"));
 
     // --- Scenes ---
     // Lobby scene: empty (just background)
@@ -481,7 +481,7 @@ int main()
                 {
                     auto cube = std::make_shared<vk::TexturedCube>(
                             device, physDevice,
-                            niiloTexture, descriptorPool, descriptorSetLayout,
+                            niilo_texture, descriptorPool, descriptorSetLayout,
                             blt::ObjectData(shared_bullet_world, 0.0f,
                                             glm::vec3(0.f, 0.f, 0.f), default_size));
                     remote_objects[obj.id] = cube;

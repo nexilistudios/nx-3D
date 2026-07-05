@@ -1,3 +1,4 @@
+#include <nexilis/object/game_item.hh>
 #include <nexilis/protocol_manager.hh>
 #include <nexilis/room_data.hh>
 
@@ -8,6 +9,25 @@
 #include <server/gun/gun_manager.hh>
 
 #include <iostream>
+
+static void spawnGameItems()
+{
+    using namespace nexilis;
+    using namespace nexilis::server;
+
+    auto& rooms = RoomStorage::getAllRooms();
+    for (auto& room : rooms)
+    {
+        room.addGameItem(GameItem(
+                Util::getRandomUint64(),
+                "ak47",
+                Vector3f{-1600.0f, 60.0f, -2400.0f},
+                Vector3f{33.0f, 33.0f, 33.0f},
+                "on_ground",
+                ""));
+        std::cout << "[GameItem] Spawned AK-47 in room: " << room.getName() << std::endl;
+    }
+}
 
 int main()
 {
@@ -35,6 +55,8 @@ int main()
             Room(nexilis::RoomData(0, "Room 3", nexilis::Util::getRandomUint64(),
                                    nexilis::RoomData::Context::_3D));
     RoomStorage::add(std::move(room3));
+
+    spawnGameItems();
 
     nexilis::ProtocolManager protocolManager;
 
