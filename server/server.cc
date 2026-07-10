@@ -5,6 +5,7 @@
 #include <nexilis/server/protocol/nxboost/tcp_server.hh>
 #include <nexilis/server/room_storage.hh>
 #include <nexilis/server/runtime.hh>
+#include <nexilis/server/server_config.hh>
 
 #include <server/gun/gun_manager.hh>
 
@@ -35,10 +36,10 @@ int main()
 
     using namespace nexilis::server;
 
-    Settings auth;
-    auth.setMode(AuthenticationMode::password_protected);
-    auth.setPassphrase("password");
-    auth.setRootPassword("root");
+    ServerConfig server_config;
+    server_config.setMode(AuthenticationMode::password_protected);
+    server_config.setPassphrase("password");
+    server_config.setRootPassword("root");
 
     // Some initial rooms.
     auto room1 =
@@ -62,7 +63,7 @@ int main()
 
     // Boost TCP server
     auto boostTCPServer =
-            protocolManager.createProtocol<nxboost::TCPServer>(auth);
+            protocolManager.createProtocol<nxboost::TCPServer>(server_config);
     boostTCPServer.start();
 
     // clang-format off
