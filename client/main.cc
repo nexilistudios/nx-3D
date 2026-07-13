@@ -146,16 +146,9 @@ int main()
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
     ak47Texture->loadFromFile("/home/valtteri/code/nx-3D/assets/ak47/textures/low_AK47_BaseColor.png");
 
-    auto ak47_cube = std::make_shared<vk::TexturedCube>(
-            device, physDevice,
-            ak47Texture, descriptorPool, descriptorSetLayout,
-            blt::ObjectData(shared_bullet_world, 0.0f,
-                            glm::vec3(-1600.0f, 60.0f, -2400.0f), glm::vec3(33.0f, 33.0f, 33.0f)));
-
     // clang-format off
     auto game_objects = spear::Scene::Container{
-        dust2_model,
-        ak47_cube
+        dust2_model
     };
     // clang-format on
     auto game_function = [](spear::Scene::Container&) {};
@@ -164,7 +157,6 @@ int main()
 
     // --- Weapon state ---
     bool weaponPickedUp = false;
-    glm::vec3 weaponFloorPos(-1600.0f, 60.0f, -2400.0f);
     std::shared_ptr<nx3d::client::gun::FirstPersonGun> firstPersonGun;
 
     // Start in lobby
@@ -267,11 +259,17 @@ int main()
 
     std::unordered_map<uint64_t, std::shared_ptr<vk::TexturedCube>> remote_players;
     std::unordered_map<uint64_t, std::shared_ptr<vk::TexturedCube>> remote_objects;
+    std::unordered_map<uint64_t, std::shared_ptr<vk::TexturedCube>> remote_game_items;
+    std::vector<std::shared_ptr<vk::TexturedCube>> pendingDestroy[3];
+    int frameCount = 0;
 
     glm::vec3 prevCamPos = camera.getPosition();
 
     while (true)
     {
+        pendingDestroy[frameCount % 3].clear();
+        frameCount++;
+
         float delta_time = time_interface.getDeltaTime();
         time_interface.updateFromMain(delta_time);
 
@@ -398,24 +396,43 @@ int main()
         }
 
         // --- Pickup ---
-        if (currentState == State::Game && !weaponPickedUp)
+        if (currentState == State::Game && !weaponPickedUp && ready && tcp_client.getClientAPI().clientInRoom())
         {
             glm::vec3 camPos = camera.getPosition();
-            float dist = glm::distance(camPos, weaponFloorPos);
+            auto& api = tcp_client.getClientAPI();
+            auto room_id = api.clientRoomId();
+            auto game_items = api.getRemoteGameItemsSnapshot(room_id);
 
-            if (dist < 100.0f)
+            for (auto& item : game_items)
             {
-                weaponPickedUp = true;
-                scene_manager.getCurrentScene()->removeObject(ak47_cube->getId());
+                if (item.status == "on_ground")
+                {
+                    float dist = glm::distance(camPos, glm::vec3(item.x, item.y, item.z));
+                    if (dist < 100.0f)
+                    {
+                        weaponPickedUp = true;
 
-                firstPersonGun = std::make_shared<nx3d::client::gun::FirstPersonGun>(
-                        device, physDevice,
-                        ak47Texture, descriptorPool, descriptorSetLayout,
-                        blt::ObjectData(shared_bullet_world, 0.0f,
-                                        glm::vec3(0.0f, 0.0f, 0.0f), default_size));
-                scene_manager.getCurrentScene()->addObject(firstPersonGun);
+                        tcp_client.sendMessage(
+                                packet::Room::GameItem::update(item.id, "picked_up"));
 
-                weaponHudText.setString("AK-47");
+                        if (remote_game_items.find(item.id) != remote_game_items.end())
+                        {
+                            scene_manager.getCurrentScene()->removeObject(remote_game_items[item.id]->getId());
+                            pendingDestroy[(frameCount - 1) % 3].push_back(std::move(remote_game_items[item.id]));
+                            remote_game_items.erase(item.id);
+                        }
+
+                        firstPersonGun = std::make_shared<nx3d::client::gun::FirstPersonGun>(
+                                device, physDevice,
+                                ak47Texture, descriptorPool, descriptorSetLayout,
+                                blt::ObjectData(shared_bullet_world, 0.0f,
+                                                glm::vec3(0.0f, 0.0f, 0.0f), default_size));
+                        scene_manager.getCurrentScene()->addObject(firstPersonGun);
+
+                        weaponHudText.setString("AK-47");
+                        break;
+                    }
+                }
             }
         }
 
@@ -457,6 +474,7 @@ int main()
                 if (it == players.end())
                 {
                     scene_manager.getCurrentScene()->removeObject(obj->getId());
+                    pendingDestroy[(frameCount - 1) % 3].push_back(std::move(obj));
                     to_remove.push_back(id);
                 }
             }
@@ -498,6 +516,7 @@ int main()
                 if (it == objects.end())
                 {
                     scene_manager.getCurrentScene()->removeObject(cube->getId());
+                    pendingDestroy[(frameCount - 1) % 3].push_back(std::move(cube));
                     objects_to_remove.push_back(id);
                 }
             }
@@ -512,6 +531,51 @@ int main()
                     it->second->setPosition({obj.x, obj.y, obj.z});
                 }
             }
+
+            auto game_items = api.getRemoteGameItemsSnapshot(room_id);
+
+            for (auto& item : game_items)
+            {
+                if (item.status == "on_ground")
+                {
+                    if (remote_game_items.find(item.id) == remote_game_items.end())
+                    {
+                        auto cube = std::make_shared<vk::TexturedCube>(
+                                device, physDevice,
+                                ak47Texture, descriptorPool, descriptorSetLayout,
+                                blt::ObjectData(shared_bullet_world, 0.0f,
+                                                glm::vec3(item.x, item.y, item.z),
+                                                glm::vec3(item.w, item.h, item.d)));
+                        remote_game_items[item.id] = cube;
+                        scene_manager.getCurrentScene()->addObject(cube);
+                    }
+                }
+                else
+                {
+                    if (remote_game_items.find(item.id) != remote_game_items.end())
+                    {
+                        scene_manager.getCurrentScene()->removeObject(remote_game_items[item.id]->getId());
+                        pendingDestroy[(frameCount - 1) % 3].push_back(std::move(remote_game_items[item.id]));
+                        remote_game_items.erase(item.id);
+                    }
+                }
+            }
+
+            std::vector<uint64_t> game_items_to_remove;
+            for (auto& [id, cube] : remote_game_items)
+            {
+                auto it = std::find_if(game_items.begin(), game_items.end(),
+                                       [id](const auto& i)
+                                       { return i.id == id; });
+                if (it == game_items.end())
+                {
+                    scene_manager.getCurrentScene()->removeObject(cube->getId());
+                    pendingDestroy[(frameCount - 1) % 3].push_back(std::move(cube));
+                    game_items_to_remove.push_back(id);
+                }
+            }
+            for (auto id : game_items_to_remove)
+                remote_game_items.erase(id);
         }
 
         window.update();
