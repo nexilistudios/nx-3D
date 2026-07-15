@@ -1,4 +1,4 @@
-#include <spear/spear.hh>
+#include <spear/spear_vulkan.hh>
 
 #include <nexilis/client/packet.hh>
 #include <nexilis/protocol_manager.hh>
@@ -165,32 +165,32 @@ int main()
 
     // --- UI Renderer ---
     std::string fontPath = "/usr/share/fonts/TTF/FiraCode-Retina.ttf";
-    spear::ui::UIRenderer uiRenderer(
+    spear::ui::vulkan::UIRenderer uiRenderer(
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
             descriptorPool, descriptorSetLayout, fontPath, 24);
 
-    spear::ui::Text titleText(
+    spear::ui::vulkan::Text titleText(
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
             descriptorPool, descriptorSetLayout, fontPath, 32);
     titleText.setString("nx-3D Lobby");
     titleText.setColor(SDL_Color{0, 200, 255, 255});
     titleText.setPosition(glm::vec2(-0.8f, 0.7f));
 
-    spear::ui::Text statusText(
+    spear::ui::vulkan::Text statusText(
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
             descriptorPool, descriptorSetLayout, fontPath, 20);
     statusText.setString("Connecting to server...");
     statusText.setColor(SDL_Color{200, 200, 200, 255});
     statusText.setPosition(glm::vec2(-0.8f, 0.5f));
 
-    spear::ui::Text instructionsText(
+    spear::ui::vulkan::Text instructionsText(
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
             descriptorPool, descriptorSetLayout, fontPath, 16);
     instructionsText.setString("");
     instructionsText.setPosition(glm::vec2(-0.8f, -0.8f));
 
     // HUD texts (used during Game state, top-left corner)
-    spear::ui::Text weaponHudText(
+    spear::ui::vulkan::Text weaponHudText(
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
             descriptorPool, descriptorSetLayout, fontPath, 20);
     weaponHudText.setString("");
@@ -198,7 +198,7 @@ int main()
     weaponHudText.setPosition(glm::vec2(-0.98f, -0.85f));
 
     // Menu list for rooms
-    spear::ui::MenuList* roomMenu = nullptr;
+    spear::ui::BaseMenuList* roomMenu = nullptr;
 
     renderer.setUIRenderer(&uiRenderer);
 
