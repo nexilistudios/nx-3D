@@ -157,6 +157,11 @@ int main()
 
     // --- Weapon state ---
     bool weaponPickedUp = false;
+    uint64_t pickedUpItemId = 0;
+    glm::vec3 pickedUpItemSize{1.0f};
+    std::string pickedUpItemType;
+    std::string pickedUpItemFilepath;
+    int dropCooldown = 0;
     std::shared_ptr<nx3d::client::gun::FirstPersonGun> firstPersonGun;
 
     // Start in lobby
@@ -263,12 +268,36 @@ int main()
     std::vector<std::shared_ptr<vk::TexturedCube>> pendingDestroy[3];
     int frameCount = 0;
 
+    eventHandler.handleInput(SDLK_G, [&]() {
+        if (currentState == State::Game && weaponPickedUp)
+        {
+            weaponPickedUp = false;
+
+            scene_manager.getCurrentScene()->removeObject(firstPersonGun->getId());
+            vkDeviceWaitIdle(device);
+            firstPersonGun.reset();
+
+            tcp_client.sendMessage(
+                    packet::Room::GameItem::destroy(pickedUpItemId));
+
+            glm::vec3 dropPos = camera.getPosition() + camera.getFront() * 300.0f;
+            auto pos = nexilis::Vector3f({dropPos.x, dropPos.y, dropPos.z});
+            auto dim = nexilis::Vector3f({pickedUpItemSize.x, pickedUpItemSize.y, pickedUpItemSize.z});
+            tcp_client.sendMessage(
+                    packet::Room::GameItem::create(pos, dim, pickedUpItemType, "on_ground", pickedUpItemFilepath));
+
+            weaponHudText.setString("");
+            dropCooldown = 60;
+        } });
+
     glm::vec3 prevCamPos = camera.getPosition();
 
     while (true)
     {
         pendingDestroy[frameCount % 3].clear();
         frameCount++;
+        if (dropCooldown > 0)
+            dropCooldown--;
 
         float delta_time = time_interface.getDeltaTime();
         time_interface.updateFromMain(delta_time);
@@ -396,7 +425,7 @@ int main()
         }
 
         // --- Pickup ---
-        if (currentState == State::Game && !weaponPickedUp && ready && tcp_client.getClientAPI().clientInRoom())
+        if (currentState == State::Game && !weaponPickedUp && dropCooldown == 0 && ready && tcp_client.getClientAPI().clientInRoom())
         {
             glm::vec3 camPos = camera.getPosition();
             auto& api = tcp_client.getClientAPI();
@@ -411,6 +440,10 @@ int main()
                     if (dist < 100.0f)
                     {
                         weaponPickedUp = true;
+                        pickedUpItemId = item.id;
+                        pickedUpItemSize = glm::vec3(item.w, item.h, item.d);
+                        pickedUpItemType = item.item_type;
+                        pickedUpItemFilepath = item.filepath;
 
                         tcp_client.sendMessage(
                                 packet::Room::GameItem::update(item.id, "picked_up"));
