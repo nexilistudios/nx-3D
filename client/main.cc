@@ -216,17 +216,28 @@ int main()
     uint64_t selectedRoomId = 0;
     State currentState = State::Connecting;
 
+    // --- Clean quit helper ---
+    auto cleanQuit = [&tcp_client, &currentState, &device, &descriptorPool, &descriptorSetLayout]()
+    {
+        if (tcp_client.getClientAPI().clientInRoom())
+        {
+            tcp_client.sendMessage(packet::Room::Management::leave());
+        }
+        tcp_client.stop();
+        vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+        vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+        exit(0);
+    };
+
     // --- Event Handlers ---
     spear::EventHandler eventHandler;
 
-    eventHandler.handleInput(SDLK_ESCAPE, [&device, &descriptorPool, &descriptorSetLayout]()
-                             {
-        vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
-        vkDestroyDescriptorPool(device, descriptorPool, nullptr);
-        exit(0); });
+    eventHandler.handleInput(SDLK_ESCAPE, [&cleanQuit]()
+                              {
+        cleanQuit(); });
 
     eventHandler.handleInput(SDLK_P, [&ready, &tcp_client, &camera, &currentState]()
-                             {
+                              {
         if (currentState == State::Game && ready && tcp_client.getClientAPI().clientInRoom())
         {
             auto cam_pos = camera.getPosition();
@@ -238,11 +249,9 @@ int main()
                     packet::Room::Object3D::create(pos, dim, ""));
         } });
 
-    eventHandler.registerCallback(SDL_EVENT_QUIT, [&device, &descriptorPool, &descriptorSetLayout](const SDL_Event&)
+    eventHandler.registerCallback(SDL_EVENT_QUIT, [&cleanQuit](const SDL_Event&)
                                   {
-        vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
-        vkDestroyDescriptorPool(device, descriptorPool, nullptr);
-        exit(0); });
+        cleanQuit(); });
 
     eventHandler.registerCallback(SDL_EVENT_MOUSE_MOTION, [&camera](const SDL_Event& event)
                                   { camera.rotate(event.motion.xrel, event.motion.yrel); });
@@ -343,17 +352,13 @@ int main()
             {
                 if (event.type == SDL_EVENT_QUIT)
                 {
-                    vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
-                    vkDestroyDescriptorPool(device, descriptorPool, nullptr);
-                    exit(0);
+                    cleanQuit();
                 }
                 if (event.type == SDL_EVENT_KEY_DOWN)
                 {
                     if (event.key.key == SDLK_ESCAPE)
                     {
-                        vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
-                        vkDestroyDescriptorPool(device, descriptorPool, nullptr);
-                        exit(0);
+                        cleanQuit();
                     }
                     if (currentState == State::Lobby && roomMenu && !joiningRoom)
                     {
