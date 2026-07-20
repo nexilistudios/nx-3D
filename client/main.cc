@@ -8,6 +8,7 @@
 
 #include <btBulletDynamicsCommon.h>
 
+#include <client/crosshair/crosshair.hh>
 #include <client/gun/first_person_gun.hh>
 
 #include <algorithm>
@@ -146,6 +147,12 @@ int main()
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
     ak47Texture->loadFromFile("/home/valtteri/code/nx-3D/assets/ak47/textures/low_AK47_BaseColor.png");
 
+    // White 1x1 texture for crosshair quads
+    auto crosshairTexture = std::make_shared<vk::STBTexture>(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
+    unsigned char whitePixel[4] = {255, 255, 255, 255};
+    crosshairTexture->loadFromRGBA(whitePixel, 1, 1);
+
     // clang-format off
     auto game_objects = spear::Scene::Container{
         dust2_model
@@ -163,6 +170,7 @@ int main()
     std::string pickedUpItemFilepath;
     int dropCooldown = 0;
     std::shared_ptr<nx3d::client::gun::FirstPersonGun> firstPersonGun;
+    std::shared_ptr<nx3d::client::Crosshair> crosshair;
 
     // Start in lobby
     scene_manager.loadScene(lobby_scene_id);
@@ -281,6 +289,13 @@ int main()
         if (currentState == State::Game && weaponPickedUp)
         {
             weaponPickedUp = false;
+
+            if (crosshair)
+            {
+                scene_manager.getCurrentScene()->removeObject(crosshair->getId());
+                vkDeviceWaitIdle(device);
+                crosshair.reset();
+            }
 
             scene_manager.getCurrentScene()->removeObject(firstPersonGun->getId());
             vkDeviceWaitIdle(device);
@@ -466,6 +481,13 @@ int main()
                                 blt::ObjectData(shared_bullet_world, 0.0f,
                                                 glm::vec3(0.0f, 0.0f, 0.0f), default_size));
                         scene_manager.getCurrentScene()->addObject(firstPersonGun);
+
+                        crosshair = std::make_shared<nx3d::client::Crosshair>(
+                                device, physDevice,
+                                crosshairTexture, descriptorPool, descriptorSetLayout,
+                                blt::ObjectData(shared_bullet_world, 0.0f,
+                                                glm::vec3(0.0f, 0.0f, 0.0f), default_size));
+                        scene_manager.getCurrentScene()->addObject(crosshair);
 
                         weaponHudText.setString("AK-47");
                         break;
