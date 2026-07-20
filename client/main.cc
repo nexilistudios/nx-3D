@@ -225,8 +225,9 @@ int main()
     State currentState = State::Connecting;
 
     // --- Clean quit helper ---
-    auto cleanQuit = [&tcp_client, &currentState, &device, &descriptorPool, &descriptorSetLayout]()
+    auto cleanQuit = [&tcp_client, &currentState, &device, &descriptorPool, &descriptorSetLayout, &window]()
     {
+        SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), false);
         if (tcp_client.getClientAPI().clientInRoom())
         {
             tcp_client.sendMessage(packet::Room::Management::leave());
@@ -356,6 +357,7 @@ int main()
             uiRenderer.clear();
             uiRenderer.addExternalText(weaponHudText);
             renderer.setUIRenderer(&uiRenderer);
+            SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
             currentState = State::Game;
         }
 
