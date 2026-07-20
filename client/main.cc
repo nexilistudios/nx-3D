@@ -169,6 +169,7 @@ int main()
     std::string pickedUpItemType;
     std::string pickedUpItemFilepath;
     int dropCooldown = 0;
+    int health = 100;
     std::shared_ptr<nx3d::client::gun::FirstPersonGun> firstPersonGun;
     std::shared_ptr<nx3d::client::Crosshair> crosshair;
 
@@ -202,13 +203,20 @@ int main()
     instructionsText.setString("");
     instructionsText.setPosition(glm::vec2(-0.8f, -0.8f));
 
-    // HUD texts (used during Game state, top-left corner)
+    // HUD texts (used during Game state, bottom-left corner)
+    spear::ui::vulkan::Text healthText(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 24);
+    healthText.setString("100");
+    healthText.setColor(SDL_Color{255, 255, 255, 255});
+    healthText.setPosition(glm::vec2(-0.98f, -0.98f));
+
     spear::ui::vulkan::Text weaponHudText(
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
             descriptorPool, descriptorSetLayout, fontPath, 20);
     weaponHudText.setString("");
     weaponHudText.setColor(SDL_Color{0, 255, 0, 255});
-    weaponHudText.setPosition(glm::vec2(-0.98f, -0.85f));
+    weaponHudText.setPosition(glm::vec2(-0.98f, -0.88f));
 
     // Menu list for rooms
     spear::ui::BaseMenuList* roomMenu = nullptr;
@@ -355,6 +363,7 @@ int main()
             renderer.setScene(scene_manager.getCurrentScene());
             // Switch UI from lobby to HUD
             uiRenderer.clear();
+            uiRenderer.addExternalText(healthText);
             uiRenderer.addExternalText(weaponHudText);
             renderer.setUIRenderer(&uiRenderer);
             SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
