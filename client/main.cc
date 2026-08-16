@@ -49,6 +49,8 @@ int main()
     auto start_client = nexilis::startClient(tcp_client, rooms, ready, mtx);
     start_client.detach();
 
+    auto& client_api = tcp_client.getClientAPI();
+
     spear::VulkanWindow window(window_name, window_size);
     auto w_size = window.getSize();
     std::cout << "Window size x: " << w_size.x << " y: " << w_size.y << std::endl;
@@ -233,12 +235,12 @@ int main()
     State currentState = State::Connecting;
 
     // --- Clean quit helper ---
-    auto cleanQuit = [&tcp_client, &currentState, &device, &descriptorPool, &descriptorSetLayout, &window]()
+    auto cleanQuit = [&tcp_client, &currentState, &device, &descriptorPool, &descriptorSetLayout, &window, &client_api]()
     {
         SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), false);
-        if (tcp_client.getClientAPI().clientInRoom())
+        if (client_api.clientInRoom())
         {
-            tcp_client.sendMessage(packet::Room::Management::leave());
+            tcp_client.sendMessage(packet::Room::Management::leave(client_api));
         }
         tcp_client.stop();
         vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
@@ -250,12 +252,11 @@ int main()
     spear::EventHandler eventHandler;
 
     eventHandler.handleInput(SDLK_ESCAPE, [&cleanQuit]()
-                              {
-        cleanQuit(); });
+                             { cleanQuit(); });
 
-    eventHandler.handleInput(SDLK_P, [&ready, &tcp_client, &camera, &currentState]()
-                              {
-        if (currentState == State::Game && ready && tcp_client.getClientAPI().clientInRoom())
+    eventHandler.handleInput(SDLK_P, [&ready, &tcp_client, &camera, &currentState, &client_api]()
+                             {
+        if (currentState == State::Game && ready && client_api.clientInRoom())
         {
             auto cam_pos = camera.getPosition();
             auto cam_front = camera.getFront();
@@ -263,12 +264,11 @@ int main()
             auto pos = nexilis::Vector3f({spawn_pos.x, spawn_pos.y, spawn_pos.z});
             auto dim = nexilis::Vector3f({1.0f, 1.0f, 1.0f});
             tcp_client.sendMessage(
-                    packet::Room::Object3D::create(pos, dim, ""));
+                    packet::Room::Object3D::create(client_api, pos, dim, ""));
         } });
 
     eventHandler.registerCallback(SDL_EVENT_QUIT, [&cleanQuit](const SDL_Event&)
-                                  {
-        cleanQuit(); });
+                                  { cleanQuit(); });
 
     eventHandler.registerCallback(SDL_EVENT_MOUSE_MOTION, [&camera](const SDL_Event& event)
                                   { camera.rotate(event.motion.xrel, event.motion.yrel); });
@@ -294,7 +294,8 @@ int main()
     std::vector<std::shared_ptr<vk::TexturedCube>> pendingDestroy[3];
     int frameCount = 0;
 
-    eventHandler.handleInput(SDLK_G, [&]() {
+    eventHandler.handleInput(SDLK_G, [&]()
+                             {
         if (currentState == State::Game && weaponPickedUp)
         {
             weaponPickedUp = false;
@@ -311,13 +312,13 @@ int main()
             firstPersonGun.reset();
 
             tcp_client.sendMessage(
-                    packet::Room::GameItem::destroy(pickedUpItemId));
+                    packet::Room::GameItem::destroy(client_api,  pickedUpItemId));
 
             glm::vec3 dropPos = camera.getPosition() + camera.getFront() * 300.0f;
             auto pos = nexilis::Vector3f({dropPos.x, dropPos.y, dropPos.z});
             auto dim = nexilis::Vector3f({pickedUpItemSize.x, pickedUpItemSize.y, pickedUpItemSize.z});
             tcp_client.sendMessage(
-                    packet::Room::GameItem::create(pos, dim, pickedUpItemType, "on_ground", pickedUpItemFilepath));
+                    packet::Room::GameItem::create(client_api, pos, dim, pickedUpItemType, "on_ground", pickedUpItemFilepath));
 
             weaponHudText.setString("");
             dropCooldown = 60;
@@ -357,7 +358,7 @@ int main()
             currentState = State::Lobby;
         }
 
-        if (currentState == State::Joining && tcp_client.getClientAPI().clientInRoom())
+        if (currentState == State::Joining && client_api.clientInRoom())
         {
             scene_manager.loadScene(game_scene_id);
             renderer.setScene(scene_manager.getCurrentScene());
@@ -402,7 +403,7 @@ int main()
                                 {
                                     selectedRoomId = rooms[idx].getId();
                                     tcp_client.sendMessage(
-                                            packet::Room::Management::join(selectedRoomId));
+                                            packet::Room::Management::join(client_api, selectedRoomId));
                                     joiningRoom = true;
                                     statusText.setString("Joining room...");
                                     currentState = State::Joining;
@@ -456,12 +457,11 @@ int main()
         }
 
         // --- Pickup ---
-        if (currentState == State::Game && !weaponPickedUp && dropCooldown == 0 && ready && tcp_client.getClientAPI().clientInRoom())
+        if (currentState == State::Game && !weaponPickedUp && dropCooldown == 0 && ready && client_api.clientInRoom())
         {
             glm::vec3 camPos = camera.getPosition();
-            auto& api = tcp_client.getClientAPI();
-            auto room_id = api.clientRoomId();
-            auto game_items = api.getRemoteGameItemsSnapshot(room_id);
+            auto room_id = client_api.clientRoomId();
+            auto game_items = client_api.getRemoteGameItemsSnapshot(room_id);
 
             for (auto& item : game_items)
             {
@@ -477,7 +477,7 @@ int main()
                         pickedUpItemFilepath = item.filepath;
 
                         tcp_client.sendMessage(
-                                packet::Room::GameItem::update(item.id, "picked_up"));
+                                packet::Room::GameItem::update(client_api, item.id, "picked_up"));
 
                         if (remote_game_items.find(item.id) != remote_game_items.end())
                         {
@@ -508,19 +508,18 @@ int main()
         }
 
         // --- Network sync (game only) ---
-        if (currentState == State::Game && ready && tcp_client.getClientAPI().clientInRoom())
+        if (currentState == State::Game && ready && client_api.clientInRoom())
         {
             auto cam_pos = camera.getPosition();
             auto pos = nexilis::Vector3f({cam_pos.x, cam_pos.y, cam_pos.z});
 
             tcp_client.sendMessage(
-                    packet::Room::Player3D::position(pos));
+                    packet::Room::Player3D::position(client_api, pos));
 
-            auto& api = tcp_client.getClientAPI();
-            auto room_id = api.clientRoomId();
-            auto my_id = api.getClientId();
+            auto room_id = client_api.clientRoomId();
+            auto my_id = client_api.getClientId();
 
-            auto players = api.getRemotePlayersSnapshot(room_id, my_id);
+            auto players = client_api.getRemotePlayersSnapshot(room_id, my_id);
 
             for (auto& player : players)
             {
@@ -562,7 +561,7 @@ int main()
                 }
             }
 
-            auto objects = api.getRemoteObjects3DSnapshot(room_id);
+            auto objects = client_api.getRemoteObjects3DSnapshot(room_id);
 
             for (auto& obj : objects)
             {
@@ -603,7 +602,7 @@ int main()
                 }
             }
 
-            auto game_items = api.getRemoteGameItemsSnapshot(room_id);
+            auto game_items = client_api.getRemoteGameItemsSnapshot(room_id);
 
             for (auto& item : game_items)
             {
