@@ -3,6 +3,8 @@
 #include <nexilis/room_data.hh>
 
 #include <nexilis/server/protocol/nxboost/tcp_server.hh>
+#include <nexilis/server/protocol/nxboost/udp_server.hh>
+
 #include <nexilis/server/room_storage.hh>
 #include <nexilis/server/runtime.hh>
 #include <nexilis/server/server_config.hh>
@@ -65,6 +67,10 @@ int main()
     auto boostTCPServer =
             protocolManager.createProtocol<nxboost::TCPServer>(server_config);
     boostTCPServer.start();
+
+    auto boostUDPServer =
+            protocolManager.createProtocol<nxboost::UDPServer>(server_config);
+    boostUDPServer.start();
 
     // clang-format off
     auto condition = [](size_t){ return true; };

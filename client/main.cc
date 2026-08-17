@@ -1,6 +1,7 @@
 #include <spear/spear_vulkan.hh>
 
 #include <nexilis/client/packet.hh>
+#include <nexilis/client/protocol/nxboost/udp_client.hh>
 #include <nexilis/protocol_manager.hh>
 #include <nexilis/room_info.hh>
 #include <nexilis/start_client.hh>
@@ -50,6 +51,8 @@ int main()
     start_client.detach();
 
     auto& client_api = tcp_client.getClientAPI();
+
+    auto udp_client = nexilis::client::nxboost::UDPClient(client_api);
 
     spear::VulkanWindow window(window_name, window_size);
     auto w_size = window.getSize();
@@ -356,6 +359,7 @@ int main()
             }
             menuPopulated = true;
             currentState = State::Lobby;
+            udp_client.start();
         }
 
         if (currentState == State::Joining && client_api.clientInRoom())
@@ -513,8 +517,7 @@ int main()
             auto cam_pos = camera.getPosition();
             auto pos = nexilis::Vector3f({cam_pos.x, cam_pos.y, cam_pos.z});
 
-            tcp_client.sendMessage(
-                    packet::Room::Player3D::position(client_api, pos));
+            udp_client.sendMessage(packet::Room::Player3D::position(client_api, pos));
 
             auto room_id = client_api.clientRoomId();
             auto my_id = client_api.getClientId();
