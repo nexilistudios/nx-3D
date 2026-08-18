@@ -13,14 +13,7 @@
 #include <client/crosshair/crosshair.hh>
 #include <client/gun/first_person_gun.hh>
 
-#include <algorithm>
-#include <atomic>
 #include <iostream>
-#include <memory>
-#include <mutex>
-#include <thread>
-#include <unordered_map>
-#include <vector>
 
 namespace
 {
@@ -518,7 +511,15 @@ int main()
             auto cam_pos = camera.getPosition();
             auto pos = nexilis::Vector3f({cam_pos.x, cam_pos.y, cam_pos.z});
 
-            udp_client.sendMessage(packet::Room::Player3D::position(client_api, pos));
+            static nexilis::Vector3f lastSentPosition = {0.0f, 0.0f, 0.0f};
+            constexpr float kPositionEpsilon = 0.001f;
+            if (std::abs(pos.x - lastSentPosition.x) > kPositionEpsilon ||
+                std::abs(pos.y - lastSentPosition.y) > kPositionEpsilon ||
+                std::abs(pos.z - lastSentPosition.z) > kPositionEpsilon)
+            {
+                udp_client.sendMessage(packet::Room::Player3D::position(client_api, pos));
+                lastSentPosition = pos;
+            }
 
             auto room_id = client_api.clientRoomId();
             auto my_id = client_api.getClientId();
