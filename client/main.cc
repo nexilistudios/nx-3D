@@ -1,5 +1,6 @@
 #include <spear/spear_vulkan.hh>
 
+#include <nexilis/client/create_client_config.hh>
 #include <nexilis/client/packet.hh>
 #include <nexilis/protocol_manager.hh>
 #include <nexilis/room_info.hh>
@@ -32,16 +33,6 @@ enum class State
     Game
 };
 
-nexilis::client::ClientConfig createClientConfig(const std::string ipAddress, const std::string& password)
-{
-    nexilis::client::ClientConfig config;
-    config.setPassword(password);
-    config.setBoostTCPAddress(ipAddress);
-    config.setBoostUDPAddress(ipAddress);
-    config.setMode(nexilis::server::AuthenticationMode::password_protected);
-    return config;
-}
-
 } // namespace
 
 int main()
@@ -55,14 +46,14 @@ int main()
     using packet = nexilis::client::Packet;
 
     nexilis::ProtocolManager protocolManager;
-    nexilis::client::ClientAPI client_api(createClientConfig("127.0.0.1", "password"));
+    nexilis::client::ClientAPI client_api(nexilis::client::createClientConfig("127.0.0.1", "password"));
 
-    nexilis::TCPClient tcp_client(client_api);
+    auto tcp_client = protocolManager.createProtocol<nexilis::TCPClient>(client_api);
 
     auto start_client = nexilis::startClient(client_api, tcp_client, rooms, ready, mtx);
     start_client.detach();
 
-    auto udp_client = nexilis::UDPClient(client_api);
+    auto udp_client = protocolManager.createProtocol<nexilis::UDPClient>(client_api);
 
     spear::VulkanWindow window(window_name, window_size);
     auto w_size = window.getSize();
