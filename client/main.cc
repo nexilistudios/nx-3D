@@ -13,7 +13,9 @@
 #include <client/crosshair/crosshair.hh>
 #include <client/gun/first_person_gun.hh>
 
+#include <cmath>
 #include <iostream>
+#include <limits>
 
 namespace
 {
@@ -206,7 +208,7 @@ int main()
     spear::ui::vulkan::Text healthText(
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
             descriptorPool, descriptorSetLayout, fontPath, 24);
-    healthText.setString("100");
+    healthText.setString("HP: 100");
     healthText.setColor(SDL_Color{255, 255, 255, 255});
     healthText.setPosition(glm::vec2(-0.98f, -0.98f));
 
@@ -216,6 +218,16 @@ int main()
     weaponHudText.setString("");
     weaponHudText.setColor(SDL_Color{0, 255, 0, 255});
     weaponHudText.setPosition(glm::vec2(-0.98f, -0.88f));
+
+    // Hitmarker overlay (shown briefly when dealing damage)
+    spear::ui::vulkan::Text hitmarkerText(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 28);
+    hitmarkerText.setString("");
+    hitmarkerText.setColor(SDL_Color{255, 255, 255, 255});
+    hitmarkerText.setPosition(glm::vec2(-0.025f, -0.025f));
+    hitmarkerText.setScale(0.003f);
+    int hitmarkerFrames = 0;
 
     // Menu list for rooms
     spear::ui::BaseMenuList* roomMenu = nullptr;
@@ -271,10 +283,76 @@ int main()
                                   { camera.rotate(event.motion.xrel, event.motion.yrel); });
 
     eventHandler.registerCallback(SDL_EVENT_MOUSE_BUTTON_DOWN,
-                                  [&currentState](const SDL_Event& event)
+                                  [&currentState, &weaponPickedUp, &camera, &tcp_client, &client_api](const SDL_Event& event)
                                   {
-                                      if (currentState == State::Game && event.button.button == SDL_BUTTON_LEFT)
-                                          ;
+                                      if (currentState == State::Game && weaponPickedUp && event.button.button == SDL_BUTTON_LEFT)
+                                      {
+                                          glm::vec3 rayOrigin = camera.getPosition();
+                                          glm::vec3 rayDir = glm::normalize(camera.getFront());
+
+                                          auto room_id = client_api.clientRoomId();
+                                          auto my_id = client_api.getClientId();
+                                          auto players = client_api.getRemotePlayersSnapshot(room_id, my_id);
+
+                                          float closestDist = std::numeric_limits<float>::max();
+                                          uint64_t hitTargetId = 0;
+
+                                          for (auto& player : players)
+                                          {
+                                              glm::vec3 center(player.x, player.y, player.z);
+                                              glm::vec3 halfExtents(5.0f, 5.0f, 5.0f);
+                                              glm::vec3 boxMin = center - halfExtents;
+                                              glm::vec3 boxMax = center + halfExtents;
+
+                                              float tmin = -std::numeric_limits<float>::max();
+                                              float tmax = std::numeric_limits<float>::max();
+                                              bool miss = false;
+
+                                              for (int i = 0; i < 3; i++)
+                                              {
+                                                  float origin_i = (&rayOrigin.x)[i];
+                                                  float dir_i = (&rayDir.x)[i];
+                                                  float min_i = (&boxMin.x)[i];
+                                                  float max_i = (&boxMax.x)[i];
+
+                                                  if (std::abs(dir_i) < 1e-8f)
+                                                  {
+                                                      if (origin_i < min_i || origin_i > max_i)
+                                                      {
+                                                          miss = true;
+                                                          break;
+                                                      }
+                                                  }
+                                                  else
+                                                  {
+                                                      float invD = 1.0f / dir_i;
+                                                      float t1 = (min_i - origin_i) * invD;
+                                                      float t2 = (max_i - origin_i) * invD;
+                                                      if (t1 > t2)
+                                                          std::swap(t1, t2);
+                                                      tmin = std::max(tmin, t1);
+                                                      tmax = std::min(tmax, t2);
+                                                      if (tmin > tmax)
+                                                      {
+                                                          miss = true;
+                                                          break;
+                                                      }
+                                                  }
+                                              }
+
+                                              if (!miss && tmin >= 0.0f && tmin < closestDist)
+                                              {
+                                                  closestDist = tmin;
+                                                  hitTargetId = player.id;
+                                              }
+                                          }
+
+                                          if (hitTargetId != 0)
+                                          {
+                                              tcp_client.sendMessage(
+                                                      packet::Room::Player3D::shoot(client_api, hitTargetId, 35.0f));
+                                          }
+                                      }
                                   });
 
     eventHandler.registerCallback(SDL_EVENT_WINDOW_RESIZED, [&window, &renderer](const SDL_Event&)
@@ -299,9 +377,9 @@ int main()
 
             if (crosshair)
             {
-                scene_manager.getCurrentScene()->removeObject(crosshair->getId());
                 vkDeviceWaitIdle(device);
                 crosshair.reset();
+                uiRenderer.setOverlayCallback(nullptr);
             }
 
             scene_manager.getCurrentScene()->removeObject(firstPersonGun->getId());
@@ -329,6 +407,11 @@ int main()
         frameCount++;
         if (dropCooldown > 0)
             dropCooldown--;
+        if (hitmarkerFrames > 0)
+        {
+            hitmarkerFrames--;
+            hitmarkerText.setString(hitmarkerFrames > 0 ? "X" : "");
+        }
 
         float delta_time = time_interface.getDeltaTime();
         time_interface.updateFromMain(delta_time);
@@ -364,6 +447,7 @@ int main()
             uiRenderer.clear();
             uiRenderer.addExternalText(healthText);
             uiRenderer.addExternalText(weaponHudText);
+            uiRenderer.addExternalText(hitmarkerText);
             renderer.setUIRenderer(&uiRenderer);
             SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
             currentState = State::Game;
@@ -496,7 +580,11 @@ int main()
                                 crosshairTexture, descriptorPool, descriptorSetLayout,
                                 blt::ObjectData(shared_bullet_world, 0.0f,
                                                 glm::vec3(0.0f, 0.0f, 0.0f), default_size));
-                        scene_manager.getCurrentScene()->addObject(crosshair);
+                        uiRenderer.setOverlayCallback([&]()
+                        {
+                            if (crosshair)
+                                crosshair->render(camera);
+                        });
 
                         weaponHudText.setString("AK-47");
                         break;
@@ -651,6 +739,23 @@ int main()
             }
             for (auto id : game_items_to_remove)
                 remote_game_items.erase(id);
+
+            // --- Consume damage events ---
+            auto damageEvents = client_api.consumeDamageEvents();
+            for (auto& evt : damageEvents)
+            {
+                if (evt.target_id == my_id)
+                {
+                    health = static_cast<int>(evt.new_health);
+                    if (health < 0)
+                        health = 0;
+                    healthText.setString("HP: " + std::to_string(health));
+                }
+                else if (evt.damage > 0.0f)
+                {
+                    hitmarkerFrames = 15;
+                }
+            }
         }
 
         window.update();
