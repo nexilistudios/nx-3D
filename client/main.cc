@@ -25,6 +25,7 @@ enum class State
     Connecting,
     Lobby,
     Joining,
+    TeamSelect,
     Game
 };
 
@@ -228,6 +229,45 @@ int main()
     hitmarkerText.setPosition(glm::vec2(-0.025f, -0.025f));
     hitmarkerText.setScale(0.003f);
     int hitmarkerFrames = 0;
+
+    // Team select UI
+    spear::ui::vulkan::Text ctButtonText(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 24);
+    ctButtonText.setString("Counter Terrorist");
+    ctButtonText.setColor(SDL_Color{255, 255, 255, 255});
+    ctButtonText.setPosition(glm::vec2(-0.72f, 0.03f));
+
+    spear::ui::vulkan::Text tButtonText(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 24);
+    tButtonText.setString("Terrorist");
+    tButtonText.setColor(SDL_Color{255, 255, 255, 255});
+    tButtonText.setPosition(glm::vec2(0.35f, 0.03f));
+
+    spear::ui::vulkan::Text teamSelectTitle(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 32);
+    teamSelectTitle.setString("Choose Your Team");
+    teamSelectTitle.setColor(SDL_Color{255, 255, 255, 255});
+    teamSelectTitle.setPosition(glm::vec2(-0.3f, 0.4f));
+
+    spear::ui::vulkan::Text teamSelectInstructions(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 16);
+    teamSelectInstructions.setString("Click a team to join");
+    teamSelectInstructions.setColor(SDL_Color{200, 200, 200, 255});
+    teamSelectInstructions.setPosition(glm::vec2(-0.25f, -0.3f));
+
+    // Team display (bottom right corner, shown during Game state)
+    spear::ui::vulkan::Text teamDisplayText(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 20);
+    teamDisplayText.setString("");
+    teamDisplayText.setColor(SDL_Color{255, 255, 255, 255});
+    teamDisplayText.setPosition(glm::vec2(0.65f, -0.95f));
+
+    std::string chosenTeam;
 
     // Menu list for rooms
     spear::ui::BaseMenuList* roomMenu = nullptr;
@@ -441,20 +481,20 @@ int main()
 
         if (currentState == State::Joining && client_api.clientInRoom())
         {
-            scene_manager.loadScene(game_scene_id);
-            renderer.setScene(scene_manager.getCurrentScene());
-            // Switch UI from lobby to HUD
+            // Keep lobby scene (dark background) for team select
+            // Switch UI from lobby to team select
             uiRenderer.clear();
-            uiRenderer.addExternalText(healthText);
-            uiRenderer.addExternalText(weaponHudText);
-            uiRenderer.addExternalText(hitmarkerText);
+            uiRenderer.addExternalText(teamSelectTitle);
+            uiRenderer.addExternalText(teamSelectInstructions);
+            uiRenderer.addExternalText(ctButtonText);
+            uiRenderer.addExternalText(tButtonText);
             renderer.setUIRenderer(&uiRenderer);
-            SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
-            currentState = State::Game;
+            currentState = State::TeamSelect;
         }
 
         // --- Event handling ---
-        if (currentState == State::Lobby || currentState == State::Connecting)
+        if (currentState == State::Lobby || currentState == State::Connecting ||
+            currentState == State::TeamSelect)
         {
             SDL_Event event;
             while (SDL_PollEvent(&event))
@@ -499,6 +539,48 @@ int main()
                     window.resize();
                     auto s = window.getSize();
                     renderer.setViewPort(s.x, s.y);
+                }
+                if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && currentState == State::TeamSelect)
+                {
+                    if (event.button.button == SDL_BUTTON_LEFT)
+                    {
+                        auto w_size = window.getSize();
+                        float mx = (static_cast<float>(event.button.x) / static_cast<float>(w_size.x)) * 2.0f - 1.0f;
+                        float my = 1.0f - (static_cast<float>(event.button.y) / static_cast<float>(w_size.y)) * 2.0f;
+
+                        // CT button: position (-0.75, 0.0), size (0.5, 0.15)
+                        if (mx >= -0.75f && mx <= -0.25f && my >= 0.0f && my <= 0.15f)
+                        {
+                            chosenTeam = "Counter Terrorist";
+                            teamDisplayText.setString(chosenTeam);
+                            scene_manager.loadScene(game_scene_id);
+                            renderer.setScene(scene_manager.getCurrentScene());
+                            uiRenderer.clear();
+                            uiRenderer.addExternalText(healthText);
+                            uiRenderer.addExternalText(weaponHudText);
+                            uiRenderer.addExternalText(hitmarkerText);
+                            uiRenderer.addExternalText(teamDisplayText);
+                            renderer.setUIRenderer(&uiRenderer);
+                            SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
+                            currentState = State::Game;
+                        }
+                        // T button: position (0.25, 0.0), size (0.5, 0.15)
+                        else if (mx >= 0.25f && mx <= 0.75f && my >= 0.0f && my <= 0.15f)
+                        {
+                            chosenTeam = "Terrorist";
+                            teamDisplayText.setString(chosenTeam);
+                            scene_manager.loadScene(game_scene_id);
+                            renderer.setScene(scene_manager.getCurrentScene());
+                            uiRenderer.clear();
+                            uiRenderer.addExternalText(healthText);
+                            uiRenderer.addExternalText(weaponHudText);
+                            uiRenderer.addExternalText(hitmarkerText);
+                            uiRenderer.addExternalText(teamDisplayText);
+                            renderer.setUIRenderer(&uiRenderer);
+                            SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
+                            currentState = State::Game;
+                        }
+                    }
                 }
                 if (event.type == SDL_EVENT_MOUSE_MOTION && currentState == State::Game)
                 {
