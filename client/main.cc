@@ -14,6 +14,7 @@
 #include <client/gun/first_person_gun.hh>
 
 #include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
 
@@ -268,6 +269,15 @@ int main()
     teamDisplayText.setPosition(glm::vec2(0.65f, -0.95f));
 
     std::string chosenTeam;
+
+    std::vector<glm::vec3> ctSpawns = {
+        {355.0f, -64.0f, -2364.0f},
+        {178.0f, -64.0f, -2408.0f}
+    };
+    std::vector<glm::vec3> tSpawns = {
+        {-592.0f, 192.0f, 764.0f},
+        {-834.0f, 192.0f, 797.0f}
+    };
 
     // Menu list for rooms
     spear::ui::BaseMenuList* roomMenu = nullptr;
@@ -553,6 +563,8 @@ int main()
                         {
                             chosenTeam = "Counter Terrorist";
                             teamDisplayText.setString(chosenTeam);
+                            auto spawn = ctSpawns[rand() % ctSpawns.size()];
+                            camera.setPosition(spawn);
                             scene_manager.loadScene(game_scene_id);
                             renderer.setScene(scene_manager.getCurrentScene());
                             uiRenderer.clear();
@@ -569,6 +581,8 @@ int main()
                         {
                             chosenTeam = "Terrorist";
                             teamDisplayText.setString(chosenTeam);
+                            auto spawn = tSpawns[rand() % tSpawns.size()];
+                            camera.setPosition(spawn);
                             scene_manager.loadScene(game_scene_id);
                             renderer.setScene(scene_manager.getCurrentScene());
                             uiRenderer.clear();
