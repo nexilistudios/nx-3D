@@ -852,6 +852,20 @@ int main()
                     hitmarkerFrames = 15;
                 }
             }
+
+            // --- Consume respawn events ---
+            auto respawnEvents = client_api.consumeRespawnEvents();
+            for (auto& evt : respawnEvents)
+            {
+                if (evt.target_id == my_id)
+                {
+                    auto& spawns = (chosenTeam == "Terrorist") ? tSpawns : ctSpawns;
+                    auto spawn = spawns[rand() % spawns.size()];
+                    camera.setPosition(spawn);
+                    health = 100;
+                    healthText.setString("HP: " + std::to_string(health));
+                }
+            }
         }
 
         window.update();
