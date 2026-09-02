@@ -1,7 +1,11 @@
+#include <nexilis/command_type.hh>
 #include <nexilis/object/game_item.hh>
 #include <nexilis/protocol_manager.hh>
+#include <nexilis/room_command_type.hh>
 #include <nexilis/room_data.hh>
 
+#include <nexilis/server/client_storage.hh>
+#include <nexilis/server/command/command.hh>
 #include <nexilis/server/protocol/nxboost/tcp_server.hh>
 #include <nexilis/server/protocol/nxboost/udp_server.hh>
 
@@ -29,6 +33,42 @@ static void spawnGameItems()
                 "on_ground",
                 ""));
         std::cout << "[GameItem] Spawned AK-47 in room: " << room.getName() << std::endl;
+    }
+}
+
+static void setupDeathHandlers()
+{
+    using namespace nexilis;
+    using namespace nexilis::server;
+
+    auto& rooms = RoomStorage::getAllRooms();
+    for (auto& room : rooms)
+    {
+        room.setDeathHandler([](Room& room, uint64_t killerId, uint64_t victimId)
+        {
+            room.resetPlayerHealth(victimId);
+
+            auto* killer = ClientStorage::getClientById(killerId);
+            if (!killer)
+                return;
+
+            nx_data respawnData;
+            respawnData.emplace_back(static_cast<uint8_t>(CommandType::room));
+            respawnData.emplace_back(static_cast<uint8_t>(RoomCommandType::Root::player_3D));
+            respawnData.emplace_back(static_cast<uint8_t>(RoomCommandType::PlayerType::respawn));
+
+            std::map<std::string, boost::json::value> respawnParams{
+                    {"target_id", boost::json::value(victimId)}};
+
+            auto packet = Command::createRoomCommand(
+                    room.getId(), *killer, respawnData, respawnParams, 0);
+            room.broadcastToAll(packet);
+
+            std::cout << "[Death] Player " << victimId
+                      << " killed by " << killerId
+                      << " in room: " << room.getName()
+                      << " - respawned" << std::endl;
+        });
     }
 }
 
@@ -60,6 +100,7 @@ int main()
     RoomStorage::add(std::move(room3));
 
     spawnGameItems();
+    setupDeathHandlers();
 
     nexilis::ProtocolManager protocolManager;
 
