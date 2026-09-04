@@ -2,6 +2,7 @@
 
 #include <nexilis/client/create_client_config.hh>
 #include <nexilis/client/packet.hh>
+#include <nexilis/cmd_line_options.hh>
 #include <nexilis/protocol_manager.hh>
 #include <nexilis/room_info.hh>
 #include <nexilis/start_client.hh>
@@ -13,6 +14,8 @@
 #include <client/crosshair/crosshair.hh>
 #include <client/gun/first_person_gun.hh>
 
+#include <SDL3/SDL.h>
+
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -23,6 +26,7 @@ namespace
 
 enum class State
 {
+    ServerInput,
     Connecting,
     Lobby,
     Joining,
@@ -32,7 +36,7 @@ enum class State
 
 } // namespace
 
-int main()
+int main(int argc, char* argv[])
 {
     const std::string window_name = "nx_3D game";
     const spear::BaseWindow::Size window_size = {820, 640};
@@ -40,15 +44,35 @@ int main()
     std::mutex mtx;
     std::vector<nexilis::RoomInfo> rooms;
 
+    // Parse --server argument
+    nexilis::CmdLineOptions cmdLine(argc, argv);
+    std::string serverAddress = cmdLine.getValue<std::string>("-server", "127.0.0.1");
+    std::string serverAddressInput = "127.0.0.1";
+    bool serverInputCleared = false;
+    std::string lastServerDisplay;
+    State currentState;
+
+    if (argc > 1)
+    {
+        currentState = State::Connecting;
+    }
+    else
+    {
+        currentState = State::ServerInput;
+    }
+
     using packet = nexilis::client::Packet;
 
     nexilis::ProtocolManager protocolManager;
-    nexilis::client::ClientAPI client_api(nexilis::client::createClientConfig("127.0.0.1", "password"));
+    nexilis::client::ClientAPI client_api(nexilis::client::createClientConfig(serverAddress, "password"));
 
     auto tcp_client = protocolManager.createProtocol<nexilis::TCPClient>(client_api);
 
-    auto start_client = nexilis::startClient(client_api, tcp_client, rooms, ready, mtx);
-    start_client.detach();
+    if (currentState == State::Connecting)
+    {
+        auto start_client = nexilis::startClient(client_api, tcp_client, rooms, ready, mtx);
+        start_client.detach();
+    }
 
     auto udp_client = protocolManager.createProtocol<nexilis::UDPClient>(client_api);
 
@@ -256,7 +280,7 @@ int main()
     spear::ui::vulkan::Text teamSelectInstructions(
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
             descriptorPool, descriptorSetLayout, fontPath, 16);
-    teamSelectInstructions.setString("Click a team to join");
+    teamSelectInstructions.setString("1 = CT    2 = T    |    Click a team to join");
     teamSelectInstructions.setColor(SDL_Color{200, 200, 200, 255});
     teamSelectInstructions.setPosition(glm::vec2(-0.25f, -0.3f));
 
@@ -267,6 +291,28 @@ int main()
     teamDisplayText.setString("");
     teamDisplayText.setColor(SDL_Color{255, 255, 255, 255});
     teamDisplayText.setPosition(glm::vec2(0.65f, -0.95f));
+
+    // Server address input UI
+    spear::ui::vulkan::Text serverInputLabel(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 24);
+    serverInputLabel.setString("Server address:");
+    serverInputLabel.setColor(SDL_Color{255, 255, 255, 255});
+    serverInputLabel.setPosition(glm::vec2(-0.8f, 0.3f));
+
+    spear::ui::vulkan::Text serverAddressText(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 24);
+    serverAddressText.setString("|");
+    serverAddressText.setColor(SDL_Color{0, 200, 255, 255});
+    serverAddressText.setPosition(glm::vec2(-0.8f, 0.1f));
+
+    spear::ui::vulkan::Text serverInputInstructions(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 16);
+    serverInputInstructions.setString("Type address and press Enter   |   ESC: Quit");
+    serverInputInstructions.setColor(SDL_Color{200, 200, 200, 255});
+    serverInputInstructions.setPosition(glm::vec2(-0.8f, -0.8f));
 
     std::string chosenTeam;
 
@@ -291,7 +337,14 @@ int main()
     bool menuPopulated = false;
     std::atomic<bool> joiningRoom = false;
     uint64_t selectedRoomId = 0;
-    State currentState = State::Connecting;
+
+    if (currentState == State::ServerInput)
+    {
+        uiRenderer.addExternalText(serverInputLabel);
+        uiRenderer.addExternalText(serverAddressText);
+        uiRenderer.addExternalText(serverInputInstructions);
+        SDL_StartTextInput(window.getSDLWindow());
+    }
 
     // --- Clean quit helper ---
     auto cleanQuit = [&tcp_client, &currentState, &device, &descriptorPool, &descriptorSetLayout, &window, &client_api]()
@@ -493,6 +546,7 @@ int main()
         {
             // Keep lobby scene (dark background) for team select
             // Switch UI from lobby to team select
+            // Switch UI from lobby to team select
             uiRenderer.clear();
             uiRenderer.addExternalText(teamSelectTitle);
             uiRenderer.addExternalText(teamSelectInstructions);
@@ -503,7 +557,73 @@ int main()
         }
 
         // --- Event handling ---
-        if (currentState == State::Lobby || currentState == State::Connecting ||
+        if (currentState == State::ServerInput)
+        {
+            SDL_Event event;
+            while (SDL_PollEvent(&event))
+            {
+                if (event.type == SDL_EVENT_QUIT)
+                {
+                    cleanQuit();
+                }
+                if (event.type == SDL_EVENT_KEY_DOWN)
+                {
+                    if (event.key.key == SDLK_ESCAPE)
+                    {
+                        cleanQuit();
+                    }
+                    else if (event.key.key == SDLK_BACKSPACE)
+                    {
+                        if (!serverAddressInput.empty())
+                        {
+                            serverInputCleared = true;
+                            serverAddressInput.pop_back();
+                        }
+                    }
+                    else if (event.key.key == SDLK_RETURN)
+                    {
+                        serverAddress = serverAddressInput.empty() ? "127.0.0.1" : serverAddressInput;
+
+                        tcp_client.stop();
+                        client_api = nexilis::client::ClientAPI(
+                                nexilis::client::createClientConfig(serverAddress, "password"));
+                        tcp_client = protocolManager.createProtocol<nexilis::TCPClient>(client_api);
+                        auto start_client = nexilis::startClient(client_api, tcp_client, rooms, ready, mtx);
+                        start_client.detach();
+                        udp_client = protocolManager.createProtocol<nexilis::UDPClient>(client_api);
+
+                        uiRenderer.clear();
+                        uiRenderer.addExternalText(titleText);
+                        uiRenderer.addExternalText(statusText);
+                        uiRenderer.addExternalText(instructionsText);
+                        currentState = State::Connecting;
+                    }
+                }
+                if (event.type == SDL_EVENT_TEXT_INPUT)
+                {
+                    if (!serverInputCleared)
+                    {
+                        serverAddressInput.clear();
+                        serverInputCleared = true;
+                    }
+                    serverAddressInput += event.text.text;
+                }
+            }
+
+            // Blinking cursor - only update when the displayed text changes
+            // to avoid re-allocating a descriptor set on every frame.
+            std::string displayText = serverAddressInput;
+            if ((frameCount / 30) % 2 == 0)
+                displayText += "|";
+            else
+                displayText += " ";
+            if (displayText != lastServerDisplay)
+            {
+                lastServerDisplay = displayText;
+                serverAddressText.setString(displayText);
+            }
+        }
+        else if (currentState == State::Lobby || currentState == State::Connecting ||
             currentState == State::TeamSelect)
         {
             SDL_Event event;
@@ -543,23 +663,9 @@ int main()
                             }
                         }
                     }
-                }
-                if (event.type == SDL_EVENT_WINDOW_RESIZED)
-                {
-                    window.resize();
-                    auto s = window.getSize();
-                    renderer.setViewPort(s.x, s.y);
-                }
-                if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && currentState == State::TeamSelect)
-                {
-                    if (event.button.button == SDL_BUTTON_LEFT)
+                    if (currentState == State::TeamSelect)
                     {
-                        auto w_size = window.getSize();
-                        float mx = (static_cast<float>(event.button.x) / static_cast<float>(w_size.x)) * 2.0f - 1.0f;
-                        float my = 1.0f - (static_cast<float>(event.button.y) / static_cast<float>(w_size.y)) * 2.0f;
-
-                        // CT button: position (-0.75, 0.0), size (0.5, 0.15)
-                        if (mx >= -0.75f && mx <= -0.25f && my >= 0.0f && my <= 0.15f)
+                        if (event.key.key == SDLK_1)
                         {
                             chosenTeam = "Counter Terrorist";
                             teamDisplayText.setString(chosenTeam);
@@ -576,8 +682,58 @@ int main()
                             SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
                             currentState = State::Game;
                         }
-                        // T button: position (0.25, 0.0), size (0.5, 0.15)
-                        else if (mx >= 0.25f && mx <= 0.75f && my >= 0.0f && my <= 0.15f)
+                        else if (event.key.key == SDLK_2)
+                        {
+                            chosenTeam = "Terrorist";
+                            teamDisplayText.setString(chosenTeam);
+                            auto spawn = tSpawns[rand() % tSpawns.size()];
+                            camera.setPosition(spawn);
+                            scene_manager.loadScene(game_scene_id);
+                            renderer.setScene(scene_manager.getCurrentScene());
+                            uiRenderer.clear();
+                            uiRenderer.addExternalText(healthText);
+                            uiRenderer.addExternalText(weaponHudText);
+                            uiRenderer.addExternalText(hitmarkerText);
+                            uiRenderer.addExternalText(teamDisplayText);
+                            renderer.setUIRenderer(&uiRenderer);
+                            SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
+                            currentState = State::Game;
+                        }
+                    }
+                }
+                if (event.type == SDL_EVENT_WINDOW_RESIZED)
+                {
+                    window.resize();
+                    auto s = window.getSize();
+                    renderer.setViewPort(s.x, s.y);
+                }
+                if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && currentState == State::TeamSelect)
+                {
+                    if (event.button.button == SDL_BUTTON_LEFT)
+                    {
+                        int live_w = 0, live_h = 0;
+                        SDL_GetWindowSize(window.getSDLWindow(), &live_w, &live_h);
+                        float mx = (static_cast<float>(event.button.x) / static_cast<float>(live_w ? live_w : 1)) * 2.0f - 1.0f;
+                        float my = 1.0f - (static_cast<float>(event.button.y) / static_cast<float>(live_h ? live_h : 1)) * 2.0f;
+
+                        if (mx >= -0.8f && mx <= -0.15f && my >= 0.0f && my <= 0.15f)
+                        {
+                            chosenTeam = "Counter Terrorist";
+                            teamDisplayText.setString(chosenTeam);
+                            auto spawn = ctSpawns[rand() % ctSpawns.size()];
+                            camera.setPosition(spawn);
+                            scene_manager.loadScene(game_scene_id);
+                            renderer.setScene(scene_manager.getCurrentScene());
+                            uiRenderer.clear();
+                            uiRenderer.addExternalText(healthText);
+                            uiRenderer.addExternalText(weaponHudText);
+                            uiRenderer.addExternalText(hitmarkerText);
+                            uiRenderer.addExternalText(teamDisplayText);
+                            renderer.setUIRenderer(&uiRenderer);
+                            SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
+                            currentState = State::Game;
+                        }
+                        else if (mx >= 0.15f && mx <= 0.8f && my >= 0.0f && my <= 0.15f)
                         {
                             chosenTeam = "Terrorist";
                             teamDisplayText.setString(chosenTeam);
