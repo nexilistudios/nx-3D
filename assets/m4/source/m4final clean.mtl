@@ -1,0 +1,35 @@
+# M4A1 model materials — map_Kd entries added for base-color textures.
+newmtl Material
+Kd 0.5 0.5 0.5
+Ns 80
+
+newmtl Material.001
+Kd 0.5 0.5 0.5
+Ns 80
+
+newmtl Material.002
+Kd 0.5 0.5 0.5
+Ns 80
+
+newmtl Material.004
+Kd 0.5 0.5 0.5
+Ns 80
+map_Kd ../textures/m4final_Material.004_BaseColor.png
+
+newmtl Material.005
+Kd 0.5 0.5 0.5
+Ns 80
+map_Kd ../textures/m4final_Material.005_BaseColor.png
+
+newmtl Material.006
+Kd 0.5 0.5 0.5
+Ns 80
+
+newmtl Material.008
+Kd 0.5 0.5 0.5
+Ns 80
+map_Kd ../textures/m4final_Material.008_BaseColor.png
+
+newmtl Material.009
+Kd 0.5 0.5 0.5
+Ns 80
