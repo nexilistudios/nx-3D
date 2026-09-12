@@ -13,6 +13,7 @@
 
 #include <client/crosshair/crosshair.hh>
 #include <client/gun/first_person_gun.hh>
+#include <client/project_root.hh>
 
 #include <SDL3/SDL.h>
 
@@ -126,7 +127,7 @@ int main(int argc, char* argv[])
     auto dust2_model = std::make_shared<vk::OBJModel>(
             device, physDevice,
             renderer.getCommandPool(), renderer.getGraphicsQueue(),
-            "/home/valtteri/code/nx-3D/assets/de_dust2/source/de_dust2.obj", "/home/valtteri/code/nx-3D/assets/de_dust2/source/de_dust2.mtl",
+            nx3d::projectAssetPath("de_dust2/source/de_dust2.obj"), nx3d::projectAssetPath("de_dust2/source/de_dust2.mtl"),
             descriptorPool, descriptorSetLayout,
             blt::ObjectData(shared_bullet_world, 0.0f,
                             glm::vec3(0.0f, 0.0f, 0.0f), default_size));
@@ -170,12 +171,12 @@ int main(int argc, char* argv[])
     auto* meshRigidBody = new btRigidBody(meshRbInfo);
     shared_bullet_world->addRigidBody(meshRigidBody);
 
-    const std::string ak47ObjPath = "/home/valtteri/code/nx-3D/assets/ak47/source/ak47.obj";
-    const std::string ak47MtlPath = "/home/valtteri/code/nx-3D/assets/ak47/source/ak47.mtl";
+    const std::string ak47ObjPath = nx3d::projectAssetPath("ak47/source/ak47.obj");
+    const std::string ak47MtlPath = nx3d::projectAssetPath("ak47/source/ak47.mtl");
     constexpr float ak47GroundScale = 48.0f;
 
-    const std::string m4ObjPath = "/home/valtteri/code/nx-3D/assets/m4/source/m4final clean.obj";
-    const std::string m4MtlPath = "/home/valtteri/code/nx-3D/assets/m4/source/m4final clean.mtl";
+    const std::string m4ObjPath = nx3d::projectAssetPath("m4/source/m4final clean.obj");
+    const std::string m4MtlPath = nx3d::projectAssetPath("m4/source/m4final clean.mtl");
     constexpr float m4GroundScale = 1.45f;
 
     // First-person view profiles (scale + bounds center) per weapon model.
@@ -202,7 +203,7 @@ int main(int argc, char* argv[])
     // --- Audio (spear engine) ---
     spear::audio::AudioSystem audio_system;
     audio_system.init();
-    spear::audio::Sound gunshot_audio(audio_system, "/home/valtteri/code/nx-3D/assets/sounds/gunshot.wav");
+    spear::audio::Sound gunshot_audio(audio_system, nx3d::projectAssetPath("sounds/gunshot.wav"));
 
     // --- Weapon state ---
     bool weaponPickedUp = false;
