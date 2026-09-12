@@ -17,25 +17,6 @@
 
 #include <iostream>
 
-static void spawnGameItems()
-{
-    using namespace nexilis;
-    using namespace nexilis::server;
-
-    auto& rooms = RoomStorage::getAllRooms();
-    for (auto& room : rooms)
-    {
-        room.addGameItem(GameItem(
-                Util::getRandomUint64(),
-                "ak47",
-                Vector3f{-1600.0f, 60.0f, -2400.0f},
-                Vector3f{33.0f, 33.0f, 33.0f},
-                "on_ground",
-                ""));
-        std::cout << "[GameItem] Spawned AK-47 in room: " << room.getName() << std::endl;
-    }
-}
-
 static void setupDeathHandlers()
 {
     using namespace nexilis;
@@ -45,7 +26,7 @@ static void setupDeathHandlers()
     for (auto& room : rooms)
     {
         room.setDeathHandler([](Room& room, uint64_t killerId, uint64_t victimId)
-        {
+                             {
             room.resetPlayerHealth(victimId);
 
             auto* killer = ClientStorage::getClientById(killerId);
@@ -67,8 +48,7 @@ static void setupDeathHandlers()
             std::cout << "[Death] Player " << victimId
                       << " killed by " << killerId
                       << " in room: " << room.getName()
-                      << " - respawned" << std::endl;
-        });
+                      << " - respawned" << std::endl; });
     }
 }
 
@@ -99,7 +79,6 @@ int main()
                                    nexilis::RoomData::Context::_3D));
     RoomStorage::add(std::move(room3));
 
-    spawnGameItems();
     setupDeathHandlers();
 
     nexilis::ProtocolManager protocolManager;

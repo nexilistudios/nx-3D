@@ -170,9 +170,19 @@ int main(int argc, char* argv[])
     auto* meshRigidBody = new btRigidBody(meshRbInfo);
     shared_bullet_world->addRigidBody(meshRigidBody);
 
-    auto ak47Texture = std::make_shared<vk::STBTexture>(
-            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
-    ak47Texture->loadFromFile("/home/valtteri/code/nx-3D/assets/ak47/textures/low_AK47_BaseColor.png");
+    const std::string ak47ObjPath = "/home/valtteri/code/nx-3D/assets/ak47/source/ak47.obj";
+    const std::string ak47MtlPath = "/home/valtteri/code/nx-3D/assets/ak47/source/ak47.mtl";
+    constexpr float ak47GroundScale = 48.0f;
+
+    const std::string m4ObjPath = "/home/valtteri/code/nx-3D/assets/m4/source/m4final clean.obj";
+    const std::string m4MtlPath = "/home/valtteri/code/nx-3D/assets/m4/source/m4final clean.mtl";
+    constexpr float m4GroundScale = 1.45f;
+
+    // First-person view profiles (scale + bounds center) per weapon model.
+    constexpr float akFPScale = 1.35f;
+    const glm::vec3 akFPCenter(0.0053f, 0.0156f, -0.0489f);
+    constexpr float m4FPScale = 0.04f;
+    const glm::vec3 m4FPCenter(-0.095f, -0.183f, 2.40f);
 
     // White 1x1 texture for crosshair quads
     auto crosshairTexture = std::make_shared<vk::STBTexture>(
@@ -325,6 +335,104 @@ int main(int argc, char* argv[])
         {-834.0f, 192.0f, 797.0f}
     };
 
+    // --- Gun equip/unequip helpers ---
+    auto equipGun = [&](const std::string& weaponName,
+                        const std::string& weaponModelPath,
+                        const std::string& weaponMaterialPath,
+                        float weaponScale,
+                        glm::vec3 weaponCenter)
+    {
+        if (crosshair)
+        {
+            vkDeviceWaitIdle(device);
+            crosshair.reset();
+            uiRenderer.setOverlayCallback(nullptr);
+        }
+        if (firstPersonGun)
+        {
+            scene_manager.getCurrentScene()->removeObject(firstPersonGun->getId());
+            vkDeviceWaitIdle(device);
+            firstPersonGun.reset();
+        }
+
+        firstPersonGun = std::make_shared<nx3d::client::gun::FirstPersonGun>(
+                device, physDevice,
+                renderer.getCommandPool(), renderer.getGraphicsQueue(),
+                weaponModelPath, weaponMaterialPath,
+                descriptorPool, descriptorSetLayout,
+                blt::ObjectData(shared_bullet_world, 0.0f,
+                                glm::vec3(0.0f, -1000.0f, 0.0f), default_size),
+                weaponScale, weaponCenter);
+        scene_manager.getCurrentScene()->addObject(firstPersonGun);
+
+        crosshair = std::make_shared<nx3d::client::Crosshair>(
+                device, physDevice,
+                crosshairTexture, descriptorPool, descriptorSetLayout,
+                blt::ObjectData(shared_bullet_world, 0.0f,
+                                glm::vec3(0.0f, -1000.0f, 0.0f), default_size));
+        uiRenderer.setOverlayCallback([&]()
+        {
+            if (crosshair)
+                crosshair->render(camera);
+        });
+
+        weaponHudText.setString(weaponName);
+    };
+
+    auto unequipGun = [&]()
+    {
+        if (crosshair)
+        {
+            vkDeviceWaitIdle(device);
+            crosshair.reset();
+            uiRenderer.setOverlayCallback(nullptr);
+        }
+        if (firstPersonGun)
+        {
+            scene_manager.getCurrentScene()->removeObject(firstPersonGun->getId());
+            vkDeviceWaitIdle(device);
+            firstPersonGun.reset();
+        }
+        weaponHudText.setString("");
+    };
+
+    auto equipWeaponForTeam = [&]()
+    {
+        const bool isCt = (chosenTeam == "Counter Terrorist");
+        const std::string& objPath = isCt ? m4ObjPath : ak47ObjPath;
+        const std::string& mtlPath = isCt ? m4MtlPath : ak47MtlPath;
+        const std::string& weaponType = isCt ? "m4" : "ak47";
+        const float& weaponScale = isCt ? m4FPScale : akFPScale;
+        const glm::vec3& weaponCenter = isCt ? m4FPCenter : akFPCenter;
+
+        equipGun(isCt ? "M4" : "AK-47", objPath, mtlPath, weaponScale, weaponCenter);
+
+        pickedUpItemId = 0;
+        pickedUpItemSize = glm::vec3(1.0f, 1.0f, 1.0f);
+        pickedUpItemType = weaponType;
+        pickedUpItemFilepath = objPath;
+    };
+
+    auto enterGameState = [&](const std::string& team)
+    {
+        chosenTeam = team;
+        teamDisplayText.setString(chosenTeam);
+        auto& spawns = (chosenTeam == "Terrorist") ? tSpawns : ctSpawns;
+        camera.setPosition(spawns[rand() % spawns.size()]);
+        scene_manager.loadScene(game_scene_id);
+        renderer.setScene(scene_manager.getCurrentScene());
+        uiRenderer.clear();
+        uiRenderer.addExternalText(healthText);
+        uiRenderer.addExternalText(weaponHudText);
+        uiRenderer.addExternalText(hitmarkerText);
+        uiRenderer.addExternalText(teamDisplayText);
+        renderer.setUIRenderer(&uiRenderer);
+        SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
+        currentState = State::Game;
+        weaponPickedUp = true;
+        equipWeaponForTeam();
+    };
+
     // Menu list for rooms
     spear::ui::BaseMenuList* roomMenu = nullptr;
 
@@ -386,10 +494,19 @@ int main(int argc, char* argv[])
                                   { camera.rotate(event.motion.xrel, event.motion.yrel); });
 
     eventHandler.registerCallback(SDL_EVENT_MOUSE_BUTTON_DOWN,
-                                  [&currentState, &weaponPickedUp, &camera, &tcp_client, &client_api](const SDL_Event& event)
+                                  [&currentState, &weaponPickedUp, &firstPersonGun, &camera, &tcp_client, &client_api](const SDL_Event& event)
                                   {
                                       if (currentState == State::Game && weaponPickedUp && event.button.button == SDL_BUTTON_LEFT)
                                       {
+                                          if (firstPersonGun)
+                                              firstPersonGun->addRecoil(0.1f);
+
+                                          // CS-style aim punch: kick the view up
+                                          // with a little random yaw, decaying over
+                                          // time.
+                                          float yawKick = (static_cast<float>(rand() % 100) - 50.0f) / 50.0f * 0.6f;
+                                          camera.addRecoilOffset(1.4f, yawKick);
+
                                           glm::vec3 rayOrigin = camera.getPosition();
                                           glm::vec3 rayDir = glm::normalize(camera.getFront());
 
@@ -468,8 +585,8 @@ int main(int argc, char* argv[])
 
     std::unordered_map<uint64_t, std::shared_ptr<vk::TexturedCube>> remote_players;
     std::unordered_map<uint64_t, std::shared_ptr<vk::TexturedCube>> remote_objects;
-    std::unordered_map<uint64_t, std::shared_ptr<vk::TexturedCube>> remote_game_items;
-    std::vector<std::shared_ptr<vk::TexturedCube>> pendingDestroy[3];
+    std::unordered_map<uint64_t, std::shared_ptr<vk::OBJModel>> remote_game_items;
+    std::vector<std::shared_ptr<spear::GameObject>> pendingDestroy[3];
     int frameCount = 0;
 
     eventHandler.handleInput(SDLK_G, [&]()
@@ -477,28 +594,24 @@ int main(int argc, char* argv[])
         if (currentState == State::Game && weaponPickedUp)
         {
             weaponPickedUp = false;
+            unequipGun();
 
-            if (crosshair)
+            // If we were holding a map pickup, remove the original from the server.
+            if (pickedUpItemId != 0)
             {
-                vkDeviceWaitIdle(device);
-                crosshair.reset();
-                uiRenderer.setOverlayCallback(nullptr);
+                tcp_client.sendMessage(
+                        packet::Room::GameItem::destroy(client_api,  pickedUpItemId));
+                pickedUpItemId = 0;
             }
 
-            scene_manager.getCurrentScene()->removeObject(firstPersonGun->getId());
-            vkDeviceWaitIdle(device);
-            firstPersonGun.reset();
-
-            tcp_client.sendMessage(
-                    packet::Room::GameItem::destroy(client_api,  pickedUpItemId));
-
-            glm::vec3 dropPos = camera.getPosition() + camera.getFront() * 300.0f;
+            // Always drop the held gun into the map, so even the team-issued
+            // spawn gun ends up as a physics-driven pickup on the ground.
+            glm::vec3 dropPos = camera.getPosition() + camera.getFront() * 80.0f;
             auto pos = nexilis::Vector3f({dropPos.x, dropPos.y, dropPos.z});
             auto dim = nexilis::Vector3f({pickedUpItemSize.x, pickedUpItemSize.y, pickedUpItemSize.z});
             tcp_client.sendMessage(
                     packet::Room::GameItem::create(client_api, pos, dim, pickedUpItemType, "on_ground", pickedUpItemFilepath));
 
-            weaponHudText.setString("");
             dropCooldown = 60;
         } });
 
@@ -667,37 +780,11 @@ int main(int argc, char* argv[])
                     {
                         if (event.key.key == SDLK_1)
                         {
-                            chosenTeam = "Counter Terrorist";
-                            teamDisplayText.setString(chosenTeam);
-                            auto spawn = ctSpawns[rand() % ctSpawns.size()];
-                            camera.setPosition(spawn);
-                            scene_manager.loadScene(game_scene_id);
-                            renderer.setScene(scene_manager.getCurrentScene());
-                            uiRenderer.clear();
-                            uiRenderer.addExternalText(healthText);
-                            uiRenderer.addExternalText(weaponHudText);
-                            uiRenderer.addExternalText(hitmarkerText);
-                            uiRenderer.addExternalText(teamDisplayText);
-                            renderer.setUIRenderer(&uiRenderer);
-                            SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
-                            currentState = State::Game;
+                            enterGameState("Counter Terrorist");
                         }
                         else if (event.key.key == SDLK_2)
                         {
-                            chosenTeam = "Terrorist";
-                            teamDisplayText.setString(chosenTeam);
-                            auto spawn = tSpawns[rand() % tSpawns.size()];
-                            camera.setPosition(spawn);
-                            scene_manager.loadScene(game_scene_id);
-                            renderer.setScene(scene_manager.getCurrentScene());
-                            uiRenderer.clear();
-                            uiRenderer.addExternalText(healthText);
-                            uiRenderer.addExternalText(weaponHudText);
-                            uiRenderer.addExternalText(hitmarkerText);
-                            uiRenderer.addExternalText(teamDisplayText);
-                            renderer.setUIRenderer(&uiRenderer);
-                            SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
-                            currentState = State::Game;
+                            enterGameState("Terrorist");
                         }
                     }
                 }
@@ -718,37 +805,11 @@ int main(int argc, char* argv[])
 
                         if (mx >= -0.8f && mx <= -0.15f && my >= 0.0f && my <= 0.15f)
                         {
-                            chosenTeam = "Counter Terrorist";
-                            teamDisplayText.setString(chosenTeam);
-                            auto spawn = ctSpawns[rand() % ctSpawns.size()];
-                            camera.setPosition(spawn);
-                            scene_manager.loadScene(game_scene_id);
-                            renderer.setScene(scene_manager.getCurrentScene());
-                            uiRenderer.clear();
-                            uiRenderer.addExternalText(healthText);
-                            uiRenderer.addExternalText(weaponHudText);
-                            uiRenderer.addExternalText(hitmarkerText);
-                            uiRenderer.addExternalText(teamDisplayText);
-                            renderer.setUIRenderer(&uiRenderer);
-                            SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
-                            currentState = State::Game;
+                            enterGameState("Counter Terrorist");
                         }
                         else if (mx >= 0.15f && mx <= 0.8f && my >= 0.0f && my <= 0.15f)
                         {
-                            chosenTeam = "Terrorist";
-                            teamDisplayText.setString(chosenTeam);
-                            auto spawn = tSpawns[rand() % tSpawns.size()];
-                            camera.setPosition(spawn);
-                            scene_manager.loadScene(game_scene_id);
-                            renderer.setScene(scene_manager.getCurrentScene());
-                            uiRenderer.clear();
-                            uiRenderer.addExternalText(healthText);
-                            uiRenderer.addExternalText(weaponHudText);
-                            uiRenderer.addExternalText(hitmarkerText);
-                            uiRenderer.addExternalText(teamDisplayText);
-                            renderer.setUIRenderer(&uiRenderer);
-                            SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
-                            currentState = State::Game;
+                            enterGameState("Terrorist");
                         }
                     }
                 }
@@ -781,6 +842,8 @@ int main(int argc, char* argv[])
         // --- Gun animation (game only) ---
         if (currentState == State::Game)
         {
+            camera.updateRecoil(delta_time);
+
             glm::vec3 cam_pos = camera.getPosition();
             glm::vec3 velocity = (cam_pos - prevCamPos) / std::max(delta_time, 0.001f);
             prevCamPos = cam_pos;
@@ -820,25 +883,11 @@ int main(int argc, char* argv[])
                             remote_game_items.erase(item.id);
                         }
 
-                        firstPersonGun = std::make_shared<nx3d::client::gun::FirstPersonGun>(
-                                device, physDevice,
-                                ak47Texture, descriptorPool, descriptorSetLayout,
-                                blt::ObjectData(shared_bullet_world, 0.0f,
-                                                glm::vec3(0.0f, 0.0f, 0.0f), default_size));
-                        scene_manager.getCurrentScene()->addObject(firstPersonGun);
+                        if (item.item_type == "m4")
+                            equipGun("M4", m4ObjPath, m4MtlPath, m4FPScale, m4FPCenter);
+                        else
+                            equipGun("AK-47", ak47ObjPath, ak47MtlPath, akFPScale, akFPCenter);
 
-                        crosshair = std::make_shared<nx3d::client::Crosshair>(
-                                device, physDevice,
-                                crosshairTexture, descriptorPool, descriptorSetLayout,
-                                blt::ObjectData(shared_bullet_world, 0.0f,
-                                                glm::vec3(0.0f, 0.0f, 0.0f), default_size));
-                        uiRenderer.setOverlayCallback([&]()
-                        {
-                            if (crosshair)
-                                crosshair->render(camera);
-                        });
-
-                        weaponHudText.setString("AK-47");
                         break;
                     }
                 }
@@ -955,14 +1004,36 @@ int main(int argc, char* argv[])
                 {
                     if (remote_game_items.find(item.id) == remote_game_items.end())
                     {
-                        auto cube = std::make_shared<vk::TexturedCube>(
+                        const std::string* objPath = &ak47ObjPath;
+                        const std::string* mtlPath = &ak47MtlPath;
+                        float groundScale = ak47GroundScale;
+                        btVector3 halfExtents(3.46f, 0.67f, 11.58f);
+                        if (item.item_type == "m4")
+                        {
+                            objPath = &m4ObjPath;
+                            mtlPath = &m4MtlPath;
+                            groundScale = m4GroundScale;
+                            halfExtents = btVector3(3.07f, 1.13f, 12.07f);
+                        }
+                        auto obj = std::make_shared<vk::OBJModel>(
                                 device, physDevice,
-                                ak47Texture, descriptorPool, descriptorSetLayout,
-                                blt::ObjectData(shared_bullet_world, 0.0f,
+                                renderer.getCommandPool(), renderer.getGraphicsQueue(),
+                                *objPath, *mtlPath,
+                                descriptorPool, descriptorSetLayout,
+                                blt::ObjectData(shared_bullet_world, 5.0f,
                                                 glm::vec3(item.x, item.y, item.z),
-                                                glm::vec3(item.w, item.h, item.d)));
-                        remote_game_items[item.id] = cube;
-                        scene_manager.getCurrentScene()->addObject(cube);
+                                                default_size),
+                                false);
+                        obj->setCollisionSize(halfExtents);
+                        if (btRigidBody* body = obj->getRigidBody())
+                        {
+                            body->setDamping(0.9f, 1.0f);
+                            body->setSleepingThresholds(0.1f, 0.1f);
+                        }
+                        obj->rotate(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+                        obj->scale(glm::vec3(groundScale));
+                        remote_game_items[item.id] = obj;
+                        scene_manager.getCurrentScene()->addObject(obj);
                     }
                 }
                 else
@@ -992,6 +1063,18 @@ int main(int argc, char* argv[])
             for (auto id : game_items_to_remove)
                 remote_game_items.erase(id);
 
+            // Sync the physics-driven position of each on-ground item back to
+            // its visual transform (guns fall under gravity and settle).
+            for (auto& item : game_items)
+            {
+                auto it = remote_game_items.find(item.id);
+                if (it != remote_game_items.end())
+                {
+                    btVector3 p = it->second->getPosition();
+                    it->second->setPosition(glm::vec3(p.x(), p.y(), p.z()));
+                }
+            }
+
             // --- Consume damage events ---
             auto damageEvents = client_api.consumeDamageEvents();
             for (auto& evt : damageEvents)
@@ -1020,6 +1103,12 @@ int main(int argc, char* argv[])
                     camera.setPosition(spawn);
                     health = 100;
                     healthText.setString("HP: " + std::to_string(health));
+
+                    if (!weaponPickedUp)
+                    {
+                        weaponPickedUp = true;
+                        equipWeaponForTeam();
+                    }
                 }
             }
         }
