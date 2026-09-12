@@ -199,6 +199,11 @@ int main(int argc, char* argv[])
     auto game_scene_id = spear::createScene(game_objects, game_function, scene_manager);
     scene_manager.getSceneById(game_scene_id)->setName("game");
 
+    // --- Audio (spear engine) ---
+    spear::audio::AudioSystem audio_system;
+    audio_system.init();
+    spear::audio::Sound gunshot_audio(audio_system, "/home/valtteri/code/nx-3D/assets/sounds/gunshot.wav");
+
     // --- Weapon state ---
     bool weaponPickedUp = false;
     uint64_t pickedUpItemId = 0;
@@ -494,10 +499,12 @@ int main(int argc, char* argv[])
                                   { camera.rotate(event.motion.xrel, event.motion.yrel); });
 
     eventHandler.registerCallback(SDL_EVENT_MOUSE_BUTTON_DOWN,
-                                  [&currentState, &weaponPickedUp, &firstPersonGun, &camera, &tcp_client, &client_api](const SDL_Event& event)
+                                  [&currentState, &weaponPickedUp, &firstPersonGun, &camera, &tcp_client, &client_api, &gunshot_audio](const SDL_Event& event)
                                   {
                                       if (currentState == State::Game && weaponPickedUp && event.button.button == SDL_BUTTON_LEFT)
                                       {
+                                          gunshot_audio.play();
+
                                           if (firstPersonGun)
                                               firstPersonGun->addRecoil(0.1f);
 
@@ -631,6 +638,9 @@ int main(int argc, char* argv[])
 
         float delta_time = time_interface.getDeltaTime();
         time_interface.updateFromMain(delta_time);
+
+        // Recycle finished gunshot sounds.
+        audio_system.update();
 
         // --- State machine ---
         if (currentState == State::Connecting && ready && !menuPopulated)
