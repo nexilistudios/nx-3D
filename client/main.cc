@@ -17,6 +17,7 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -32,7 +33,8 @@ enum class State
     Lobby,
     Joining,
     TeamSelect,
-    Game
+    Game,
+    Paused
 };
 
 } // namespace
@@ -308,6 +310,176 @@ int main(int argc, char* argv[])
     teamDisplayText.setColor(SDL_Color{255, 255, 255, 255});
     teamDisplayText.setPosition(glm::vec2(0.65f, -0.95f));
 
+    // Pause menu UI: a boxed panel (drawn as quads in the overlay pass)
+    // holding the volume slider and the quit button, plus overlay texts and
+    // the pause/resume/volume lambdas.
+    float audioVolume = 0.5f;
+    bool quitHovered = false;
+
+    auto pauseBackdropTexture = std::make_shared<vk::STBTexture>(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
+    unsigned char pauseBackdropPixel[4] = {12, 12, 18, 215};
+    pauseBackdropTexture->loadFromRGBA(pauseBackdropPixel, 1, 1);
+
+    auto pausePanelBorderTexture = std::make_shared<vk::STBTexture>(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
+    unsigned char pausePanelBorderPixel[4] = {160, 160, 170, 255};
+    pausePanelBorderTexture->loadFromRGBA(pausePanelBorderPixel, 1, 1);
+
+    auto pausePanelTexture = std::make_shared<vk::STBTexture>(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
+    unsigned char pausePanelPixel[4] = {26, 28, 38, 255};
+    pausePanelTexture->loadFromRGBA(pausePanelPixel, 1, 1);
+
+    auto sliderTrackTexture = std::make_shared<vk::STBTexture>(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
+    unsigned char sliderTrackPixel[4] = {90, 90, 100, 255};
+    sliderTrackTexture->loadFromRGBA(sliderTrackPixel, 1, 1);
+
+    auto sliderFillTexture = std::make_shared<vk::STBTexture>(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
+    unsigned char sliderFillPixel[4] = {255, 150, 0, 255};
+    sliderFillTexture->loadFromRGBA(sliderFillPixel, 1, 1);
+
+    auto sliderKnobTexture = std::make_shared<vk::STBTexture>(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
+    unsigned char sliderKnobPixel[4] = {255, 210, 0, 255};
+    sliderKnobTexture->loadFromRGBA(sliderKnobPixel, 1, 1);
+
+    auto quitButtonTexture = std::make_shared<vk::STBTexture>(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
+    unsigned char quitButtonPixel[4] = {140, 40, 40, 255};
+    quitButtonTexture->loadFromRGBA(quitButtonPixel, 1, 1);
+
+    auto quitButtonHoverTexture = std::make_shared<vk::STBTexture>(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue());
+    unsigned char quitButtonHoverPixel[4] = {210, 80, 60, 255};
+    quitButtonHoverTexture->loadFromRGBA(quitButtonHoverPixel, 1, 1);
+
+    std::shared_ptr<spear::ui::vulkan::Quad2D> pauseBackdropQuad =
+            std::make_shared<spear::ui::vulkan::Quad2D>(
+                    device, physDevice, descriptorPool, descriptorSetLayout, pauseBackdropTexture);
+    pauseBackdropQuad->setPosition(glm::vec2(-1.0f, -1.0f));
+    pauseBackdropQuad->setSize(glm::vec2(2.0f, 2.0f));
+
+    std::shared_ptr<spear::ui::vulkan::Quad2D> pausePanelBorder =
+            std::make_shared<spear::ui::vulkan::Quad2D>(
+                    device, physDevice, descriptorPool, descriptorSetLayout, pausePanelBorderTexture);
+    pausePanelBorder->setPosition(glm::vec2(-0.52f, -0.62f));
+    pausePanelBorder->setSize(glm::vec2(1.04f, 1.36f));
+
+    std::shared_ptr<spear::ui::vulkan::Quad2D> pausePanel =
+            std::make_shared<spear::ui::vulkan::Quad2D>(
+                    device, physDevice, descriptorPool, descriptorSetLayout, pausePanelTexture);
+    pausePanel->setPosition(glm::vec2(-0.50f, -0.60f));
+    pausePanel->setSize(glm::vec2(1.0f, 1.32f));
+
+    std::shared_ptr<spear::ui::vulkan::Quad2D> pauseSliderTrack =
+            std::make_shared<spear::ui::vulkan::Quad2D>(
+                    device, physDevice, descriptorPool, descriptorSetLayout, sliderTrackTexture);
+    pauseSliderTrack->setPosition(glm::vec2(-0.45f, 0.0f));
+    pauseSliderTrack->setSize(glm::vec2(0.9f, 0.07f));
+
+    std::shared_ptr<spear::ui::vulkan::Quad2D> pauseSliderFill =
+            std::make_shared<spear::ui::vulkan::Quad2D>(
+                    device, physDevice, descriptorPool, descriptorSetLayout, sliderFillTexture);
+    pauseSliderFill->setPosition(glm::vec2(-0.45f, 0.0f));
+    pauseSliderFill->setSize(glm::vec2(0.9f, 0.07f));
+
+    std::shared_ptr<spear::ui::vulkan::Quad2D> pauseSliderKnob =
+            std::make_shared<spear::ui::vulkan::Quad2D>(
+                    device, physDevice, descriptorPool, descriptorSetLayout, sliderKnobTexture);
+    pauseSliderKnob->setSize(glm::vec2(0.05f, 0.15f));
+
+    std::shared_ptr<spear::ui::vulkan::Quad2D> pauseQuitButton =
+            std::make_shared<spear::ui::vulkan::Quad2D>(
+                    device, physDevice, descriptorPool, descriptorSetLayout, quitButtonTexture);
+    pauseQuitButton->setPosition(glm::vec2(-0.42f, -0.37f));
+    pauseQuitButton->setSize(glm::vec2(0.84f, 0.12f));
+
+    std::shared_ptr<spear::ui::vulkan::Quad2D> pauseQuitButtonHover =
+            std::make_shared<spear::ui::vulkan::Quad2D>(
+                    device, physDevice, descriptorPool, descriptorSetLayout, quitButtonHoverTexture);
+    pauseQuitButtonHover->setPosition(glm::vec2(-0.42f, -0.37f));
+    pauseQuitButtonHover->setSize(glm::vec2(0.84f, 0.12f));
+
+    spear::ui::vulkan::Text pauseTitle(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 48);
+    pauseTitle.setString("");
+    pauseTitle.setColor(SDL_Color{255, 255, 255, 255});
+    pauseTitle.setPosition(glm::vec2(-0.17f, 0.47f));
+
+    spear::ui::vulkan::Text pauseVolumeText(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 24);
+    pauseVolumeText.setString("");
+    pauseVolumeText.setColor(SDL_Color{255, 200, 0, 255});
+    pauseVolumeText.setPosition(glm::vec2(-0.17f, 0.17f));
+
+    spear::ui::vulkan::Text pauseQuitText(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 28);
+    pauseQuitText.setString("");
+    pauseQuitText.setColor(SDL_Color{255, 255, 255, 255});
+    pauseQuitText.setPosition(glm::vec2(-0.22f, -0.33f));
+
+    spear::ui::vulkan::Text pauseInstructions(
+            device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout, fontPath, 14);
+    pauseInstructions.setString("");
+    pauseInstructions.setColor(SDL_Color{200, 200, 200, 255});
+    pauseInstructions.setPosition(glm::vec2(-0.37f, -0.56f));
+
+    auto changeVolume = [&](float delta)
+    {
+        audioVolume = std::clamp(audioVolume + delta, 0.0f, 1.0f);
+        gunshot_audio.setVolume(audioVolume);
+        int percent = static_cast<int>(std::lround(audioVolume * 100.0f));
+        pauseVolumeText.setString("Volume: " + std::to_string(percent) + "%");
+        float fillWidth = 0.9f * audioVolume;
+        if (pauseSliderFill)
+            pauseSliderFill->setSize(glm::vec2(fillWidth, 0.07f));
+        if (pauseSliderKnob)
+            pauseSliderKnob->setPosition(glm::vec2(-0.45f + fillWidth - 0.025f, -0.04f));
+    };
+    changeVolume(0.0f);
+    pauseVolumeText.setString("");
+
+    auto setVolumeNormalized = [&](float normalized)
+    {
+        normalized = std::clamp(normalized, 0.0f, 1.0f);
+        float snapped = std::round(normalized * 20.0f) / 20.0f;
+        changeVolume(snapped - audioVolume);
+    };
+
+    auto pauseGame = [&]()
+    {
+        if (currentState == State::Game)
+        {
+            currentState = State::Paused;
+            quitHovered = false;
+            SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), false);
+            pauseTitle.setString("PAUSED");
+            pauseQuitText.setString("[ QUIT GAME ]");
+            pauseInstructions.setString("ESC: Resume   |   L/R: Volume   |   Enter or Click: Quit");
+            changeVolume(0.0f);
+        }
+    };
+
+    auto resumeGame = [&]()
+    {
+        if (currentState == State::Paused)
+        {
+            currentState = State::Game;
+            SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
+            pauseTitle.setString("");
+            pauseVolumeText.setString("");
+            pauseQuitText.setString("");
+            pauseInstructions.setString("");
+        }
+    };
+
     // Server address input UI
     spear::ui::vulkan::Text serverInputLabel(
             device, physDevice, renderer.getCommandPool(), renderer.getGraphicsQueue(),
@@ -378,6 +550,31 @@ int main(int argc, char* argv[])
                                 glm::vec3(0.0f, -1000.0f, 0.0f), default_size));
         uiRenderer.setOverlayCallback([&]()
         {
+            if (currentState == State::Paused)
+            {
+                auto ctx = spear::ui::RenderContext{spear::rendering::vulkan::g_frameContext.commandBuffer};
+                if (pauseBackdropQuad)
+                    pauseBackdropQuad->render(ctx);
+                if (pausePanelBorder)
+                    pausePanelBorder->render(ctx);
+                if (pausePanel)
+                    pausePanel->render(ctx);
+                if (pauseSliderTrack)
+                    pauseSliderTrack->render(ctx);
+                if (pauseSliderFill)
+                    pauseSliderFill->render(ctx);
+                if (pauseSliderKnob)
+                    pauseSliderKnob->render(ctx);
+                if (quitHovered)
+                {
+                    if (pauseQuitButtonHover)
+                        pauseQuitButtonHover->render(ctx);
+                }
+                else if (pauseQuitButton)
+                {
+                    pauseQuitButton->render(ctx);
+                }
+            }
             if (crosshair)
                 crosshair->render(camera);
         });
@@ -432,6 +629,10 @@ int main(int argc, char* argv[])
         uiRenderer.addExternalText(weaponHudText);
         uiRenderer.addExternalText(hitmarkerText);
         uiRenderer.addExternalText(teamDisplayText);
+        uiRenderer.addExternalText(pauseTitle);
+        uiRenderer.addExternalText(pauseVolumeText);
+        uiRenderer.addExternalText(pauseQuitText);
+        uiRenderer.addExternalText(pauseInstructions);
         renderer.setUIRenderer(&uiRenderer);
         SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
         currentState = State::Game;
@@ -477,8 +678,17 @@ int main(int argc, char* argv[])
     // --- Event Handlers ---
     spear::EventHandler eventHandler;
 
-    eventHandler.handleInput(SDLK_ESCAPE, [&cleanQuit]()
-                             { cleanQuit(); });
+eventHandler.handleKeyPressed(SDLK_ESCAPE, [&currentState, &pauseGame, &resumeGame]()
+                                 {
+        if (currentState == State::Game)
+        {
+            pauseGame();
+        }
+        else if (currentState == State::Paused)
+        {
+            resumeGame();
+        }
+    });
 
     eventHandler.handleInput(SDLK_P, [&ready, &tcp_client, &camera, &currentState, &client_api]()
                              {
@@ -827,6 +1037,64 @@ int main(int argc, char* argv[])
                 if (event.type == SDL_EVENT_MOUSE_MOTION && currentState == State::Game)
                 {
                     camera.rotate(event.motion.xrel, event.motion.yrel);
+                }
+            }
+        }
+        else if (currentState == State::Paused)
+        {
+            SDL_Event event;
+            while (SDL_PollEvent(&event))
+            {
+                if (event.type == SDL_EVENT_QUIT)
+                {
+                    cleanQuit();
+                }
+                if (event.type == SDL_EVENT_KEY_DOWN)
+                {
+                    if (event.key.key == SDLK_ESCAPE)
+                    {
+                        resumeGame();
+                    }
+                    else if (event.key.key == SDLK_LEFT)
+                    {
+                        changeVolume(-0.05f);
+                    }
+                    else if (event.key.key == SDLK_RIGHT)
+                    {
+                        changeVolume(0.05f);
+                    }
+                    else if (event.key.key == SDLK_RETURN)
+                    {
+                        cleanQuit();
+                    }
+                }
+                if (event.type == SDL_EVENT_MOUSE_MOTION)
+                {
+                    int live_w = 0, live_h = 0;
+                    SDL_GetWindowSize(window.getSDLWindow(), &live_w, &live_h);
+                    float mx = (static_cast<float>(event.motion.x) / static_cast<float>(live_w ? live_w : 1)) * 2.0f - 1.0f;
+                    float my = 1.0f - (static_cast<float>(event.motion.y) / static_cast<float>(live_h ? live_h : 1)) * 2.0f;
+                    quitHovered = (mx >= -0.42f && mx <= 0.42f && my >= -0.37f && my <= -0.25f);
+                    if ((event.motion.state & SDL_BUTTON_LMASK) &&
+                        mx >= -0.45f && mx <= 0.45f && my >= -0.04f && my <= 0.11f)
+                    {
+                        setVolumeNormalized((mx + 0.45f) / 0.9f);
+                    }
+                }
+                if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT)
+                {
+                    int live_w = 0, live_h = 0;
+                    SDL_GetWindowSize(window.getSDLWindow(), &live_w, &live_h);
+                    float mx = (static_cast<float>(event.button.x) / static_cast<float>(live_w ? live_w : 1)) * 2.0f - 1.0f;
+                    float my = 1.0f - (static_cast<float>(event.button.y) / static_cast<float>(live_h ? live_h : 1)) * 2.0f;
+                    if (mx >= -0.45f && mx <= 0.45f && my >= -0.04f && my <= 0.11f)
+                    {
+                        setVolumeNormalized((mx + 0.45f) / 0.9f);
+                    }
+                    else if (mx >= -0.42f && mx <= 0.42f && my >= -0.37f && my <= -0.25f)
+                    {
+                        cleanQuit();
+                    }
                 }
             }
         }
