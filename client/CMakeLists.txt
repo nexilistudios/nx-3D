@@ -12,7 +12,12 @@ set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/../nexilis/nexilis/build/")
 find_package(Nexilis REQUIRED CONFIG)
 
 add_subdirectory(../spear/engine spear_engine)
-add_executable(nx_3D_client main.cc gun/first_person_gun.cc crosshair/crosshair.cc)
+
+file(GLOB_RECURSE NX3D_CLIENT_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+list(FILTER NX3D_CLIENT_SOURCES EXCLUDE REGEX "/build/")
+
+add_executable(nx_3D_client ${NX3D_CLIENT_SOURCES})
 set(PROJECT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_include_directories(nx_3D_client PRIVATE "${CMAKE_SOURCE_DIR}/..")
 target_compile_definitions(nx_3D_client PRIVATE PROJECT_ROOT="${PROJECT_ROOT}")

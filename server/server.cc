@@ -13,44 +13,25 @@
 #include <nexilis/server/runtime.hh>
 #include <nexilis/server/server_config.hh>
 
+#include <server/gamemode/game_mode_registry.hh>
 #include <server/gun/gun_manager.hh>
 
+#include <shared/gamemode.hh>
+
+#include <functional>
 #include <iostream>
 
-static void setupDeathHandlers()
+namespace
 {
-    using namespace nexilis;
-    using namespace nexilis::server;
 
-    auto& rooms = RoomStorage::getAllRooms();
-    for (auto& room : rooms)
-    {
-        room.setDeathHandler([](Room& room, uint64_t killerId, uint64_t victimId)
-                             {
-            room.resetPlayerHealth(victimId);
-
-            auto* killer = ClientStorage::getClientById(killerId);
-            if (!killer)
-                return;
-
-            nx_data respawnData;
-            respawnData.emplace_back(static_cast<uint8_t>(CommandType::room));
-            respawnData.emplace_back(static_cast<uint8_t>(RoomCommandType::Root::player_3D));
-            respawnData.emplace_back(static_cast<uint8_t>(RoomCommandType::PlayerType::respawn));
-
-            std::map<std::string, boost::json::value> respawnParams{
-                    {"target_id", boost::json::value(victimId)}};
-
-            auto packet = Command::createRoomCommand(
-                    room.getId(), *killer, respawnData, respawnParams, 0);
-            room.broadcastToAll(packet);
-
-            std::cout << "[Death] Player " << victimId
-                      << " killed by " << killerId
-                      << " in room: " << room.getName()
-                      << " - respawned" << std::endl; });
-    }
+/// Create a room with the given display name.
+nexilis::server::Room createRoom(const std::string& name)
+{
+    auto roomData = nexilis::RoomData(0, name, nexilis::Util::getRandomUint64());
+    return nexilis::server::Room(roomData);
 }
+
+} // namespace
 
 int main()
 {
@@ -63,23 +44,31 @@ int main()
     server_config.setPassphrase("password");
     server_config.setRootPassword("root");
 
-    // Some initial rooms.
-    auto room1 =
-            Room(nexilis::RoomData(0, "Room 1", nexilis::Util::getRandomUint64(),
-                                   nexilis::RoomData::Context::_3D));
-    RoomStorage::add(std::move(room1));
+    namespace gamemode = nx3d::server::gamemode;
 
-    auto room2 =
-            Room(nexilis::RoomData(0, "Room 2", nexilis::Util::getRandomUint64(),
-                                   nexilis::RoomData::Context::_3D));
-    RoomStorage::add(std::move(room2));
+    // Some initial rooms. The gamemode is decided here on the server, purely as
+    // game logic: nexilis does not know about gamemodes, so the registry keeps
+    // track of which room runs which mode.
+    {
+        auto room = createRoom("Room 1");
+        auto roomId = room.getId();
+        RoomStorage::add(std::move(room));
+        gamemode::GameModeRegistry::assignRoom(*RoomStorage::getRoomById(roomId), nx3d::GameMode::deathmatch);
+    }
 
-    auto room3 =
-            Room(nexilis::RoomData(0, "Room 3", nexilis::Util::getRandomUint64(),
-                                   nexilis::RoomData::Context::_3D));
-    RoomStorage::add(std::move(room3));
+    {
+        auto room = createRoom("Room 2");
+        auto roomId = room.getId();
+        RoomStorage::add(std::move(room));
+        gamemode::GameModeRegistry::assignRoom(*RoomStorage::getRoomById(roomId), nx3d::GameMode::deathmatch);
+    }
 
-    setupDeathHandlers();
+    {
+        auto room = createRoom("Room 3");
+        auto roomId = room.getId();
+        RoomStorage::add(std::move(room));
+        gamemode::GameModeRegistry::assignRoom(*RoomStorage::getRoomById(roomId), nx3d::GameMode::deathmatch);
+    }
 
     nexilis::ProtocolManager protocolManager;
 
@@ -106,6 +95,7 @@ int main()
     auto f = std::function<bool()>([&gunManager]()
     {
         gunManager.update(1.0f / 60.0f);
+        gamemode::GameModeRegistry::update(1.0f / 60.0f);
         return true;
     });
 
