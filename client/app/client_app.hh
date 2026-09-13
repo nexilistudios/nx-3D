@@ -64,6 +64,7 @@ public:
     VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
     spear::audio::AudioSystem audio_system;
     std::unique_ptr<spear::audio::Sound> gunshot_audio;
+    std::unique_ptr<spear::audio::Sound> hitmarker_audio;
     spear::Time time_interface;
     spear::EventHandler eventHandler;
     std::unique_ptr<ui::Ui> ui;
@@ -95,7 +96,7 @@ public:
     bool menuPopulated = false;
 
     // --- Pause / audio -------------------------------------------------------
-    float audioVolume = 0.5f;
+    float audioVolume = 0.1f;
     bool quitHovered = false;
 
     // --- Textures -------------------------------------------------------------
@@ -118,6 +119,7 @@ public:
     // --- Helpers ----------------------------------------------------------------
     void connect(const std::string& address);
     void enterGame(const std::string& team);
+    void applyAudioVolume();
     void changeVolume(float delta);
     void setVolumeNormalized(float normalized);
     void pauseGame();

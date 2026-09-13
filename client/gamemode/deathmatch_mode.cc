@@ -48,6 +48,10 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
         app.ui->hitmarkerText.setString(m_hitmarkerFrames > 0 ? "X" : "");
     }
 
+    // Play the hitmarker sound shortly after a hit (handled in the shared
+    // GameMode base so it works in every gamemode).
+    updateHitmarkerSound(app);
+
     // --- Gun walk-bob ---
     glm::vec3 cam_pos = app.camera.getPosition();
     glm::vec3 velocity = (cam_pos - m_prevCamPos) / std::max(delta_time, 0.001f);
@@ -145,6 +149,12 @@ void DeathmatchMode::handleMouseButtonDown(ClientApp& app, const SDL_Event& even
     if (app.gunshot_audio)
         app.gunshot_audio->play();
 
+    // Capture the aim direction BEFORE the aim punch is applied, so the
+    // bullet goes exactly where the crosshair points when firing. The punch
+    // below is purely visual feedback and decays after the shot.
+    glm::vec3 rayOrigin = app.camera.getPosition();
+    glm::vec3 rayDir = glm::normalize(app.camera.getFront());
+
     if (m_firstPersonGun)
         m_firstPersonGun->addRecoil(0.1f);
 
@@ -152,9 +162,6 @@ void DeathmatchMode::handleMouseButtonDown(ClientApp& app, const SDL_Event& even
     // decaying over time.
     float yawKick = (static_cast<float>(rand() % 100) - 50.0f) / 50.0f * 0.6f;
     app.camera.addRecoilOffset(1.4f, yawKick);
-
-    glm::vec3 rayOrigin = app.camera.getPosition();
-    glm::vec3 rayDir = glm::normalize(app.camera.getFront());
 
     auto room_id = app.client_api.clientRoomId();
     auto my_id = app.client_api.getClientId();
@@ -166,7 +173,7 @@ void DeathmatchMode::handleMouseButtonDown(ClientApp& app, const SDL_Event& even
     for (auto& player : players)
     {
         glm::vec3 center(player.x, player.y, player.z);
-        glm::vec3 halfExtents(5.0f, 5.0f, 5.0f);
+        glm::vec3 halfExtents(10.0f, 10.0f, 10.0f);
         glm::vec3 boxMin = center - halfExtents;
         glm::vec3 boxMax = center + halfExtents;
 
@@ -215,6 +222,10 @@ void DeathmatchMode::handleMouseButtonDown(ClientApp& app, const SDL_Event& even
 
     if (hitTargetId != 0)
     {
+        // Fire the hitmarker sound a little later (in update()) so it is
+        // not drowned out by the gunshot sound that was just started.
+        triggerHitmarkerSound();
+
         app.tcp_client.sendMessage(
                 packet::Room::Player3D::shoot(app.client_api, hitTargetId, 35.0f));
     }

@@ -41,6 +41,20 @@ public:
 
     /// Called for key presses while the app is in the Game state.
     virtual void handleKeyDown(ClientApp& app, const SDL_Event& event) = 0;
+
+protected:
+    /// Advance and play the shared hitmarker sound. Gamemodes should call this
+    /// from their update() so the hitmarker audio works regardless of mode.
+    void updateHitmarkerSound(ClientApp& app);
+
+    /// Request the hitmarker sound to play shortly after a hit. Call whenever
+    /// a shot fired by the local player lands on another player.
+    void triggerHitmarkerSound();
+
+private:
+    /// Frames until the delayed hitmarker sound should play (lets the
+    /// gunshot's initial attack pass so the hitmarker is audible).
+    int m_hitmarkerAudioDelay = 0;
 };
 
 } // namespace nx3d::client::gamemode

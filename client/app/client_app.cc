@@ -79,6 +79,9 @@ ClientApp::ClientApp(const std::string& initialServerAddress, bool connectOnStar
     audio_system.init();
     gunshot_audio = std::make_unique<spear::audio::Sound>(
             audio_system, nx3d::projectAssetPath("sounds/gunshot.wav"));
+    hitmarker_audio = std::make_unique<spear::audio::Sound>(
+            audio_system, nx3d::projectAssetPath("sounds/hitmarker.wav"));
+    applyAudioVolume();
 
     // --- UI ---
     std::string fontPath = "/usr/share/fonts/TTF/FiraCode-Retina.ttf";
@@ -261,9 +264,16 @@ void ClientApp::enterGame(const std::string& team)
 void ClientApp::changeVolume(float delta)
 {
     audioVolume = std::clamp(audioVolume + delta, 0.0f, 1.0f);
+    applyAudioVolume();
+    ui->updateVolumeDisplay(audioVolume);
+}
+
+void ClientApp::applyAudioVolume()
+{
     if (gunshot_audio)
         gunshot_audio->setVolume(audioVolume);
-    ui->updateVolumeDisplay(audioVolume);
+    if (hitmarker_audio)
+        hitmarker_audio->setVolume(audioVolume);
 }
 
 void ClientApp::setVolumeNormalized(float normalized)
