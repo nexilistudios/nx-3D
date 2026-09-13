@@ -26,7 +26,7 @@ namespace nx3d::client
 namespace blt = spear::physics::bullet;
 namespace vk = spear::rendering::vulkan;
 
-ClientApp::ClientApp(const std::string& initialServerAddress, bool connectOnStart)
+ClientApp::ClientApp(const std::string& initialServerAddress, const std::string& initialUsername, bool connectOnStart)
     : window("nx_3D game", spear::BaseWindow::Size{820, 640}),
       camera(glm::vec3(-1600.0f, 64.0f, -2600.0f), glm::vec3(0.f, 1.f, 0.f), 90.0f, 0.f, 250.f),
       scene_manager(),
@@ -35,7 +35,7 @@ ClientApp::ClientApp(const std::string& initialServerAddress, bool connectOnStar
       movement_controller(camera, shared_world.get(), 64.0f),
       renderer(window),
       serverAddress(initialServerAddress),
-      username("username_" + std::to_string(nexilis::Util::getRandomInt(1000000, 9999999))),
+      username(initialUsername.empty() ? "username_" + std::to_string(nexilis::Util::getRandomInt(1000000, 9999999)) : initialUsername),
       client_api(nexilis::client::createClientConfig(serverAddress, "password")),
       tcp_client(client_api),
       udp_client(client_api)

@@ -6,11 +6,12 @@
 
 int main(int argc, char* argv[])
 {
-    // Parse --server argument
+    // Parse --server and --username arguments
     nexilis::CmdLineOptions cmdLine(argc, argv);
     std::string serverAddress = cmdLine.getValue<std::string>("-server", "127.0.0.1");
+    std::string username = cmdLine.getValue<std::string>("-username", "");
 
-    nx3d::client::ClientApp app(serverAddress, argc > 1);
+    nx3d::client::ClientApp app(serverAddress, username, argc > 1);
     app.run();
 
     return 0;

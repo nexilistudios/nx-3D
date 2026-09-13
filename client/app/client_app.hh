@@ -43,7 +43,7 @@ public:
         Paused
     };
 
-    ClientApp(const std::string& initialServerAddress, bool connectOnStart);
+    ClientApp(const std::string& initialServerAddress, const std::string& initialUsername, bool connectOnStart);
     ~ClientApp();
 
     ClientApp(const ClientApp&) = delete;
