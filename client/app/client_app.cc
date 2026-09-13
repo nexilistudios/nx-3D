@@ -9,6 +9,7 @@
 #include <nexilis/cmd_line_options.hh>
 #include <nexilis/start_client.hh>
 #include <nexilis/udp_client.hh>
+#include <nexilis/util.hh>
 
 #include <shared/gamemode.hh>
 
@@ -34,6 +35,7 @@ ClientApp::ClientApp(const std::string& initialServerAddress, bool connectOnStar
       movement_controller(camera, shared_world.get(), 64.0f),
       renderer(window),
       serverAddress(initialServerAddress),
+      username("username_" + std::to_string(nexilis::Util::getRandomInt(1000000, 9999999))),
       client_api(nexilis::client::createClientConfig(serverAddress, "password")),
       tcp_client(client_api),
       udp_client(client_api)
@@ -101,6 +103,7 @@ ClientApp::ClientApp(const std::string& initialServerAddress, bool connectOnStar
     else
     {
         currentState = State::ServerInput;
+        usernameInput = username;
         ui->showServerInputTexts();
         SDL_StartTextInput(window.getSDLWindow());
     }
@@ -341,6 +344,8 @@ void ClientApp::run()
         // --- State machine ---
         if (currentState == State::Connecting && ready && !menuPopulated)
         {
+            tcp_client.sendMessage(packet::Set::General::username(client_api, username));
+
             std::lock_guard<std::mutex> lock(mtx);
             if (!rooms.empty())
             {
@@ -384,44 +389,75 @@ void ClientApp::run()
                     {
                         cleanQuit();
                     }
+                    else if (event.key.key == SDLK_TAB)
+                    {
+                        activeTextInputField = (activeTextInputField + 1) % 2;
+                    }
                     else if (event.key.key == SDLK_BACKSPACE)
                     {
-                        if (!serverAddressInput.empty())
+                        if (activeTextInputField == 0 && !serverAddressInput.empty())
                         {
                             serverInputCleared = true;
                             serverAddressInput.pop_back();
+                        }
+                        else if (activeTextInputField == 1 && !usernameInput.empty())
+                        {
+                            usernameInputCleared = true;
+                            usernameInput.pop_back();
                         }
                     }
                     else if (event.key.key == SDLK_RETURN)
                     {
                         std::string address = serverAddressInput.empty() ? "127.0.0.1" : serverAddressInput;
                         connect(address);
+                        if (!usernameInput.empty())
+                            username = usernameInput;
                         ui->showMenuTexts();
                         currentState = State::Connecting;
                     }
                 }
                 if (event.type == SDL_EVENT_TEXT_INPUT)
                 {
-                    if (!serverInputCleared)
+                    if (activeTextInputField == 0)
                     {
-                        serverAddressInput.clear();
-                        serverInputCleared = true;
+                        if (!serverInputCleared)
+                        {
+                            serverAddressInput.clear();
+                            serverInputCleared = true;
+                        }
+                        serverAddressInput += event.text.text;
                     }
-                    serverAddressInput += event.text.text;
+                    else
+                    {
+                        if (!usernameInputCleared)
+                        {
+                            usernameInput.clear();
+                            usernameInputCleared = true;
+                        }
+                        usernameInput += event.text.text;
+                    }
                 }
             }
 
             // Blinking cursor - only update when the displayed text changes
             // to avoid re-allocating a descriptor set on every frame.
-            std::string displayText = serverAddressInput;
-            if ((frameCount / 30) % 2 == 0)
-                displayText += "|";
-            else
-                displayText += " ";
-            if (displayText != lastServerDisplay)
+            auto cursorText = [&](const std::string& text, bool activeField)
             {
-                lastServerDisplay = displayText;
-                ui->serverAddressText.setString(displayText);
+                if (!activeField)
+                    return text;
+                return ((frameCount / 30) % 2 == 0) ? text + "|" : text + " ";
+            };
+            std::string serverDisplay = cursorText(serverAddressInput, activeTextInputField == 0);
+            std::string usernameDisplay = cursorText(usernameInput, activeTextInputField == 1);
+            if (serverDisplay != lastServerDisplay)
+            {
+                lastServerDisplay = serverDisplay;
+                ui->serverAddressText.setString(serverDisplay);
+            }
+            if (usernameDisplay != lastUsernameDisplay)
+            {
+                lastUsernameDisplay = usernameDisplay;
+                ui->usernameInputText.setString(usernameDisplay);
             }
         }
         else if (currentState == State::Lobby || currentState == State::Connecting ||

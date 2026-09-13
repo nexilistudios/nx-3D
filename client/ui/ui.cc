@@ -39,6 +39,11 @@ Ui::Ui(VkDevice device,
       serverInputInstructions(device, physDevice, commandPool, graphicsQueue,
                               descriptorPool, descriptorSetLayout, fontPath, 16),
 
+      usernameInputLabel(device, physDevice, commandPool, graphicsQueue,
+                         descriptorPool, descriptorSetLayout, fontPath, 24),
+      usernameInputText(device, physDevice, commandPool, graphicsQueue,
+                        descriptorPool, descriptorSetLayout, fontPath, 24),
+
       ctButtonText(device, physDevice, commandPool, graphicsQueue,
                    descriptorPool, descriptorSetLayout, fontPath, 24),
       tButtonText(device, physDevice, commandPool, graphicsQueue,
@@ -81,13 +86,22 @@ Ui::Ui(VkDevice device,
     // --- Server address input ---------------------------------------------
     serverInputLabel.setString("Server address:");
     serverInputLabel.setColor(SDL_Color{255, 255, 255, 255});
-    serverInputLabel.setPosition(glm::vec2(-0.8f, 0.3f));
+    serverInputLabel.setPosition(glm::vec2(-0.8f, 0.5f));
 
     serverAddressText.setString("|");
     serverAddressText.setColor(SDL_Color{0, 200, 255, 255});
-    serverAddressText.setPosition(glm::vec2(-0.8f, 0.1f));
+    serverAddressText.setPosition(glm::vec2(-0.8f, 0.3f));
 
-    serverInputInstructions.setString("Type address and press Enter   |   ESC: Quit");
+    // --- Username input ----------------------------------------------------
+    usernameInputLabel.setString("Username:");
+    usernameInputLabel.setColor(SDL_Color{255, 255, 255, 255});
+    usernameInputLabel.setPosition(glm::vec2(-0.8f, 0.1f));
+
+    usernameInputText.setString("|");
+    usernameInputText.setColor(SDL_Color{0, 200, 255, 255});
+    usernameInputText.setPosition(glm::vec2(-0.8f, -0.1f));
+
+    serverInputInstructions.setString("Type and press Enter   |   Tab: Switch field   |   ESC: Quit");
     serverInputInstructions.setColor(SDL_Color{200, 200, 200, 255});
     serverInputInstructions.setPosition(glm::vec2(-0.8f, -0.8f));
 
@@ -218,6 +232,8 @@ void Ui::showServerInputTexts()
     clear();
     registerText(serverInputLabel);
     registerText(serverAddressText);
+    registerText(usernameInputLabel);
+    registerText(usernameInputText);
     registerText(serverInputInstructions);
 }
 

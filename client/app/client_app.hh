@@ -91,6 +91,14 @@ public:
     bool serverInputCleared = false;
     std::string lastServerDisplay;
 
+    // --- Username input -------------------------------------------------------
+    std::string username;
+    std::string usernameInput;
+    bool usernameInputCleared = false;
+    std::string lastUsernameDisplay;
+    /// 0 = server address field, 1 = username field.
+    int activeTextInputField = 0;
+
     // --- Lobby room menu -----------------------------------------------------
     spear::ui::BaseMenuList* roomMenu = nullptr;
     bool menuPopulated = false;

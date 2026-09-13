@@ -70,6 +70,9 @@ public:
     spear::ui::vulkan::Text serverAddressText;
     spear::ui::vulkan::Text serverInputInstructions;
 
+    spear::ui::vulkan::Text usernameInputLabel;
+    spear::ui::vulkan::Text usernameInputText;
+
     spear::ui::vulkan::Text ctButtonText;
     spear::ui::vulkan::Text tButtonText;
     spear::ui::vulkan::Text teamSelectTitle;
