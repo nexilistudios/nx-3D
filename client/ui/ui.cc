@@ -69,8 +69,29 @@ Ui::Ui(VkDevice device,
       pauseQuitText(device, physDevice, commandPool, graphicsQueue,
                     descriptorPool, descriptorSetLayout, fontPath, 28),
       pauseInstructions(device, physDevice, commandPool, graphicsQueue,
-                        descriptorPool, descriptorSetLayout, fontPath, 14)
+                        descriptorPool, descriptorSetLayout, fontPath, 14),
+
+      leaderboardTitle(device, physDevice, commandPool, graphicsQueue,
+                       descriptorPool, descriptorSetLayout, fontPath, 28),
+      leaderboardTHeader(device, physDevice, commandPool, graphicsQueue,
+                         descriptorPool, descriptorSetLayout, fontPath, 22),
+      leaderboardCTHeader(device, physDevice, commandPool, graphicsQueue,
+                          descriptorPool, descriptorSetLayout, fontPath, 22)
 {
+    // --- Leaderboard (Tab) ----------------------------------------------------
+    leaderboardTitle.setString("");
+    leaderboardTitle.setColor(SDL_Color{255, 255, 255, 255});
+    leaderboardTitle.setPosition(glm::vec2(-0.12f, 0.44f));
+
+    leaderboardTHeader.setString("");
+    leaderboardTHeader.setColor(SDL_Color{255, 150, 0, 255});
+    leaderboardTHeader.setPosition(glm::vec2(-0.8f, 0.34f));
+
+    leaderboardCTHeader.setString("");
+    leaderboardCTHeader.setColor(SDL_Color{0, 150, 255, 255});
+    leaderboardCTHeader.setPosition(glm::vec2(0.0f, 0.34f));
+
+    buildLeaderboard();
     // --- Lobby / connecting ----------------------------------------------
     titleText.setString("nx-3D Lobby");
     titleText.setColor(SDL_Color{0, 200, 255, 255});
@@ -219,6 +240,69 @@ void Ui::buildPauseMenu()
     m_pauseQuitButtonHover->setSize(glm::vec2(0.84f, 0.12f));
 }
 
+void Ui::buildLeaderboard()
+{
+    auto makeSolidTexture = [&](unsigned char r, unsigned char g, unsigned char b, unsigned char a)
+    {
+        auto texture = std::make_shared<spear::rendering::vulkan::STBTexture>(
+                m_device, m_physDevice, m_commandPool, m_graphicsQueue);
+        unsigned char pixel[4] = {r, g, b, a};
+        texture->loadFromRGBA(pixel, 1, 1);
+        return texture;
+    };
+
+    m_leaderboardBackdropQuad = std::make_shared<spear::ui::vulkan::Quad2D>(
+            m_device, m_physDevice, m_descriptorPool, m_descriptorSetLayout,
+            makeSolidTexture(0, 0, 0, 180));
+    m_leaderboardBackdropQuad->setPosition(glm::vec2(-1.0f, -1.0f));
+    m_leaderboardBackdropQuad->setSize(glm::vec2(2.0f, 2.0f));
+
+    m_leaderboardPanelQuad = std::make_shared<spear::ui::vulkan::Quad2D>(
+            m_device, m_physDevice, m_descriptorPool, m_descriptorSetLayout,
+            makeSolidTexture(18, 20, 30, 220));
+    m_leaderboardPanelQuad->setPosition(glm::vec2(-0.90f, -0.12f));
+    m_leaderboardPanelQuad->setSize(glm::vec2(1.80f, 0.68f));
+
+    constexpr int maxRows = kLeaderboardMaxRows;
+    const float startY = 0.24f;
+    const float rowH = 0.055f;
+
+    leaderboardTRows.resize(maxRows);
+    leaderboardCTRows.resize(maxRows);
+    for (int i = 0; i < maxRows; ++i)
+    {
+        leaderboardTRows[i] = std::make_unique<spear::ui::vulkan::Text>(
+                m_device, m_physDevice, m_commandPool, m_graphicsQueue,
+                m_descriptorPool, m_descriptorSetLayout, m_fontPath, 20);
+        leaderboardTRows[i]->setColor(SDL_Color{255, 150, 0, 255});
+        leaderboardTRows[i]->setPosition(glm::vec2(-0.80f, startY - i * rowH));
+        leaderboardTRows[i]->setString("");
+
+        leaderboardCTRows[i] = std::make_unique<spear::ui::vulkan::Text>(
+                m_device, m_physDevice, m_commandPool, m_graphicsQueue,
+                m_descriptorPool, m_descriptorSetLayout, m_fontPath, 20);
+        leaderboardCTRows[i]->setColor(SDL_Color{0, 150, 255, 255});
+        leaderboardCTRows[i]->setPosition(glm::vec2(0.0f, startY - i * rowH));
+        leaderboardCTRows[i]->setString("");
+    }
+}
+
+void Ui::setRowText(spear::ui::vulkan::Text& text, const LeaderboardEntry& entry)
+{
+    // Pad the name to a fixed width for column alignment.
+    auto name = entry.username;
+    if (name.size() > 18)
+        name = name.substr(0, 18);
+    else
+        name.append(18 - name.size(), ' ');
+
+    std::string content = name + std::to_string(entry.kills) + "   " + std::to_string(entry.deaths);
+    // Only rebuild the texture if the content actually changed, otherwise
+    // frequent leaderboard broadcasts cause constant GPU stalls/flicker.
+    if (text.getString() != content)
+        text.setString(content);
+}
+
 void Ui::showMenuTexts()
 {
     clear();
@@ -257,6 +341,14 @@ void Ui::showGameHudTexts()
     registerText(pauseVolumeText);
     registerText(pauseQuitText);
     registerText(pauseInstructions);
+
+    registerText(leaderboardTitle);
+    registerText(leaderboardTHeader);
+    registerText(leaderboardCTHeader);
+    for (auto& row : leaderboardTRows)
+        registerText(*row);
+    for (auto& row : leaderboardCTRows)
+        registerText(*row);
 }
 
 void Ui::renderPauseOverlay(spear::ui::RenderContext ctx, bool quitHovered)
@@ -282,6 +374,69 @@ void Ui::renderPauseOverlay(spear::ui::RenderContext ctx, bool quitHovered)
     {
         m_pauseQuitButton->render(ctx);
     }
+}
+
+void Ui::showLeaderboard(const std::vector<LeaderboardEntry>& entries)
+{
+    leaderboardTitle.setString("SCOREBOARD");
+    leaderboardTHeader.setString("Terrorist");
+    leaderboardCTHeader.setString("Counter Terrorist");
+
+    std::vector<LeaderboardEntry> tEntries;
+    std::vector<LeaderboardEntry> ctEntries;
+    tEntries.reserve(kLeaderboardMaxRows);
+    ctEntries.reserve(kLeaderboardMaxRows);
+    for (const auto& entry : entries)
+    {
+        if (entry.team == "Terrorist")
+            tEntries.push_back(entry);
+        else if (entry.team == "Counter Terrorist")
+            ctEntries.push_back(entry);
+    }
+
+    // Sort by kills descending so the top fraggers sit at the top of the table.
+    auto byKills = [](const LeaderboardEntry& a, const LeaderboardEntry& b)
+    {
+        return a.kills > b.kills;
+    };
+    std::sort(tEntries.begin(), tEntries.end(), byKills);
+    std::sort(ctEntries.begin(), ctEntries.end(), byKills);
+
+    for (int i = 0; i < kLeaderboardMaxRows; ++i)
+    {
+        if (i < static_cast<int>(tEntries.size()))
+            setRowText(*leaderboardTRows[i], tEntries[i]);
+        else if (!leaderboardTRows[i]->getString().empty())
+            leaderboardTRows[i]->setString("");
+        if (i < static_cast<int>(ctEntries.size()))
+            setRowText(*leaderboardCTRows[i], ctEntries[i]);
+        else if (!leaderboardCTRows[i]->getString().empty())
+            leaderboardCTRows[i]->setString("");
+    }
+
+    m_leaderboardVisible = true;
+}
+
+void Ui::hideLeaderboard()
+{
+    leaderboardTitle.setString("");
+    leaderboardTHeader.setString("");
+    leaderboardCTHeader.setString("");
+    for (auto& row : leaderboardTRows)
+        row->setString("");
+    for (auto& row : leaderboardCTRows)
+        row->setString("");
+    m_leaderboardVisible = false;
+}
+
+void Ui::renderLeaderboardOverlay(spear::ui::RenderContext ctx)
+{
+    if (!m_leaderboardVisible)
+        return;
+    if (m_leaderboardBackdropQuad)
+        m_leaderboardBackdropQuad->render(ctx);
+    if (m_leaderboardPanelQuad)
+        m_leaderboardPanelQuad->render(ctx);
 }
 
 void Ui::updateVolumeDisplay(float volume)

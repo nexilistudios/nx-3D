@@ -3,11 +3,23 @@
 
 #include <spear/spear_vulkan.hh>
 
+#include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace nx3d::client::ui
 {
+
+/// One row of the in-game leaderboard.
+struct LeaderboardEntry
+{
+    uint64_t id = 0;
+    std::string username;
+    std::string team;
+    uint64_t kills = 0;
+    uint64_t deaths = 0;
+};
 
 /// All of the user interface elements of the client: the menu screens,
 /// the lobby, the team select, the in-game HUD and the pause menu.
@@ -58,6 +70,20 @@ public:
     /// callback that also draws the crosshair).
     void renderPauseOverlay(spear::ui::RenderContext ctx, bool quitHovered);
 
+    /// Show the Tab leaderboard with the given entries. Terrorists are shown
+    /// on the left, Counter Terrorists on the right.
+    void showLeaderboard(const std::vector<LeaderboardEntry>& entries);
+    /// Hide the Tab leaderboard.
+    void hideLeaderboard();
+    /// Whether the Tab leaderboard is currently shown.
+    bool isLeaderboardVisible() const
+    {
+        return m_leaderboardVisible;
+    }
+    /// Render the leaderboard backdrop/panel quads (used from the overlay
+    /// callback; the row text itself is registered as regular UI text).
+    void renderLeaderboardOverlay(spear::ui::RenderContext ctx);
+
     /// Synchronize the volume slider/pause text with the given volume [0,1].
     void updateVolumeDisplay(float volume);
 
@@ -88,8 +114,20 @@ public:
     spear::ui::vulkan::Text pauseQuitText;
     spear::ui::vulkan::Text pauseInstructions;
 
+    // --- Leaderboard (Tab) --------------------------------------------------
+    spear::ui::vulkan::Text leaderboardTitle;
+    spear::ui::vulkan::Text leaderboardTHeader;
+    spear::ui::vulkan::Text leaderboardCTHeader;
+    std::vector<std::unique_ptr<spear::ui::vulkan::Text>> leaderboardTRows;
+    std::vector<std::unique_ptr<spear::ui::vulkan::Text>> leaderboardCTRows;
+
+    /// Maximum rows shown per team on the leaderboard.
+    static constexpr int kLeaderboardMaxRows = 10;
+
 private:
     void buildPauseMenu();
+    void buildLeaderboard();
+    void setRowText(spear::ui::vulkan::Text& text, const LeaderboardEntry& entry);
 
     VkDevice m_device;
     VkPhysicalDevice m_physDevice;
@@ -109,6 +147,10 @@ private:
     std::shared_ptr<spear::ui::vulkan::Quad2D> m_pauseSliderKnob;
     std::shared_ptr<spear::ui::vulkan::Quad2D> m_pauseQuitButton;
     std::shared_ptr<spear::ui::vulkan::Quad2D> m_pauseQuitButtonHover;
+
+    std::shared_ptr<spear::ui::vulkan::Quad2D> m_leaderboardBackdropQuad;
+    std::shared_ptr<spear::ui::vulkan::Quad2D> m_leaderboardPanelQuad;
+    bool m_leaderboardVisible = false;
 };
 
 } // namespace nx3d::client::ui

@@ -154,6 +154,13 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
             game_mode->handleKeyDown(*this, event);
     });
 
+    eventHandler.registerCallback(SDL_EVENT_KEY_UP,
+                                  [this](const SDL_Event& event)
+                                  {
+        if (currentState == State::Game && game_mode)
+            game_mode->handleKeyUp(*this, event);
+    });
+
     eventHandler.registerCallback(SDL_EVENT_WINDOW_RESIZED, [this](const SDL_Event&)
                                   {
         window.resize();

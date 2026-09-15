@@ -4,12 +4,14 @@
 #include <client/crosshair/crosshair.hh>
 #include <client/gamemode/game_mode.hh>
 #include <client/gun/first_person_gun.hh>
+#include <client/ui/ui.hh>
 
 #include <glm/glm.hpp>
 
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace nx3d::client::gamemode
@@ -27,6 +29,7 @@ public:
     void update(ClientApp& app, float delta_time) override;
     void handleMouseButtonDown(ClientApp& app, const SDL_Event& event) override;
     void handleKeyDown(ClientApp& app, const SDL_Event& event) override;
+    void handleKeyUp(ClientApp& app, const SDL_Event& event) override;
 
 private:
     void equipGun(ClientApp& app, const std::string& weaponName,
@@ -37,6 +40,11 @@ private:
     void dropCurrentWeapon(ClientApp& app);
 
     std::string m_team;
+
+    // Locally-maintained kill/death table, keyed by player id. Updated from
+    // server stats notifications (on kill and on team join); the Tab board is
+    // rendered straight from here without asking the server.
+    std::unordered_map<uint64_t, nx3d::client::ui::LeaderboardEntry> m_leaderboard;
 
     // Weapon state
     std::shared_ptr<nx3d::client::gun::FirstPersonGun> m_firstPersonGun;

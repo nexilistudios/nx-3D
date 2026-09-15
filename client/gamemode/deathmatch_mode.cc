@@ -21,8 +21,17 @@ nx3d::GameMode DeathmatchMode::type() const
 
 void DeathmatchMode::onEnter(ClientApp& app, const std::string& team)
 {
+    using packet = nexilis::client::Packet;
+
     m_team = team;
     app.ui->teamDisplayText.setString(m_team);
+
+    // Tell the server which team this player joined so it can track kills and
+    // deaths per team. The server replies with a stats seed that the client
+    // merges into its locally-maintained leaderboard.
+    app.tcp_client.sendMessage(packet::Room::Player3D::setTeam(app.client_api, team));
+    app.ui->hideLeaderboard();
+    m_leaderboard.clear();
 
     const auto& spawns = (m_team == "Terrorist") ? m_tSpawns : m_ctSpawns;
     if (!spawns.empty())
@@ -137,6 +146,30 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
             }
         }
     }
+
+    // --- Merge leaderboard stats updates into our local table ---
+    auto leaderboardEvents = app.client_api.consumeLeaderboardEvents();
+    for (auto& evt : leaderboardEvents)
+    {
+        for (auto& entry : evt.entries)
+        {
+            if (entry.id == 0)
+                continue;
+            m_leaderboard[entry.id] =
+                    {entry.id, entry.username, entry.team, entry.kills, entry.deaths};
+        }
+
+        // If the Tab board is currently open, refresh it from the local table
+        // only (no network round-trip required to show up-to-date numbers).
+        if (app.ui->isLeaderboardVisible())
+        {
+            std::vector<nx3d::client::ui::LeaderboardEntry> uiEntries;
+            uiEntries.reserve(m_leaderboard.size());
+            for (auto& [id, entry] : m_leaderboard)
+                uiEntries.push_back(entry);
+            app.ui->showLeaderboard(uiEntries);
+        }
+    }
 }
 
 void DeathmatchMode::handleMouseButtonDown(ClientApp& app, const SDL_Event& event)
@@ -233,8 +266,28 @@ void DeathmatchMode::handleMouseButtonDown(ClientApp& app, const SDL_Event& even
 
 void DeathmatchMode::handleKeyDown(ClientApp& app, const SDL_Event& event)
 {
+    // Ignore OS auto-repeat: holding Tab/G must only trigger the action once.
+    if (event.key.repeat)
+        return;
+
     if (event.key.key == SDLK_G && m_weaponPickedUp)
         dropCurrentWeapon(app);
+    else if (event.key.key == SDLK_TAB && app.client_api.clientInRoom())
+    {
+        // Render the locally-maintained leaderboard. No packet is sent: the
+        // server keeps clients up to date with kill/team stats as they happen.
+        std::vector<nx3d::client::ui::LeaderboardEntry> uiEntries;
+        uiEntries.reserve(m_leaderboard.size());
+        for (auto& [id, entry] : m_leaderboard)
+            uiEntries.push_back(entry);
+        app.ui->showLeaderboard(uiEntries);
+    }
+}
+
+void DeathmatchMode::handleKeyUp(ClientApp& app, const SDL_Event& event)
+{
+    if (event.key.key == SDLK_TAB)
+        app.ui->hideLeaderboard();
 }
 
 void DeathmatchMode::equipGun(ClientApp& app,
@@ -274,11 +327,11 @@ void DeathmatchMode::equipGun(ClientApp& app,
                             glm::vec3(0.0f, -1000.0f, 0.0f), app.default_size));
     app.ui->renderer().setOverlayCallback([this, &app]()
                                           {
+        auto ctx = spear::ui::RenderContext{spear::rendering::vulkan::g_frameContext.commandBuffer};
         if (app.currentState == ClientApp::State::Paused)
-        {
-            auto ctx = spear::ui::RenderContext{spear::rendering::vulkan::g_frameContext.commandBuffer};
             app.ui->renderPauseOverlay(ctx, app.quitHovered);
-        }
+        if (app.ui->isLeaderboardVisible())
+            app.ui->renderLeaderboardOverlay(ctx);
         if (m_crosshair)
             m_crosshair->render(app.camera);
     });

@@ -23,6 +23,7 @@ void DeathmatchMode::onPlayerDeath(nexilis::server::Room& room, uint64_t killerI
     using namespace nexilis;
 
     room.resetPlayerHealth(victimId);
+    room.recordKill(killerId, victimId);
 
     auto* killer = nexilis::server::ClientStorage::getClientById(killerId);
     if (!killer)
@@ -39,6 +40,13 @@ void DeathmatchMode::onPlayerDeath(nexilis::server::Room& room, uint64_t killerI
     auto packet = nexilis::server::Command::createRoomCommand(
             room.getId(), *killer, respawnData, respawnParams, 0);
     room.broadcastToAll(packet);
+
+    // Notify the room about the kill: just the two affected players' updated
+    // stats. Clients merge these into their locally-maintained leaderboard.
+    auto statsPayload = nexilis::server::Command::createRoomLeaderboardCommand(
+            room.getId(), *killer,
+            nexilis::server::Command::playerStatsEntries(room, {killerId, victimId}), 0);
+    room.broadcastToAll(statsPayload);
 
     std::cout << "[Deathmatch] Player " << victimId
               << " killed by " << killerId

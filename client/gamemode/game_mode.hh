@@ -42,6 +42,12 @@ public:
     /// Called for key presses while the app is in the Game state.
     virtual void handleKeyDown(ClientApp& app, const SDL_Event& event) = 0;
 
+    /// Called for key releases while the app is in the Game state. Defaults to
+    /// doing nothing; gamemodes override it to handle hold-actions like Tab.
+    virtual void handleKeyUp(ClientApp&, const SDL_Event&)
+    {
+    }
+
 protected:
     /// Advance and play the shared hitmarker sound. Gamemodes should call this
     /// from their update() so the hitmarker audio works regardless of mode.
