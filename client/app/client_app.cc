@@ -86,7 +86,7 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
     applyAudioVolume();
 
     // --- UI ---
-    std::string fontPath = "/usr/share/fonts/TTF/FiraCode-Retina.ttf";
+    std::string fontPath = nx3d::projectAssetPath("fonts/firacode/static/FiraCode-Retina.ttf");
     ui = std::make_unique<ui::Ui>(
             renderer.getDevice(), renderer.getPhysicalDevice(),
             renderer.getCommandPool(), renderer.getGraphicsQueue(),
