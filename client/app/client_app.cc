@@ -17,7 +17,6 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
-#include <limits>
 #include <thread>
 
 namespace nx3d::client
@@ -118,8 +117,7 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
         else if (currentState == State::Paused)
         {
             resumeGame();
-        }
-    });
+        } });
 
     eventHandler.handleInput(SDLK_P, [this]()
                              {
@@ -143,23 +141,23 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
     eventHandler.registerCallback(SDL_EVENT_MOUSE_BUTTON_DOWN,
                                   [this](const SDL_Event& event)
                                   {
-        if (currentState == State::Game && game_mode)
-            game_mode->handleMouseButtonDown(*this, event);
-    });
+                                      if (currentState == State::Game && game_mode)
+                                          game_mode->handleMouseButtonDown(*this, event);
+                                  });
 
     eventHandler.registerCallback(SDL_EVENT_KEY_DOWN,
                                   [this](const SDL_Event& event)
                                   {
-        if (currentState == State::Game && game_mode)
-            game_mode->handleKeyDown(*this, event);
-    });
+                                      if (currentState == State::Game && game_mode)
+                                          game_mode->handleKeyDown(*this, event);
+                                  });
 
     eventHandler.registerCallback(SDL_EVENT_KEY_UP,
                                   [this](const SDL_Event& event)
                                   {
-        if (currentState == State::Game && game_mode)
-            game_mode->handleKeyUp(*this, event);
-    });
+                                      if (currentState == State::Game && game_mode)
+                                          game_mode->handleKeyUp(*this, event);
+                                  });
 
     eventHandler.registerCallback(SDL_EVENT_WINDOW_RESIZED, [this](const SDL_Event&)
                                   {
@@ -227,8 +225,7 @@ void ClientApp::setupScenes()
     shared_world->addRigidBody(meshRigidBody);
 
     auto game_objects = spear::Scene::Container{
-            dust2_model
-    };
+            dust2_model};
     auto game_function = [](spear::Scene::Container&) {};
     game_scene_id = spear::createScene(game_objects, game_function, scene_manager);
     scene_manager.getSceneById(game_scene_id)->setName("game");
@@ -468,7 +465,7 @@ void ClientApp::run()
             }
         }
         else if (currentState == State::Lobby || currentState == State::Connecting ||
-            currentState == State::TeamSelect)
+                 currentState == State::TeamSelect)
         {
             SDL_Event event;
             while (SDL_PollEvent(&event))

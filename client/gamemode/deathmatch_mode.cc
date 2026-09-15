@@ -34,8 +34,9 @@ void DeathmatchMode::onEnter(ClientApp& app, const std::string& team)
     m_leaderboard.clear();
 
     const auto& spawns = (m_team == "Terrorist") ? m_tSpawns : m_ctSpawns;
+    m_lastSpawnIndex = SIZE_MAX;
     if (!spawns.empty())
-        app.camera.setPosition(spawns[rand() % spawns.size()]);
+        app.camera.setPosition(pickSpawnPoint());
 
     m_health = 100;
     app.ui->healthText.setString("HP: " + std::to_string(m_health));
@@ -135,7 +136,7 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
         {
             const auto& spawns = (m_team == "Terrorist") ? m_tSpawns : m_ctSpawns;
             if (!spawns.empty())
-                app.camera.setPosition(spawns[rand() % spawns.size()]);
+                app.camera.setPosition(pickSpawnPoint());
             m_health = 100;
             app.ui->healthText.setString("HP: " + std::to_string(m_health));
 
@@ -354,6 +355,19 @@ void DeathmatchMode::unequipGun(ClientApp& app)
         m_firstPersonGun.reset();
     }
     app.ui->weaponHudText.setString("");
+}
+
+glm::vec3 DeathmatchMode::pickSpawnPoint()
+{
+    const auto& spawns = (m_team == "Terrorist") ? m_tSpawns : m_ctSpawns;
+    if (spawns.empty())
+        return glm::vec3{0.0f};
+
+    size_t index = rand() % spawns.size();
+    if (spawns.size() > 1 && index == m_lastSpawnIndex)
+        index = (index + 1) % spawns.size();
+    m_lastSpawnIndex = index;
+    return spawns[index];
 }
 
 void DeathmatchMode::equipWeaponForTeam(ClientApp& app)

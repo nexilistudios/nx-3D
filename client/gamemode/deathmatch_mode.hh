@@ -38,6 +38,7 @@ private:
     void unequipGun(ClientApp& app);
     void equipWeaponForTeam(ClientApp& app);
     void dropCurrentWeapon(ClientApp& app);
+    glm::vec3 pickSpawnPoint();
 
     std::string m_team;
 
@@ -59,15 +60,24 @@ private:
     int m_hitmarkerFrames = 0;
     glm::vec3 m_prevCamPos{0.0f};
 
+    // Index of the last spawn point used, so a respawn never lands on the
+    // same spawn the player died at.
+    size_t m_lastSpawnIndex = SIZE_MAX;
+
     // Team spawn points (de_dust2 coordinates).
     std::vector<glm::vec3> m_ctSpawns{
-        {355.0f, -64.0f, -2364.0f},
-        {178.0f, -64.0f, -2408.0f}
-    };
+            {355.0f, -64.0f, -2364.0f},
+            {178.0f, -64.0f, -2408.0f},
+            {381.0f, -64.0f, -2470.0f},
+            {180.0f, -64.0f, -2368.0f},
+            {123.0f, -64.0f, -2519.0f}};
+
     std::vector<glm::vec3> m_tSpawns{
-        {-592.0f, 192.0f, 764.0f},
-        {-834.0f, 192.0f, 797.0f}
-    };
+            {-592.0f, 192.0f, 764.0f},
+            {-834.0f, 192.0f, 797.0f},
+            {-561.0f, 192.0f, 771.0f},
+            {-801.0f, 192.0f, 777.0f},
+            {-705.0f, 204.0f, 947.0f}};
 };
 
 } // namespace nx3d::client::gamemode
