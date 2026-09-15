@@ -13,6 +13,14 @@ find_package(Nexilis REQUIRED CONFIG)
 
 add_subdirectory(../spear/engine spear_engine)
 
+# nixpkgs' shaderc package ships libshaderc_shared but the pkg-config
+# advertises shaderc_combined. Fix the spear target's link libraries.
+get_target_property(_spear_links spear INTERFACE_LINK_LIBRARIES)
+if(_spear_links)
+  string(REPLACE "shaderc_combined" "shaderc_shared" _spear_links "${_spear_links}")
+  set_target_properties(spear PROPERTIES INTERFACE_LINK_LIBRARIES "${_spear_links}")
+endif()
+
 file(GLOB_RECURSE NX3D_CLIENT_SOURCES CONFIGURE_DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 list(FILTER NX3D_CLIENT_SOURCES EXCLUDE REGEX "/build/")
