@@ -65,6 +65,7 @@ public:
     spear::audio::AudioSystem audio_system;
     std::unique_ptr<spear::audio::Sound> gunshot_audio;
     std::unique_ptr<spear::audio::Sound> hitmarker_audio;
+    std::unique_ptr<spear::audio::Sound> walk_audio;
     spear::Time time_interface;
     spear::EventHandler eventHandler;
     std::unique_ptr<ui::Ui> ui;

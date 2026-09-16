@@ -66,7 +66,10 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
     glm::vec3 cam_pos = app.camera.getPosition();
     glm::vec3 velocity = (cam_pos - m_prevCamPos) / std::max(delta_time, 0.001f);
     m_prevCamPos = cam_pos;
-    (void)velocity;
+
+    // Start/stop the footstep loop based on how fast the player is actually
+    // moving across the ground (horizontal only, so falling stays quiet).
+    updateWalkSound(app, std::sqrt(velocity.x * velocity.x + velocity.z * velocity.z));
 
     if (m_firstPersonGun)
         m_firstPersonGun->addBob(delta_time, velocity);

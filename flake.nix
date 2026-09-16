@@ -83,6 +83,7 @@
           pkgs.sdl3
           pkgs.sdl3-image
           pkgs.sdl3-ttf
+          pkgs.sdl3-mixer
           pkgs.glew
           pkgs.libGL
           pkgs.libGLU
@@ -267,6 +268,7 @@ cd "$PWD/repo/client"
                 pkgs.vulkan-loader
                 pkgs.mesa
                 pkgs.sdl3
+                pkgs.sdl3-mixer
               ];
             })
           ];

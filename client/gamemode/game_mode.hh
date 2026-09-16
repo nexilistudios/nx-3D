@@ -57,6 +57,11 @@ protected:
     /// a shot fired by the local player lands on another player.
     void triggerHitmarkerSound();
 
+    /// Start or stop the looping footstep sound based on how fast the local
+    /// player's horizontal speed (`horizontalSpeed`, engine units/sec) is.
+    /// Every gamemode calls this so walking sounds identical everywhere.
+    void updateWalkSound(ClientApp& app, float horizontalSpeed);
+
 private:
     /// Frames until the delayed hitmarker sound should play (lets the
     /// gunshot's initial attack pass so the hitmarker is audible).

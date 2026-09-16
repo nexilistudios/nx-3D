@@ -82,6 +82,8 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
             audio_system, nx3d::projectAssetPath("sounds/gunshot.wav"));
     hitmarker_audio = std::make_unique<spear::audio::Sound>(
             audio_system, nx3d::projectAssetPath("sounds/hitmarker.wav"));
+    walk_audio = std::make_unique<spear::audio::Sound>(
+            audio_system, nx3d::projectAssetPath("sounds/walk.mp3"));
     applyAudioVolume();
 
     // --- UI ---
@@ -281,6 +283,8 @@ void ClientApp::applyAudioVolume()
         gunshot_audio->setVolume(audioVolume);
     if (hitmarker_audio)
         hitmarker_audio->setVolume(audioVolume);
+    if (walk_audio)
+        walk_audio->setVolume(audioVolume);
 }
 
 void ClientApp::setVolumeNormalized(float normalized)
