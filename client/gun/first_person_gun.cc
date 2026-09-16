@@ -100,8 +100,8 @@ void FirstPersonGun::addBob(float delta_time, const glm::vec3& velocity)
 void FirstPersonGun::addRecoil(float amount)
 {
     m_recoilKick += amount;
-    if (m_recoilKick > 0.15f)
-        m_recoilKick = 0.15f;
+    if (m_recoilKick > 0.35f)
+        m_recoilKick = 0.35f;
 }
 
 } // namespace nx3d::client::gun

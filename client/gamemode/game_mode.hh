@@ -39,6 +39,13 @@ public:
     /// Called for mouse button presses while the app is in the Game state.
     virtual void handleMouseButtonDown(ClientApp& app, const SDL_Event& event) = 0;
 
+    /// Called for mouse button releases while the app is in the Game state.
+    /// Defaults to doing nothing; gamemodes override it to handle hold-actions
+    /// like automatic fire.
+    virtual void handleMouseButtonUp(ClientApp&, const SDL_Event&)
+    {
+    }
+
     /// Called for key presses while the app is in the Game state.
     virtual void handleKeyDown(ClientApp& app, const SDL_Event& event) = 0;
 

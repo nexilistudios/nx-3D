@@ -14,6 +14,16 @@ namespace nx3d::client::gamemode
 
 namespace blt = spear::physics::bullet;
 
+namespace
+{
+/// Recoil ramps up as a burst goes on: each shot multiplies the previous
+/// shot's view/gun punch slightly more, capped so sustained fire stays
+/// controllable. Reset on trigger release.
+constexpr float kRecoilStartMultiplier = 0.6f;
+constexpr float kRecoilStep = 0.15f;
+constexpr float kMaxRecoilMultiplier = 2.5f;
+} // namespace
+
 nx3d::GameMode DeathmatchMode::type() const
 {
     return nx3d::GameMode::deathmatch;
@@ -77,6 +87,18 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
 
     if (m_firstPersonGun)
         m_firstPersonGun->addBob(delta_time, velocity);
+
+    // --- Automatic fire while the trigger is held ---
+    if (m_triggerHeld && m_weaponPickedUp)
+    {
+        m_fireCooldown -= delta_time;
+        // A while loop keeps the cadence correct even after a big frame time.
+        while (m_fireCooldown <= 0.0f)
+        {
+            m_fireCooldown += fireIntervalSeconds();
+            fireWeapon(app);
+        }
+    }
 
     // --- Pickup nearby dropped weapons ---
     if (!m_weaponPickedUp && m_dropCooldown == 0 && app.ready && app.client_api.clientInRoom())
@@ -182,10 +204,43 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
 
 void DeathmatchMode::handleMouseButtonDown(ClientApp& app, const SDL_Event& event)
 {
-    using packet = nexilis::client::Packet;
-
     if (!m_weaponPickedUp || event.button.button != SDL_BUTTON_LEFT)
         return;
+
+    // Start a fresh burst: the first shot fires immediately, subsequent shots
+    // are paced by the weapon's rate of fire while the trigger is held.
+    m_triggerHeld = true;
+    m_burstShots = 0;
+    m_fireCooldown = 0.0f;
+    fireWeapon(app);
+    m_fireCooldown = fireIntervalSeconds();
+}
+
+void DeathmatchMode::handleMouseButtonUp(ClientApp& app, const SDL_Event& event)
+{
+    if (event.button.button != SDL_BUTTON_LEFT)
+        return;
+
+    m_triggerHeld = false;
+    m_burstShots = 0;
+    m_fireCooldown = 0.0f;
+}
+
+float DeathmatchMode::fireIntervalSeconds() const
+{
+    return 60.0f / getWeaponProfile(m_pickedUpItemType).rounds_per_minute;
+}
+
+void DeathmatchMode::fireWeapon(ClientApp& app)
+{
+    using packet = nexilis::client::Packet;
+
+    // Recoil grows the longer a burst runs: each shot kicks harder than the
+    // last, resetting only when the trigger is released.
+    m_burstShots++;
+    const float recoilMul = std::min(
+            kRecoilStartMultiplier + static_cast<float>(m_burstShots) * kRecoilStep,
+            kMaxRecoilMultiplier);
 
     if (app.gunshot_audio)
         app.gunshot_audio->play();
@@ -208,12 +263,12 @@ void DeathmatchMode::handleMouseButtonDown(ClientApp& app, const SDL_Event& even
     glm::vec3 rayDir = glm::normalize(app.camera.getFront());
 
     if (m_firstPersonGun)
-        m_firstPersonGun->addRecoil(0.1f);
+        m_firstPersonGun->addRecoil(0.1f * recoilMul);
 
     // CS-style aim punch: kick the view up with a little random yaw,
-    // decaying over time.
-    float yawKick = (static_cast<float>(rand() % 100) - 50.0f) / 50.0f * 0.6f;
-    app.camera.addRecoilOffset(1.4f, yawKick);
+    // decaying over time. Scales up with burst length.
+    float yawKick = (static_cast<float>(rand() % 100) - 50.0f) / 50.0f * 0.6f * recoilMul;
+    app.camera.addRecoilOffset(1.4f * recoilMul, yawKick);
 
     auto room_id = app.client_api.clientRoomId();
     auto my_id = app.client_api.getClientId();
@@ -407,6 +462,9 @@ void DeathmatchMode::dropCurrentWeapon(ClientApp& app)
     using packet = nexilis::client::Packet;
 
     m_weaponPickedUp = false;
+    m_triggerHeld = false;
+    m_burstShots = 0;
+    m_fireCooldown = 0.0f;
     unequipGun(app);
 
     // If we were holding a map pickup, remove the original from the server.

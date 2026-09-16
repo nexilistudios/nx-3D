@@ -149,6 +149,13 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
                                           game_mode->handleMouseButtonDown(*this, event);
                                   });
 
+    eventHandler.registerCallback(SDL_EVENT_MOUSE_BUTTON_UP,
+                                  [this](const SDL_Event& event)
+                                  {
+                                      if (currentState == State::Game && game_mode)
+                                          game_mode->handleMouseButtonUp(*this, event);
+                                  });
+
     eventHandler.registerCallback(SDL_EVENT_KEY_DOWN,
                                   [this](const SDL_Event& event)
                                   {

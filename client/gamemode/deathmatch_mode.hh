@@ -28,6 +28,7 @@ public:
     void onEnter(ClientApp& app, const std::string& team) override;
     void update(ClientApp& app, float delta_time) override;
     void handleMouseButtonDown(ClientApp& app, const SDL_Event& event) override;
+    void handleMouseButtonUp(ClientApp& app, const SDL_Event& event) override;
     void handleKeyDown(ClientApp& app, const SDL_Event& event) override;
     void handleKeyUp(ClientApp& app, const SDL_Event& event) override;
 
@@ -38,6 +39,8 @@ private:
     void unequipGun(ClientApp& app);
     void equipWeaponForTeam(ClientApp& app);
     void dropCurrentWeapon(ClientApp& app);
+    void fireWeapon(ClientApp& app);
+    float fireIntervalSeconds() const;
     glm::vec3 pickSpawnPoint();
 
     std::string m_team;
@@ -59,6 +62,13 @@ private:
     int m_health = 100;
     int m_hitmarkerFrames = 0;
     glm::vec3 m_prevCamPos{0.0f};
+
+    // Automatic fire state
+    bool m_triggerHeld = false;
+    float m_fireCooldown = 0.0f;
+    /// Consecutive shots in the current burst; each shot kicks harder than the
+    /// last. Reset when the trigger is released.
+    int m_burstShots = 0;
 
     // Index of the last spawn point used, so a respawn never lands on the
     // same spawn the player died at.
