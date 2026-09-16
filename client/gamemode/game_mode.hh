@@ -60,12 +60,23 @@ protected:
     /// Start or stop the looping footstep sound based on how fast the local
     /// player's horizontal speed (`horizontalSpeed`, engine units/sec) is.
     /// Every gamemode calls this so walking sounds identical everywhere.
-    void updateWalkSound(ClientApp& app, float horizontalSpeed);
+    /// While the player moves it also broadcasts positional footstep events
+    /// to the server so other clients can hear where the walking happens.
+    void updateWalkSound(ClientApp& app, float horizontalSpeed, float delta_time);
+
+    /// Apply all pending network audio events: play the corresponding sound
+    /// at the world position the emitting player reported. Sounds made by the
+    /// local player are skipped (they are already played centered).
+    void updateRemoteAudioEvents(ClientApp& app);
 
 private:
     /// Frames until the delayed hitmarker sound should play (lets the
     /// gunshot's initial attack pass so the hitmarker is audible).
     int m_hitmarkerAudioDelay = 0;
+
+    /// Distance (engine units) walked since the last positional footstep
+    /// event was sent, used to throttle them into a natural step rhythm.
+    float m_stepDistanceSinceLastEvent = 0.0f;
 };
 
 } // namespace nx3d::client::gamemode

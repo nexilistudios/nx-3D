@@ -69,7 +69,11 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
 
     // Start/stop the footstep loop based on how fast the player is actually
     // moving across the ground (horizontal only, so falling stays quiet).
-    updateWalkSound(app, std::sqrt(velocity.x * velocity.x + velocity.z * velocity.z));
+    updateWalkSound(app, std::sqrt(velocity.x * velocity.x + velocity.z * velocity.z),
+                    delta_time);
+
+    // Spatialize sounds other players reported (gunshots and footsteps).
+    updateRemoteAudioEvents(app);
 
     if (m_firstPersonGun)
         m_firstPersonGun->addBob(delta_time, velocity);
@@ -185,6 +189,17 @@ void DeathmatchMode::handleMouseButtonDown(ClientApp& app, const SDL_Event& even
 
     if (app.gunshot_audio)
         app.gunshot_audio->play();
+
+    // Tell every other client where this shot happened so they can play the
+    // gunshot sound spatically. Only sent once per trigger: the shoot packet
+    // below carries the damage, this one carries the audio origin.
+    if (app.ready && app.client_api.clientInRoom())
+    {
+        glm::vec3 cam_pos = app.camera.getPosition();
+        app.tcp_client.sendMessage(packet::Room::Player3D::audioEvent(
+                app.client_api, audio::kSoundShoot,
+                nexilis::Vector3f({cam_pos.x, cam_pos.y, cam_pos.z})));
+    }
 
     // Capture the aim direction BEFORE the aim punch is applied, so the
     // bullet goes exactly where the crosshair points when firing. The punch

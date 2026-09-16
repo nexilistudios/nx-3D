@@ -84,6 +84,8 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
             audio_system, nx3d::projectAssetPath("sounds/hitmarker.wav"));
     walk_audio = std::make_unique<spear::audio::Sound>(
             audio_system, nx3d::projectAssetPath("sounds/walk.mp3"));
+    step_audio = std::make_unique<spear::audio::Sound>(
+            audio_system, nx3d::projectAssetPath("sounds/step.wav"));
     applyAudioVolume();
 
     // --- UI ---
@@ -285,6 +287,8 @@ void ClientApp::applyAudioVolume()
         hitmarker_audio->setVolume(audioVolume);
     if (walk_audio)
         walk_audio->setVolume(audioVolume);
+    if (step_audio)
+        step_audio->setVolume(audioVolume);
 }
 
 void ClientApp::setVolumeNormalized(float normalized)
@@ -625,6 +629,12 @@ void ClientApp::run()
         if (currentState == State::Game)
         {
             camera.updateRecoil(delta_time);
+
+            // Keep the 3D audio listener glued to the camera so positional
+            // sounds (other players' shots and footsteps) pan and attenuate
+            // relative to where the player is looking.
+            audio_system.setListener(
+                    camera.getPosition(), camera.getFront(), camera.getWorldUp());
 
             if (game_mode)
                 game_mode->update(*this, delta_time);

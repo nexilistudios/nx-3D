@@ -26,6 +26,14 @@
 namespace nx3d::client
 {
 
+namespace audio
+{
+/// Sound identifiers used by positional audio events sent to / received from
+/// the server. Kept as raw bytes on the wire; matched against these constants.
+inline constexpr uint8_t kSoundFootstep = 0;
+inline constexpr uint8_t kSoundShoot = 1;
+} // namespace audio
+
 /// Owns the entire client application: windowing, rendering, UI, networking and
 /// the main game loop. Everything that is specific to how a room plays is
 /// delegated to a gamemode that is chosen from the room the player joined.
@@ -66,6 +74,11 @@ public:
     std::unique_ptr<spear::audio::Sound> gunshot_audio;
     std::unique_ptr<spear::audio::Sound> hitmarker_audio;
     std::unique_ptr<spear::audio::Sound> walk_audio;
+    /// Short positional "step" clip for sounds other players make when
+    /// walking. A single footfall cut from walk.mp3, played at world
+    /// positions, so remote steps are spatialized and never collide with the
+    /// local walk loop.
+    std::unique_ptr<spear::audio::Sound> step_audio;
     spear::Time time_interface;
     spear::EventHandler eventHandler;
     std::unique_ptr<ui::Ui> ui;
