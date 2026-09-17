@@ -406,6 +406,7 @@ void DeathmatchMode::equipGun(ClientApp& app,
             app.ui->renderPauseOverlay(ctx, app.quitHovered);
         if (app.ui->isLeaderboardVisible())
             app.ui->renderLeaderboardOverlay(ctx);
+        app.ui->renderChatOverlay(ctx);
         if (m_crosshair)
             m_crosshair->render(app.camera);
     });

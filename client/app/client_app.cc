@@ -123,6 +123,13 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
             resumeGame();
         } });
 
+    // "y" opens the chat input line while playing.
+    eventHandler.handleKeyPressed(SDLK_Y, [this]()
+                                  {
+        if (currentState == State::Game && !chatActive)
+            openChat();
+    });
+
     eventHandler.handleInput(SDLK_P, [this]()
                              {
         if (currentState == State::Game && ready && client_api.clientInRoom())
@@ -329,6 +336,112 @@ void ClientApp::resumeGame()
         ui->pauseVolumeText.setString("");
         ui->pauseQuitText.setString("");
         ui->pauseInstructions.setString("");
+    }
+}
+
+void ClientApp::openChat()
+{
+    if (chatActive || currentState != State::Game)
+        return;
+
+    chatActive = true;
+    chatInput.clear();
+    lastChatDisplay.clear();
+    ui->setChatInput("");
+    SDL_StartTextInput(window.getSDLWindow());
+    SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), false);
+    // Release any movement keys held when the chat opened, so the character
+    // doesn't keep walking once keyboard control is handed back to the game.
+    eventHandler.clearMovementKeys();
+    // Keep the window up while the player types.
+    chatVisibleTimer = std::max(chatVisibleTimer, kChatDisplaySeconds);
+}
+
+void ClientApp::closeChat(bool send)
+{
+    if (!chatActive)
+        return;
+
+    if (send && !chatInput.empty() && ready && client_api.clientInRoom())
+    {
+        // Broadcasts are relayed to everyone in the room, including the
+        // sender, so our own message comes back and shows up (with our own
+        // username) like everyone else's.
+        tcp_client.sendMessage(
+                nexilis::client::Packet::Room::Communicate::broadcast(client_api, chatInput));
+    }
+
+    chatActive = false;
+    chatInput.clear();
+    lastChatDisplay.clear();
+    ui->setChatInput("");
+    SDL_StopTextInput(window.getSDLWindow());
+    SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
+    eventHandler.clearMovementKeys();
+}
+
+void ClientApp::updateChatMessages()
+{
+    const auto room_id = client_api.clientRoomId();
+    if (chatRoomId != room_id)
+    {
+        chatRoomId = room_id;
+        chatMessagesConsumed = 0;
+        chatMessages.clear();
+    }
+
+    // Snapshot the rooms under their mutex (same pattern as the nexilis
+    // messaging example) and consume any messages we have not shown yet.
+    for (const auto& room : client_api.getActiveRooms())
+    {
+        if (room.getId() != room_id)
+            continue;
+
+        const auto& messages = room.getMessages();
+        const auto count = messages.size();
+        for (; chatMessagesConsumed < count; ++chatMessagesConsumed)
+        {
+            const auto& message = messages[chatMessagesConsumed];
+            const auto* sender = message.getClient();
+            const std::string name = sender ? sender->getUsername() : std::string("unknown");
+
+            chatMessages.push_back({name, message.getPayload()});
+            if (static_cast<int>(chatMessages.size()) > kChatMaxLines)
+                chatMessages.erase(chatMessages.begin());
+
+            // A fresh message brings the window back up.
+            chatVisibleTimer = kChatDisplaySeconds;
+        }
+        break;
+    }
+}
+
+void ClientApp::updateChatWindow(float delta_time)
+{
+    if (!chatActive)
+    {
+        chatVisibleTimer -= delta_time;
+        if (chatVisibleTimer < 0.0f)
+            chatVisibleTimer = 0.0f;
+    }
+
+    const bool visible = chatActive || chatVisibleTimer > 0.0f;
+    ui->setChatVisible(visible);
+
+    if (!visible)
+    {
+        ui->clearChatRows();
+        return;
+    }
+
+    // Fill the rows with the most recent messages (newest at the bottom).
+    const int total = static_cast<int>(chatMessages.size());
+    for (int i = 0; i < kChatMaxLines; ++i)
+    {
+        if (i < total)
+            ui->setChatRow(i, chatMessages[i].username, chatMessages[i].payload);
+        else
+            ui->setChatRow(i, "", "");
     }
 }
 
@@ -621,6 +734,45 @@ void ClientApp::run()
                 }
             }
         }
+        else if (currentState == State::Game && chatActive)
+        {
+            // Chat typing takes over the keyboard: events are polled manually
+            // (like the menu states) so they don't feed player movement,
+            // weapon handling or the camera through `eventHandler`.
+            SDL_Event event;
+            while (SDL_PollEvent(&event))
+            {
+                if (event.type == SDL_EVENT_QUIT)
+                {
+                    cleanQuit();
+                }
+                if (event.type == SDL_EVENT_KEY_DOWN)
+                {
+                    if (event.key.key == SDLK_ESCAPE)
+                    {
+                        closeChat(false);
+                    }
+                    else if (event.key.key == SDLK_RETURN)
+                    {
+                        closeChat(true);
+                    }
+                    else if (event.key.key == SDLK_BACKSPACE && !chatInput.empty())
+                    {
+                        chatInput.pop_back();
+                    }
+                }
+                if (event.type == SDL_EVENT_TEXT_INPUT)
+                {
+                    chatInput += event.text.text;
+                }
+                if (event.type == SDL_EVENT_WINDOW_RESIZED)
+                {
+                    window.resize();
+                    auto s = window.getSize();
+                    renderer.setViewPort(s.x, s.y);
+                }
+            }
+        }
         else
         {
             eventHandler.handleEvents(movement_controller, delta_time);
@@ -664,7 +816,21 @@ void ClientApp::run()
                 syncRemotePlayerTransforms();
                 syncRemoteObjects();
                 syncRemoteGameItems();
+                updateChatMessages();
             }
+
+            // Chat window refresh: blinking cursor on the input line while
+            // typing, plus the visibility countdown and row re-sync.
+            if (chatActive)
+            {
+                std::string chatDisplay = chatInput + (((frameCount / 30) % 2 == 0) ? "|" : " ");
+                if (chatDisplay != lastChatDisplay)
+                {
+                    lastChatDisplay = chatDisplay;
+                    ui->setChatInput(chatDisplay);
+                }
+            }
+            updateChatWindow(delta_time);
         }
 
         window.update();

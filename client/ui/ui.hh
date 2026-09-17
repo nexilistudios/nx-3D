@@ -124,9 +124,30 @@ public:
     /// Maximum rows shown per team on the leaderboard.
     static constexpr int kLeaderboardMaxRows = 10;
 
+    // --- Chat (bottom-left corner) ------------------------------------------
+    spear::ui::vulkan::Text chatTitle;
+    spear::ui::vulkan::Text chatInputText;
+    /// Message rows, oldest at the top. Composed as "username: payload".
+    std::vector<std::unique_ptr<spear::ui::vulkan::Text>> chatMessageRows;
+
+    /// Maximum chat messages shown in the window at once.
+    static constexpr int kChatMaxLines = 6;
+
+    /// Show/hide the chat window (backdrop + rows get filled from the game).
+    void setChatVisible(bool visible);
+    /// Render the chat backdrop quad (used from the overlay callback).
+    void renderChatOverlay(spear::ui::RenderContext ctx);
+    /// Update one chat message row (oldest at the top). Empty strings clear it.
+    void setChatRow(int index, const std::string& username, const std::string& payload);
+    /// Clear all chat message rows.
+    void clearChatRows();
+    /// Set the text shown on the chat input line (empty hides it).
+    void setChatInput(const std::string& text);
+
 private:
     void buildPauseMenu();
     void buildLeaderboard();
+    void buildChat();
     void setRowText(spear::ui::vulkan::Text& text, const LeaderboardEntry& entry);
 
     VkDevice m_device;
@@ -151,6 +172,9 @@ private:
     std::shared_ptr<spear::ui::vulkan::Quad2D> m_leaderboardBackdropQuad;
     std::shared_ptr<spear::ui::vulkan::Quad2D> m_leaderboardPanelQuad;
     bool m_leaderboardVisible = false;
+
+    std::shared_ptr<spear::ui::vulkan::Quad2D> m_chatBackdropQuad;
+    bool m_chatVisible = false;
 };
 
 } // namespace nx3d::client::ui

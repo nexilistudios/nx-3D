@@ -76,7 +76,12 @@ Ui::Ui(VkDevice device,
       leaderboardTHeader(device, physDevice, commandPool, graphicsQueue,
                          descriptorPool, descriptorSetLayout, fontPath, 22),
       leaderboardCTHeader(device, physDevice, commandPool, graphicsQueue,
-                          descriptorPool, descriptorSetLayout, fontPath, 22)
+                          descriptorPool, descriptorSetLayout, fontPath, 22),
+
+      chatTitle(device, physDevice, commandPool, graphicsQueue,
+                descriptorPool, descriptorSetLayout, fontPath, 14),
+      chatInputText(device, physDevice, commandPool, graphicsQueue,
+                    descriptorPool, descriptorSetLayout, fontPath, 18)
 {
     // --- Leaderboard (Tab) ----------------------------------------------------
     leaderboardTitle.setString("");
@@ -92,6 +97,7 @@ Ui::Ui(VkDevice device,
     leaderboardCTHeader.setPosition(glm::vec2(0.0f, 0.34f));
 
     buildLeaderboard();
+    buildChat();
     // --- Lobby / connecting ----------------------------------------------
     titleText.setString("nx-3D Lobby");
     titleText.setColor(SDL_Color{0, 200, 255, 255});
@@ -287,6 +293,93 @@ void Ui::buildLeaderboard()
     }
 }
 
+void Ui::buildChat()
+{
+    auto makeSolidTexture = [&](unsigned char r, unsigned char g, unsigned char b, unsigned char a)
+    {
+        auto texture = std::make_shared<spear::rendering::vulkan::STBTexture>(
+                m_device, m_physDevice, m_commandPool, m_graphicsQueue);
+        unsigned char pixel[4] = {r, g, b, a};
+        texture->loadFromRGBA(pixel, 1, 1);
+        return texture;
+    };
+
+    // Bottom-left chat window: x in [-0.98, -0.30], y in [-0.85, -0.23].
+    m_chatBackdropQuad = std::make_shared<spear::ui::vulkan::Quad2D>(
+            m_device, m_physDevice, m_descriptorPool, m_descriptorSetLayout,
+            makeSolidTexture(12, 14, 22, 195));
+    m_chatBackdropQuad->setPosition(glm::vec2(-0.98f, -0.85f));
+    m_chatBackdropQuad->setSize(glm::vec2(0.68f, 0.62f));
+
+    chatTitle.setString("");
+    chatTitle.setColor(SDL_Color{200, 200, 200, 255});
+    chatTitle.setPosition(glm::vec2(-0.93f, -0.30f));
+
+    chatInputText.setString("");
+    chatInputText.setColor(SDL_Color{0, 200, 255, 255});
+    chatInputText.setPosition(glm::vec2(-0.93f, -0.74f));
+
+    chatMessageRows.resize(kChatMaxLines);
+    const float startY = -0.38f;
+    const float rowH = 0.048f;
+    for (int i = 0; i < kChatMaxLines; ++i)
+    {
+        chatMessageRows[i] = std::make_unique<spear::ui::vulkan::Text>(
+                m_device, m_physDevice, m_commandPool, m_graphicsQueue,
+                m_descriptorPool, m_descriptorSetLayout, m_fontPath, 18);
+        chatMessageRows[i]->setColor(SDL_Color{255, 255, 255, 255});
+        chatMessageRows[i]->setPosition(glm::vec2(-0.93f, startY - i * rowH));
+        chatMessageRows[i]->setString("");
+    }
+}
+
+void Ui::setChatVisible(bool visible)
+{
+    m_chatVisible = visible;
+}
+
+void Ui::renderChatOverlay(spear::ui::RenderContext ctx)
+{
+    if (!m_chatVisible)
+        return;
+    if (m_chatBackdropQuad)
+        m_chatBackdropQuad->render(ctx);
+}
+
+void Ui::setChatRow(int index, const std::string& username, const std::string& payload)
+{
+    if (index < 0 || index >= kChatMaxLines)
+        return;
+    auto& text = *chatMessageRows[index];
+
+    std::string content;
+    if (!username.empty() || !payload.empty())
+        content = username + ": " + payload;
+    // Keep the line inside the chat panel (monospace FiraCode at ~18pt).
+    if (content.size() > 34)
+        content = content.substr(0, 34);
+
+    // Only rebuild the texture when the content actually changed, otherwise
+    // every frame causes a GPU stall.
+    if (text.getString() != content)
+        text.setString(content);
+}
+
+void Ui::clearChatRows()
+{
+    for (auto& row : chatMessageRows)
+    {
+        if (!row->getString().empty())
+            row->setString("");
+    }
+}
+
+void Ui::setChatInput(const std::string& text)
+{
+    if (chatInputText.getString() != text)
+        chatInputText.setString(text);
+}
+
 void Ui::setRowText(spear::ui::vulkan::Text& text, const LeaderboardEntry& entry)
 {
     // Pad the name to a fixed width for column alignment.
@@ -348,6 +441,11 @@ void Ui::showGameHudTexts()
     for (auto& row : leaderboardTRows)
         registerText(*row);
     for (auto& row : leaderboardCTRows)
+        registerText(*row);
+
+    registerText(chatTitle);
+    registerText(chatInputText);
+    for (auto& row : chatMessageRows)
         registerText(*row);
 }
 

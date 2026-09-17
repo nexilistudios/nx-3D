@@ -138,6 +138,42 @@ public:
     State currentState = State::ServerInput;
     std::unique_ptr<gamemode::GameMode> game_mode;
 
+    // --- Chat ---------------------------------------------------------------------
+    /// Whether the chat input line is open (typing "y" toggles it).
+    bool chatActive = false;
+    /// The text currently being typed.
+    std::string chatInput;
+    /// Last string pushed to the chat input line (blinking cursor diffing).
+    std::string lastChatDisplay;
+    /// One chat line as shown in the window: sender username + payload.
+    struct ChatMessage
+    {
+        std::string username;
+        std::string payload;
+    };
+    /// Rolling history of the most recent chat messages (newest at the back).
+    std::vector<ChatMessage> chatMessages;
+    /// Number of nexilis room messages already consumed into `chatMessages`.
+    std::size_t chatMessagesConsumed = 0;
+    /// Room whose messages `chatMessagesConsumed` refers to (reset on room change).
+    uint64_t chatRoomId = 0;
+    /// Seconds the chat window stays visible after the last received message.
+    float chatVisibleTimer = 0.0f;
+
+    /// How long the chat window stays visible after a new message arrives.
+    static constexpr float kChatDisplaySeconds = 6.0f;
+    /// Maximum chat lines shown at once (matches ui::Ui::kChatMaxLines).
+    static constexpr int kChatMaxLines = 6;
+
+    /// Open the chat input line (takes over keyboard input from the game).
+    void openChat();
+    /// Close the chat input line; sends the typed message when `send` is true.
+    void closeChat(bool send);
+    /// Consume new room messages from nexilis into `chatMessages`.
+    void updateChatMessages();
+    /// Count down the visibility timer and refresh the chat window UI.
+    void updateChatWindow(float delta_time);
+
     // --- Helpers ----------------------------------------------------------------
     void connect(const std::string& address);
     void enterGame(const std::string& team);
