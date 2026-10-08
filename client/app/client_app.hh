@@ -133,7 +133,8 @@ public:
     glm::vec3 default_size{1.0f};
 
     // --- Remote entities (network sync) --------------------------------------
-    std::unordered_map<uint64_t, std::shared_ptr<spear::rendering::vulkan::TexturedCube>> remote_players;
+    std::unordered_map<uint64_t, std::shared_ptr<spear::rendering::vulkan::OBJModel>> remote_players;
+    std::unordered_map<uint64_t, std::string> remote_player_teams;
     std::unordered_map<uint64_t, std::shared_ptr<spear::rendering::vulkan::TexturedCube>> remote_objects;
     std::unordered_map<uint64_t, std::shared_ptr<spear::rendering::vulkan::OBJModel>> remote_game_items;
     std::vector<std::shared_ptr<spear::GameObject>> pendingDestroy[3];

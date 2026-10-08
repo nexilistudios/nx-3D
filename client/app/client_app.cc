@@ -860,14 +860,34 @@ void ClientApp::syncRemotePlayerTransforms()
 
     for (auto& player : players)
     {
+        const std::string team = game_mode ? game_mode->playerTeam(player.id) : std::string{};
+        // A player still choosing a team is not yet in the game. Create the
+        // figure once the server has announced its team, then replace it if
+        // the server swaps sides at halftime.
+        if (team.empty())
+            continue;
+        auto existing = remote_players.find(player.id);
+        if (existing != remote_players.end() && remote_player_teams[player.id] != team)
+        {
+            scene_manager.getCurrentScene()->removeObject(existing->second->getId());
+            pendingDestroy[(frameCount - 1) % 3].push_back(std::move(existing->second));
+            remote_players.erase(existing);
+        }
         if (remote_players.find(player.id) == remote_players.end())
         {
-            auto obj = std::make_shared<vk::TexturedCube>(
+            const char* model = team == "Terrorist" ? "terrorist" : "counter_terrorist";
+            const std::string asset = std::string("players/") + model;
+            auto obj = std::make_shared<vk::OBJModel>(
                     renderer.getDevice(), renderer.getPhysicalDevice(),
-                    wallnut_texture, descriptorPool, descriptorSetLayout,
+                    renderer.getCommandPool(), renderer.getGraphicsQueue(),
+                    nx3d::projectAssetPath(asset + ".obj"),
+                    nx3d::projectAssetPath(asset + ".mtl"),
+                    descriptorPool, descriptorSetLayout,
                     blt::ObjectData(shared_world, 0.0f,
-                                    glm::vec3(0.f, 0.f, 0.f), glm::vec3(10.0f, 10.0f, 10.0f)));
+                                    glm::vec3(player.x, player.y, player.z),
+                                    default_size));
             remote_players[player.id] = obj;
+            remote_player_teams[player.id] = team;
             scene_manager.getCurrentScene()->addObject(obj);
         }
     }
@@ -886,7 +906,10 @@ void ClientApp::syncRemotePlayerTransforms()
         }
     }
     for (auto id : to_remove)
+    {
         remote_players.erase(id);
+        remote_player_teams.erase(id);
+    }
 
     for (auto& player : players)
     {

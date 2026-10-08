@@ -29,6 +29,12 @@ nx3d::GameMode DeathmatchMode::type() const
     return nx3d::GameMode::deathmatch;
 }
 
+std::string DeathmatchMode::playerTeam(uint64_t playerId) const
+{
+    const auto it = m_leaderboard.find(playerId);
+    return it == m_leaderboard.end() ? std::string{} : it->second.team;
+}
+
 void DeathmatchMode::onEnter(ClientApp& app, const std::string& team)
 {
     using packet = nexilis::client::Packet;
@@ -312,9 +318,10 @@ void DeathmatchMode::fireWeapon(ClientApp& app)
     for (auto& player : players)
     {
         glm::vec3 center(player.x, player.y, player.z);
-        glm::vec3 halfExtents(10.0f, 10.0f, 10.0f);
-        glm::vec3 boxMin = center - halfExtents;
-        glm::vec3 boxMax = center + halfExtents;
+        // Remote-player positions are at eye height. Match the low-poly
+        // figure's full head-to-boot silhouette instead of its old cube.
+        glm::vec3 boxMin = center + glm::vec3(-18.0f, -64.0f, -9.0f);
+        glm::vec3 boxMax = center + glm::vec3(18.0f, 12.0f, 9.0f);
 
         float tmin = -std::numeric_limits<float>::max();
         float tmax = std::numeric_limits<float>::max();

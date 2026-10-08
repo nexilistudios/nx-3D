@@ -66,6 +66,8 @@ The flake also exposes packaged programs through `nix run .#server` and `nix run
 
 The equipped gun appears beside the camera and follows the view. It has walk bob and recoil. The gun mesh is selected from the team's weapon profile or the weapon picked up from the ground. First-person placement and animation live in `client/gun/first_person_gun.cc`; per-weapon mesh paths, scale, and center are in `client/gamemode/weapon_profiles.hh`.
 
+Other players appear as custom low-poly OBJ figures: a blue armored Counter Terrorist and a tan Terrorist with a head wrap and utility vest. The figures and their texture atlases live in `assets/players/`; see its README for the generator and dimensions. Figures update when a player's team becomes known or changes at halftime. The client-side shot box spans the figures from headgear to boots.
+
 Both rifles hold 30 shots. R reloads a partly empty magazine in 2.5 seconds; firing is disabled while reloading. The weapon HUD shows remaining ammunition and reload status. Ammunition is currently managed by the client, matching the existing client-reported hit model. A respawn or new bomb round refills the magazine.
 
 Reload and planting sounds play locally and are relayed to nearby players through Nexilis positional audio. A bomb explosion sound plays for everyone when the server declares an explosion win. The three original PCM assets are `assets/sounds/reload.wav`, `planting.wav`, and `explosion.wav`; regenerate them with `python3 assets/sounds/generate.py`.

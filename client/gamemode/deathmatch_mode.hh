@@ -25,6 +25,7 @@ class DeathmatchMode : public GameMode
 {
 public:
     nx3d::GameMode type() const override;
+    std::string playerTeam(uint64_t playerId) const override;
     void onEnter(ClientApp& app, const std::string& team) override;
     void update(ClientApp& app, float delta_time) override;
     void handleMouseButtonDown(ClientApp& app, const SDL_Event& event) override;

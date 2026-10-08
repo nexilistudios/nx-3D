@@ -5,6 +5,7 @@
 
 #include <SDL3/SDL_events.h>
 
+#include <cstdint>
 #include <string>
 
 namespace nx3d::client
@@ -29,6 +30,12 @@ public:
 
     /// Identifier that must match the gamemode the server assigned to the room.
     virtual nx3d::GameMode type() const = 0;
+
+    /// Team of a remote player if known from server leaderboard updates.
+    virtual std::string playerTeam(uint64_t) const
+    {
+        return {};
+    }
 
     /// Called once when the player enters the game after choosing a team.
     virtual void onEnter(ClientApp& app, const std::string& team) = 0;
