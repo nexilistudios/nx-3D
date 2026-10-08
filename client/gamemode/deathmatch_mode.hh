@@ -32,7 +32,7 @@ public:
     void handleKeyDown(ClientApp& app, const SDL_Event& event) override;
     void handleKeyUp(ClientApp& app, const SDL_Event& event) override;
 
-private:
+protected:
     void equipGun(ClientApp& app, const std::string& weaponName,
                   const std::string& objPath, const std::string& mtlPath,
                   float fpScale, glm::vec3 fpCenter,

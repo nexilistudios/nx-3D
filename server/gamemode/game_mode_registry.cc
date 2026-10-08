@@ -1,5 +1,6 @@
 #include <server/gamemode/game_mode_registry.hh>
 
+#include <server/gamemode/bomb_mode.hh>
 #include <server/gamemode/deathmatch_mode.hh>
 
 #include <nexilis/logger/log.hh>
@@ -21,6 +22,8 @@ std::unique_ptr<GameMode> createGameMode(nx3d::GameMode gameMode)
     {
         case nx3d::GameMode::deathmatch:
             return std::make_unique<DeathmatchMode>();
+        case nx3d::GameMode::bomb:
+            return std::make_unique<BombMode>();
 
         // Not implemented yet. Fall back to deathmatch so a room requesting
         // one of these still runs (with automatic respawns) until the mode is
@@ -43,6 +46,14 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
 
     room.setDeathHandler([modePtr](nexilis::server::Room& r, uint64_t killerId, uint64_t victimId)
                          { modePtr->onPlayerDeath(r, killerId, victimId); });
+    room.setTeamHandler([modePtr](nexilis::server::Room& r, uint64_t playerId)
+                        { modePtr->onTeamSelected(r, playerId); });
+    room.setActionHandler([modePtr](nexilis::server::Room& r, uint64_t playerId, uint8_t action)
+                          { return modePtr->onAction(r, playerId, action); });
+    room.setCombatHandler([modePtr](uint64_t shooterId, uint64_t targetId)
+                          { return modePtr->canDamage(shooterId, targetId); });
+    room.setTeamSelectionHandler([modePtr](uint64_t playerId)
+                                 { return modePtr->canSelectTeam(playerId); });
 
     m_modes[room.getId()] = std::move(mode);
 }

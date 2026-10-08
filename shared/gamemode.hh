@@ -20,6 +20,9 @@ enum class GameMode
     /// Immediate automatic respawn on death (free-for-all / team deathmatch).
     deathmatch,
 
+    /// MR12 bomb rounds with a per-room player queue.
+    bomb,
+
     /// No automatic respawns; players stay dead until something revives them.
     nospawn,
 
@@ -37,6 +40,8 @@ inline const char* gameModeToString(GameMode mode)
     {
         case GameMode::deathmatch:
             return "deathmatch";
+        case GameMode::bomb:
+            return "bomb";
         case GameMode::nospawn:
             return "nospawn";
         case GameMode::hardpoint:
@@ -60,6 +65,8 @@ inline GameMode gameModeFromName(const std::string& roomName)
                    [](unsigned char c)
                    { return std::tolower(c); });
 
+    if (lower.find("bomb") != std::string::npos)
+        return GameMode::bomb;
     if (lower.find("nospawn") != std::string::npos)
         return GameMode::nospawn;
     if (lower.find("hardpoint") != std::string::npos)

@@ -61,6 +61,12 @@ Ui::Ui(VkDevice device,
                     descriptorPool, descriptorSetLayout, fontPath, 28),
       teamDisplayText(device, physDevice, commandPool, graphicsQueue,
                       descriptorPool, descriptorSetLayout, fontPath, 20),
+      roundText(device, physDevice, commandPool, graphicsQueue,
+                descriptorPool, descriptorSetLayout, fontPath, 22),
+      matchStatusText(device, physDevice, commandPool, graphicsQueue,
+                      descriptorPool, descriptorSetLayout, fontPath, 17),
+      bombText(device, physDevice, commandPool, graphicsQueue,
+               descriptorPool, descriptorSetLayout, fontPath, 20),
 
       pauseTitle(device, physDevice, commandPool, graphicsQueue,
                  descriptorPool, descriptorSetLayout, fontPath, 48),
@@ -166,6 +172,15 @@ Ui::Ui(VkDevice device,
     teamDisplayText.setString("");
     teamDisplayText.setColor(SDL_Color{255, 255, 255, 255});
     teamDisplayText.setPosition(glm::vec2(0.65f, -0.95f));
+    roundText.setString("");
+    roundText.setPosition(glm::vec2(-0.32f, 0.88f));
+    roundText.setColor(SDL_Color{255, 255, 255, 255});
+    matchStatusText.setString("");
+    matchStatusText.setPosition(glm::vec2(-0.52f, 0.78f));
+    matchStatusText.setColor(SDL_Color{255, 220, 140, 255});
+    bombText.setString("");
+    bombText.setPosition(glm::vec2(0.58f, 0.82f));
+    bombText.setColor(SDL_Color{255, 100, 60, 255});
 
     // --- Pause menu ----------------------------------------------------------
     pauseTitle.setString("");
@@ -430,6 +445,9 @@ void Ui::showGameHudTexts()
     registerText(weaponHudText);
     registerText(hitmarkerText);
     registerText(teamDisplayText);
+    registerText(roundText);
+    registerText(matchStatusText);
+    registerText(bombText);
     registerText(pauseTitle);
     registerText(pauseVolumeText);
     registerText(pauseQuitText);

@@ -18,6 +18,8 @@
 
 #include <shared/gamemode.hh>
 
+#include <atomic>
+#include <chrono>
 #include <functional>
 #include <iostream>
 
@@ -46,25 +48,18 @@ int main()
 
     namespace gamemode = nx3d::server::gamemode;
 
-    // Some initial rooms. The gamemode is decided here on the server, purely as
+    // A bomb room and a deathmatch room. The gamemode is decided here, purely as
     // game logic: nexilis does not know about gamemodes, so the registry keeps
     // track of which room runs which mode.
     {
-        auto room = createRoom("Room 1");
+        auto room = createRoom("Bomb Match 1");
         auto roomId = room.getId();
         RoomStorage::add(std::move(room));
-        gamemode::GameModeRegistry::assignRoom(*RoomStorage::getRoomById(roomId), nx3d::GameMode::deathmatch);
+        gamemode::GameModeRegistry::assignRoom(*RoomStorage::getRoomById(roomId), nx3d::GameMode::bomb);
     }
 
     {
-        auto room = createRoom("Room 2");
-        auto roomId = room.getId();
-        RoomStorage::add(std::move(room));
-        gamemode::GameModeRegistry::assignRoom(*RoomStorage::getRoomById(roomId), nx3d::GameMode::deathmatch);
-    }
-
-    {
-        auto room = createRoom("Room 3");
+        auto room = createRoom("Deathmatch 1");
         auto roomId = room.getId();
         RoomStorage::add(std::move(room));
         gamemode::GameModeRegistry::assignRoom(*RoomStorage::getRoomById(roomId), nx3d::GameMode::deathmatch);
@@ -92,19 +87,27 @@ int main()
                   << " rpm:" << def.fire_rate * 60.0f
                   << " mag:" << def.magazine_size << ")" << std::endl;
 
-    auto f = std::function<bool()>([&gunManager]()
+    auto lastTick = std::chrono::steady_clock::now();
+    std::atomic<bool> running{true};
+    auto f = std::function<bool()>([&gunManager, &lastTick, &running]()
     {
-        gunManager.update(1.0f / 60.0f);
-        gamemode::GameModeRegistry::update(1.0f / 60.0f);
+        if (!running.load())
+            return false;
+        const auto now = std::chrono::steady_clock::now();
+        const float dt = std::chrono::duration<float>(now - lastTick).count();
+        lastTick = now;
+        gunManager.update(dt);
+        gamemode::GameModeRegistry::update(dt);
         return true;
     });
 
-    auto server_runtime = std::thread([&condition, &f](){ nexilis::server::runtime(condition, f, 1); });
-    server_runtime.detach();
+    auto server_runtime = std::thread([&condition, &f](){ nexilis::server::runtime(condition, f, 60); });
     // clang-format on
 
     // Wait for user input to stop the server
     std::cout << "Nx3D game server is running. Press Enter to stop..."
               << std::endl;
     std::cin.get();
+    running.store(false);
+    server_runtime.join();
 }

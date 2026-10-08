@@ -1,5 +1,6 @@
 #include <client/app/client_app.hh>
 
+#include <client/gamemode/bomb_mode.hh>
 #include <client/gamemode/deathmatch_mode.hh>
 #include <client/gamemode/weapon_profiles.hh>
 #include <client/project_root.hh>
@@ -127,8 +128,7 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
     eventHandler.handleKeyPressed(SDLK_Y, [this]()
                                   {
         if (currentState == State::Game && !chatActive)
-            openChat();
-    });
+            openChat(); });
 
     eventHandler.handleInput(SDLK_P, [this]()
                              {
@@ -266,6 +266,8 @@ std::unique_ptr<gamemode::GameMode> ClientApp::makeGameMode(nx3d::GameMode gameM
 {
     if (gameMode == nx3d::GameMode::deathmatch)
         return std::make_unique<gamemode::DeathmatchMode>();
+    if (gameMode == nx3d::GameMode::bomb)
+        return std::make_unique<gamemode::BombMode>();
 
     // Any gamemode without a client implementation yet falls back to
     // deathmatch so the room stays playable.

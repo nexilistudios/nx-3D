@@ -108,6 +108,9 @@ public:
     spear::ui::vulkan::Text weaponHudText;
     spear::ui::vulkan::Text hitmarkerText;
     spear::ui::vulkan::Text teamDisplayText;
+    spear::ui::vulkan::Text roundText;
+    spear::ui::vulkan::Text matchStatusText;
+    spear::ui::vulkan::Text bombText;
 
     spear::ui::vulkan::Text pauseTitle;
     spear::ui::vulkan::Text pauseVolumeText;

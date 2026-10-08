@@ -26,6 +26,21 @@ public:
 
     /// Called when a player dies in the room.
     virtual void onPlayerDeath(nexilis::server::Room& room, uint64_t killerId, uint64_t victimId) = 0;
+    virtual void onTeamSelected(nexilis::server::Room&, uint64_t)
+    {
+    }
+    virtual bool onAction(nexilis::server::Room&, uint64_t, uint8_t)
+    {
+        return false;
+    }
+    virtual bool canDamage(uint64_t, uint64_t) const
+    {
+        return true;
+    }
+    virtual bool canSelectTeam(uint64_t) const
+    {
+        return true;
+    }
 
     /// Called once per server tick so the gamemode can run its own logic.
     virtual void update(nexilis::server::Room& room, float dt)
