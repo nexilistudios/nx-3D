@@ -32,6 +32,8 @@ namespace audio
 /// the server. Kept as raw bytes on the wire; matched against these constants.
 inline constexpr uint8_t kSoundFootstep = 0;
 inline constexpr uint8_t kSoundShoot = 1;
+inline constexpr uint8_t kSoundReload = 2;
+inline constexpr uint8_t kSoundPlanting = 3;
 } // namespace audio
 
 /// Owns the entire client application: windowing, rendering, UI, networking and
@@ -73,6 +75,9 @@ public:
     spear::audio::AudioSystem audio_system;
     std::unique_ptr<spear::audio::Sound> gunshot_audio;
     std::unique_ptr<spear::audio::Sound> hitmarker_audio;
+    std::unique_ptr<spear::audio::Sound> reload_audio;
+    std::unique_ptr<spear::audio::Sound> planting_audio;
+    std::unique_ptr<spear::audio::Sound> explosion_audio;
     std::unique_ptr<spear::audio::Sound> walk_audio;
     /// Short positional "step" clip for sounds other players make when
     /// walking. A single footfall cut from walk.mp3, played at world

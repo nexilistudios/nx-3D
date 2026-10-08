@@ -28,6 +28,8 @@ struct WeaponProfile
     btVector3 half_extents{1.0f, 1.0f, 1.0f};
     /// Fully-automatic fire rate in rounds per minute (LMB held down).
     float rounds_per_minute = 600.0f;
+    int magazine_size = 30;
+    float reload_seconds = 2.5f;
 };
 
 /// Whether a weapon profile is known for the given item type.
@@ -52,6 +54,8 @@ inline const WeaponProfile& getWeaponProfile(const std::string& type)
             .fp_rotation = glm::vec3(-8.0f, 25.0f, -8.0f),
             .half_extents = btVector3(3.46f, 0.67f, 11.58f),
             .rounds_per_minute = 600.0f,
+            .magazine_size = 30,
+            .reload_seconds = 2.5f,
     };
 
     static const WeaponProfile kM4 = {
@@ -66,6 +70,8 @@ inline const WeaponProfile& getWeaponProfile(const std::string& type)
             .fp_rotation = glm::vec3(-7.0f, 27.0f, -6.0f),
             .half_extents = btVector3(3.07f, 1.13f, 12.07f),
             .rounds_per_minute = 800.0f,
+            .magazine_size = 30,
+            .reload_seconds = 2.5f,
     };
 
     if (type == "m4")

@@ -56,6 +56,7 @@ The flake also exposes packaged programs through `nix run .#server` and `nix run
 | Move and look | WASD and mouse |
 | Jump | Space |
 | Fire | Hold left mouse button |
+| Reload | R |
 | Plant or defuse bomb (bomb match) | Hold E |
 | Drop held weapon | G |
 | Pick up a weapon | Walk near a dropped weapon |
@@ -64,6 +65,10 @@ The flake also exposes packaged programs through `nix run .#server` and `nix run
 | Pause or resume | Escape |
 
 The equipped gun appears beside the camera and follows the view. It has walk bob and recoil. The gun mesh is selected from the team's weapon profile or the weapon picked up from the ground. First-person placement and animation live in `client/gun/first_person_gun.cc`; per-weapon mesh paths, scale, and center are in `client/gamemode/weapon_profiles.hh`.
+
+Both rifles hold 30 shots. R reloads a partly empty magazine in 2.5 seconds; firing is disabled while reloading. The weapon HUD shows remaining ammunition and reload status. Ammunition is currently managed by the client, matching the existing client-reported hit model. A respawn or new bomb round refills the magazine.
+
+Reload and planting sounds play locally and are relayed to nearby players through Nexilis positional audio. A bomb explosion sound plays for everyone when the server declares an explosion win. The three original PCM assets are `assets/sounds/reload.wav`, `planting.wav`, and `explosion.wav`; regenerate them with `python3 assets/sounds/generate.py`.
 
 Weapons render in camera space to avoid shaking from world-coordinate rounding. Their default pose is angled inward with a slight roll. `client/gun/weapon_motion.hh` controls the subtle walking cadence and time-based recoil recovery; vertical movement, small ground-contact jitter, and respawn teleports do not drive the bob animation.
 

@@ -60,6 +60,16 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
 {
     using packet = nexilis::client::Packet;
 
+    if (m_reloadRemaining > 0.0f)
+    {
+        m_reloadRemaining = std::max(0.0f, m_reloadRemaining - delta_time);
+        if (m_reloadRemaining == 0.0f)
+        {
+            m_ammo = m_magazineSize;
+            refreshWeaponHud(app);
+        }
+    }
+
     if (m_dropCooldown > 0)
         m_dropCooldown--;
     if (m_hitmarkerFrames > 0)
@@ -93,7 +103,7 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
     {
         m_fireCooldown -= delta_time;
         // A while loop keeps the cadence correct even after a big frame time.
-        while (m_fireCooldown <= 0.0f)
+        while (m_triggerHeld && m_fireCooldown <= 0.0f)
         {
             m_fireCooldown += fireIntervalSeconds();
             fireWeapon(app);
@@ -175,6 +185,11 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
                 m_firstPersonGun->resetAnimation();
             m_health = 100;
             app.ui->healthText.setString("HP: " + std::to_string(m_health));
+            m_ammo = m_magazineSize;
+            m_reloadRemaining = 0.0f;
+            if (app.reload_audio)
+                app.reload_audio->stop();
+            refreshWeaponHud(app);
 
             if (!m_weaponPickedUp)
             {
@@ -213,6 +228,8 @@ void DeathmatchMode::handleMouseButtonDown(ClientApp& app, const SDL_Event& even
 {
     if (!m_weaponPickedUp || event.button.button != SDL_BUTTON_LEFT)
         return;
+    if (m_reloadRemaining > 0.0f || m_ammo == 0)
+        return;
 
     // Start a fresh burst: the first shot fires immediately, subsequent shots
     // are paced by the weapon's rate of fire while the trigger is held.
@@ -241,6 +258,14 @@ float DeathmatchMode::fireIntervalSeconds() const
 void DeathmatchMode::fireWeapon(ClientApp& app)
 {
     using packet = nexilis::client::Packet;
+
+    if (m_reloadRemaining > 0.0f || m_ammo == 0)
+    {
+        m_triggerHeld = false;
+        return;
+    }
+    --m_ammo;
+    refreshWeaponHud(app);
 
     // Recoil grows the longer a burst runs: each shot kicks harder than the
     // last, resetting only when the trigger is released.
@@ -351,7 +376,9 @@ void DeathmatchMode::handleKeyDown(ClientApp& app, const SDL_Event& event)
     if (event.key.repeat)
         return;
 
-    if (event.key.key == SDLK_G && m_weaponPickedUp)
+    if (event.key.key == SDLK_R && m_weaponPickedUp)
+        startReload(app);
+    else if (event.key.key == SDLK_G && m_weaponPickedUp)
         dropCurrentWeapon(app);
     else if (event.key.key == SDLK_TAB && app.client_api.clientInRoom())
     {
@@ -380,6 +407,8 @@ void DeathmatchMode::equipGun(ClientApp& app,
                               glm::vec3 fpOffset,
                               glm::vec3 fpRotation)
 {
+    if (app.reload_audio)
+        app.reload_audio->stop();
     if (m_crosshair)
     {
         vkDeviceWaitIdle(app.renderer.getDevice());
@@ -421,11 +450,18 @@ void DeathmatchMode::equipGun(ClientApp& app,
         if (m_crosshair)
             m_crosshair->render(app.camera); });
 
-    app.ui->weaponHudText.setString(weaponName);
+    m_weaponName = weaponName;
+    const auto& profile = getWeaponProfile(m_pickedUpItemType);
+    m_magazineSize = profile.magazine_size;
+    m_ammo = m_magazineSize;
+    m_reloadRemaining = 0.0f;
+    refreshWeaponHud(app);
 }
 
 void DeathmatchMode::unequipGun(ClientApp& app)
 {
+    if (app.reload_audio)
+        app.reload_audio->stop();
     if (m_crosshair)
     {
         vkDeviceWaitIdle(app.renderer.getDevice());
@@ -439,6 +475,8 @@ void DeathmatchMode::unequipGun(ClientApp& app)
         m_firstPersonGun.reset();
     }
     app.ui->weaponHudText.setString("");
+    m_weaponName.clear();
+    m_reloadRemaining = 0.0f;
 }
 
 glm::vec3 DeathmatchMode::pickSpawnPoint()
@@ -459,14 +497,45 @@ void DeathmatchMode::equipWeaponForTeam(ClientApp& app)
     const bool isCt = (m_team == "Counter Terrorist");
     const auto& profile = getWeaponProfile(isCt ? "m4" : "ak47");
 
+    m_pickedUpItemType = profile.type;
+
     equipGun(app, profile.name, profile.obj_path, profile.mtl_path,
              profile.fp_scale, profile.fp_center,
              profile.fp_offset, profile.fp_rotation);
 
     m_pickedUpItemId = 0;
     m_pickedUpItemSize = glm::vec3(1.0f, 1.0f, 1.0f);
-    m_pickedUpItemType = profile.type;
     m_pickedUpItemFilepath = profile.obj_path;
+}
+
+void DeathmatchMode::refreshWeaponHud(ClientApp& app)
+{
+    if (m_weaponName.empty())
+        return;
+    const std::string suffix = m_reloadRemaining > 0.0f ? "  RELOADING" : m_ammo == 0 ? "  [R] RELOAD"
+                                                                                      : "";
+    app.ui->weaponHudText.setString(m_weaponName + "  " + std::to_string(m_ammo) + "/" +
+                                    std::to_string(m_magazineSize) + suffix);
+}
+
+void DeathmatchMode::startReload(ClientApp& app)
+{
+    if (m_reloadRemaining > 0.0f || m_ammo >= m_magazineSize)
+        return;
+    m_triggerHeld = false;
+    m_burstShots = 0;
+    m_fireCooldown = 0.0f;
+    m_reloadRemaining = getWeaponProfile(m_pickedUpItemType).reload_seconds;
+    refreshWeaponHud(app);
+    if (app.reload_audio)
+        app.reload_audio->play();
+    if (app.ready && app.client_api.clientInRoom())
+    {
+        const glm::vec3 pos = app.camera.getPosition();
+        app.tcp_client.sendMessage(nexilis::client::Packet::Room::Player3D::audioEvent(
+                app.client_api, audio::kSoundReload,
+                nexilis::Vector3f({pos.x, pos.y, pos.z})));
+    }
 }
 
 void DeathmatchMode::dropCurrentWeapon(ClientApp& app)

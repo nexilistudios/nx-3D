@@ -30,6 +30,10 @@ void BombMode::update(ClientApp& app, float dt)
         if (event.room_id != app.client_api.clientRoomId())
             continue;
         const bool newRound = event.round != m_round;
+        const bool bombExploded = m_phase == "live" && event.phase == "post" &&
+                                  event.notice == "T win: Bomb exploded";
+        if (bombExploded && app.explosion_audio)
+            app.explosion_audio->play();
         m_round = event.round;
         m_tScore = event.terrorist_score;
         m_ctScore = event.counter_terrorist_score;
@@ -40,6 +44,8 @@ void BombMode::update(ClientApp& app, float dt)
         m_planted = event.bomb_planted;
         m_active = event.active;
         m_alive = event.alive;
+        if ((!m_alive || event.phase != "live") && m_using && app.planting_audio)
+            app.planting_audio->stop();
         if (m_planted)
         {
             if (!m_bombCube)
@@ -63,12 +69,22 @@ void BombMode::update(ClientApp& app, float dt)
         }
         if (!m_alive)
             m_triggerHeld = false;
-        if (!event.team.empty() && m_team != event.team)
+        const bool teamChanged = !event.team.empty() && m_team != event.team;
+        if (teamChanged)
         {
             m_team = event.team;
             app.ui->teamDisplayText.setString(m_team);
-            if (newRound)
-                equipWeaponForTeam(app);
+        }
+        if (newRound && event.active && event.phase == "live")
+        {
+            if (teamChanged)
+            {
+                m_lastSpawnIndex = SIZE_MAX;
+                app.camera.setPosition(pickSpawnPoint());
+                m_prevCamPos = app.camera.getPosition();
+            }
+            m_weaponPickedUp = true;
+            equipWeaponForTeam(app);
         }
     }
 
@@ -111,6 +127,15 @@ void BombMode::handleKeyDown(ClientApp& app, const SDL_Event& event)
         {
             app.tcp_client.sendMessage(nexilis::client::Packet::Room::Player3D::matchAction(app.client_api, action));
             m_using = true;
+            if (action == 1)
+            {
+                if (app.planting_audio)
+                    app.planting_audio->play();
+                const glm::vec3 pos = app.camera.getPosition();
+                app.tcp_client.sendMessage(nexilis::client::Packet::Room::Player3D::audioEvent(
+                        app.client_api, audio::kSoundPlanting,
+                        nexilis::Vector3f({pos.x, pos.y, pos.z})));
+            }
         }
     }
     if (m_active && m_alive)
@@ -124,6 +149,8 @@ void BombMode::handleKeyUp(ClientApp& app, const SDL_Event& event)
     if (event.key.key == SDLK_E && m_using)
     {
         app.tcp_client.sendMessage(nexilis::client::Packet::Room::Player3D::matchAction(app.client_api, 0));
+        if (app.planting_audio)
+            app.planting_audio->stop();
         m_using = false;
     }
     DeathmatchMode::handleKeyUp(app, event);

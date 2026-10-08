@@ -94,6 +94,16 @@ void GameMode::updateRemoteAudioEvents(ClientApp& app)
             if (app.step_audio)
                 app.step_audio->playAt(pos);
         }
+        else if (evt.sound == audio::kSoundReload)
+        {
+            if (app.reload_audio)
+                app.reload_audio->playAt(pos);
+        }
+        else if (evt.sound == audio::kSoundPlanting)
+        {
+            if (app.planting_audio)
+                app.planting_audio->playAt(pos);
+        }
     }
 }
 

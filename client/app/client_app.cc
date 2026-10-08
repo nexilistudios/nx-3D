@@ -83,6 +83,12 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
             audio_system, nx3d::projectAssetPath("sounds/gunshot.wav"));
     hitmarker_audio = std::make_unique<spear::audio::Sound>(
             audio_system, nx3d::projectAssetPath("sounds/hitmarker.wav"));
+    reload_audio = std::make_unique<spear::audio::Sound>(
+            audio_system, nx3d::projectAssetPath("sounds/reload.wav"));
+    planting_audio = std::make_unique<spear::audio::Sound>(
+            audio_system, nx3d::projectAssetPath("sounds/planting.wav"));
+    explosion_audio = std::make_unique<spear::audio::Sound>(
+            audio_system, nx3d::projectAssetPath("sounds/explosion.wav"));
     walk_audio = std::make_unique<spear::audio::Sound>(
             audio_system, nx3d::projectAssetPath("sounds/walk.mp3"));
     step_audio = std::make_unique<spear::audio::Sound>(
@@ -301,6 +307,12 @@ void ClientApp::applyAudioVolume()
         gunshot_audio->setVolume(audioVolume);
     if (hitmarker_audio)
         hitmarker_audio->setVolume(audioVolume);
+    if (reload_audio)
+        reload_audio->setVolume(audioVolume);
+    if (planting_audio)
+        planting_audio->setVolume(audioVolume);
+    if (explosion_audio)
+        explosion_audio->setVolume(audioVolume);
     if (walk_audio)
         walk_audio->setVolume(audioVolume);
     if (step_audio)

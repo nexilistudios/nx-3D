@@ -41,6 +41,8 @@ protected:
     void equipWeaponForTeam(ClientApp& app);
     void dropCurrentWeapon(ClientApp& app);
     void fireWeapon(ClientApp& app);
+    void startReload(ClientApp& app);
+    void refreshWeaponHud(ClientApp& app);
     float fireIntervalSeconds() const;
     glm::vec3 pickSpawnPoint();
 
@@ -62,6 +64,10 @@ protected:
     int m_dropCooldown = 0;
     int m_health = 100;
     int m_hitmarkerFrames = 0;
+    std::string m_weaponName;
+    int m_ammo = 0;
+    int m_magazineSize = 0;
+    float m_reloadRemaining = 0.0f;
     glm::vec3 m_prevCamPos{0.0f};
 
     // Automatic fire state
