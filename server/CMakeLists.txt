@@ -2,10 +2,11 @@ cmake_minimum_required(VERSION 3.30)
 project(nx-3D-server)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/../nexilis/nexilis/build")
-find_package(Nexilis REQUIRED CONFIG)
+set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../nexilis/nexilis/build")
+include(../cmake/Nexilis.cmake)
 find_package(Boost REQUIRED COMPONENTS json)
 
 # Collect all sources by globbing recursively so new files are picked up
@@ -18,5 +19,5 @@ file(GLOB_RECURSE NX3D_SERVER_SOURCES CONFIGURE_DEPENDS
 list(FILTER NX3D_SERVER_SOURCES EXCLUDE REGEX "/build/")
 
 add_executable(nx-3D-server ${NX3D_SERVER_SOURCES})
-target_include_directories(nx-3D-server PRIVATE "${CMAKE_SOURCE_DIR}/..")
+target_include_directories(nx-3D-server PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_link_libraries(nx-3D-server PRIVATE Nexilis::nexilis Boost::json)

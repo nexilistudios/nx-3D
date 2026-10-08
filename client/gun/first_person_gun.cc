@@ -36,72 +36,51 @@ FirstPersonGun::FirstPersonGun(VkDevice device,
 
 void FirstPersonGun::render(spear::Camera& camera)
 {
-    // Compute the world-space transform for the gun.
-    // Place the gun at a fixed offset relative to the camera, then let the
-    // inherited OBJModel render handle the view-projection transform. This
-    // keeps the gun at a constant screen position regardless of camera motion.
-
-    glm::vec3 offset = m_viewOffset + m_bobOffset;
-    offset.y += m_recoilKick;
-
-    glm::vec3 gunPos = camera.getPosition()
-        + camera.getRight() * offset.x
-        + camera.getUp() * offset.y
-        + camera.getFront() * offset.z;
-
-    glm::mat4 model = glm::translate(glm::mat4(1.0f), gunPos);
+    // Draw directly in camera space. Moving the mesh into world coordinates
+    // and back loses precision at the map's large coordinates and makes a
+    // nearby weapon visibly tremble as the player moves or turns.
+    glm::vec3 offset = m_viewOffset + m_motion.bob;
+    offset.y += m_motion.recoil;
+    offset.z = -offset.z; // Positive forward distance becomes view-space -Z.
+    glm::mat4 model = glm::translate(glm::mat4(1.0f), offset);
 
     // Apply view rotation offsets (tilt the gun)
-    model = glm::rotate(model, glm::radians(m_viewRotation.x + m_recoilKick * 10.0f),
-                        camera.getRight());
+    model = glm::rotate(model, glm::radians(m_viewRotation.x + m_motion.recoil * 10.0f),
+                        glm::vec3(1.0f, 0.0f, 0.0f));
     model = glm::rotate(model, glm::radians(m_viewRotation.y),
-                        camera.getUp());
+                        glm::vec3(0.0f, 1.0f, 0.0f));
     model = glm::rotate(model, glm::radians(m_viewRotation.z),
-                        camera.getFront());
+                        glm::vec3(0.0f, 0.0f, 1.0f));
 
     // The model was built facing +Z, rotate 180 around Y so it points toward -Z
     // (away from the camera, into the screen)
     model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
-    // Fit the AK model into the same visible space as the old procedural gun:
-    // scale it up and center it around the view position.
+    // Center and size the selected weapon mesh in the camera frame.
     model = glm::scale(model, glm::vec3(m_modelScale));
     model = glm::translate(model, -m_modelCenter);
 
     setModel(model);
-    OBJModel::render(camera);
-
-    // Decay recoil each frame
-    m_recoilKick *= 0.85f;
-    if (m_recoilKick < 0.001f)
-        m_recoilKick = 0.0f;
+    // Match the player's field of view without inheriting world translation
+    // or aim punch. Camera movement is already implicit in this local frame.
+    const float fov = glm::degrees(2.0f * std::atan(1.0f / camera.getProjectionMatrix()[1][1]));
+    spear::Camera viewCamera(glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f),
+                             -90.0f, 0.0f, 0.0f, 0.0f, fov);
+    OBJModel::render(viewCamera);
 }
 
 // ---------------------------------------------------------------------------
 // Animation
 // ---------------------------------------------------------------------------
 
-void FirstPersonGun::addBob(float delta_time, const glm::vec3& velocity)
+void FirstPersonGun::updateAnimation(float delta_time, const glm::vec3& velocity, bool grounded)
 {
-    float speed = glm::length(velocity);
-    if (speed > 0.1f)
-    {
-        m_bobPhase += delta_time * speed * 0.5f;
-        m_bobOffset.x = std::sin(m_bobPhase) * 0.008f;
-        m_bobOffset.y = std::abs(std::cos(m_bobPhase)) * 0.008f;
-    }
-    else
-    {
-        m_bobPhase = 0.0f;
-        m_bobOffset = glm::vec3(0.0f);
-    }
+    m_motion.update(delta_time, velocity, grounded);
 }
 
 void FirstPersonGun::addRecoil(float amount)
 {
-    m_recoilKick += amount;
-    if (m_recoilKick > 0.35f)
-        m_recoilKick = 0.35f;
+    m_motion.kick(amount);
 }
 
 } // namespace nx3d::client::gun

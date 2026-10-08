@@ -35,7 +35,8 @@ public:
 private:
     void equipGun(ClientApp& app, const std::string& weaponName,
                   const std::string& objPath, const std::string& mtlPath,
-                  float fpScale, glm::vec3 fpCenter);
+                  float fpScale, glm::vec3 fpCenter,
+                  glm::vec3 fpOffset, glm::vec3 fpRotation);
     void unequipGun(ClientApp& app);
     void equipWeaponForTeam(ClientApp& app);
     void dropCurrentWeapon(ClientApp& app);

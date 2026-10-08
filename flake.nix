@@ -40,6 +40,7 @@
 
         nativeBuildInputs = [ pkgs.cmake ];
         buildInputs = [ nexilisPkg pkgs.boost pkgs.openssl ];
+        cmakeFlags = [ "-DNX3D_USE_SYSTEM_NEXILIS=ON" ];
 
         preConfigure = ''
           # Work on a writable copy so hardcoded paths can be patched.
@@ -76,6 +77,7 @@
         src = self.outPath;
 
         nativeBuildInputs = [ pkgs.cmake pkgs.pkg-config ];
+        cmakeFlags = [ "-DNX3D_USE_SYSTEM_NEXILIS=ON" ];
         buildInputs = [
           nexilisPkg
           pkgs.boost

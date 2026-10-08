@@ -86,7 +86,7 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
     updateRemoteAudioEvents(app);
 
     if (m_firstPersonGun)
-        m_firstPersonGun->addBob(delta_time, velocity);
+        m_firstPersonGun->updateAnimation(delta_time, velocity, app.movement_controller.isOnGround());
 
     // --- Automatic fire while the trigger is held ---
     if (m_triggerHeld && m_weaponPickedUp)
@@ -132,7 +132,8 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
 
                     const auto& profile = getWeaponProfile(item.item_type);
                     equipGun(app, profile.name, profile.obj_path, profile.mtl_path,
-                             profile.fp_scale, profile.fp_center);
+                             profile.fp_scale, profile.fp_center,
+                             profile.fp_offset, profile.fp_rotation);
 
                     break;
                 }
@@ -166,6 +167,12 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
             const auto& spawns = (m_team == "Terrorist") ? m_tSpawns : m_ctSpawns;
             if (!spawns.empty())
                 app.camera.setPosition(pickSpawnPoint());
+            m_prevCamPos = app.camera.getPosition();
+            m_triggerHeld = false;
+            m_burstShots = 0;
+            m_fireCooldown = 0.0f;
+            if (m_firstPersonGun)
+                m_firstPersonGun->resetAnimation();
             m_health = 100;
             app.ui->healthText.setString("HP: " + std::to_string(m_health));
 
@@ -369,7 +376,9 @@ void DeathmatchMode::equipGun(ClientApp& app,
                               const std::string& objPath,
                               const std::string& mtlPath,
                               float fpScale,
-                              glm::vec3 fpCenter)
+                              glm::vec3 fpCenter,
+                              glm::vec3 fpOffset,
+                              glm::vec3 fpRotation)
 {
     if (m_crosshair)
     {
@@ -392,6 +401,8 @@ void DeathmatchMode::equipGun(ClientApp& app,
             blt::ObjectData(app.shared_world, 0.0f,
                             glm::vec3(0.0f, -1000.0f, 0.0f), app.default_size),
             fpScale, fpCenter);
+    m_firstPersonGun->setViewOffset(fpOffset);
+    m_firstPersonGun->setViewRotation(fpRotation);
     app.scene_manager.getCurrentScene()->addObject(m_firstPersonGun);
 
     m_crosshair = std::make_shared<nx3d::client::Crosshair>(
@@ -408,8 +419,7 @@ void DeathmatchMode::equipGun(ClientApp& app,
             app.ui->renderLeaderboardOverlay(ctx);
         app.ui->renderChatOverlay(ctx);
         if (m_crosshair)
-            m_crosshair->render(app.camera);
-    });
+            m_crosshair->render(app.camera); });
 
     app.ui->weaponHudText.setString(weaponName);
 }
@@ -450,7 +460,8 @@ void DeathmatchMode::equipWeaponForTeam(ClientApp& app)
     const auto& profile = getWeaponProfile(isCt ? "m4" : "ak47");
 
     equipGun(app, profile.name, profile.obj_path, profile.mtl_path,
-             profile.fp_scale, profile.fp_center);
+             profile.fp_scale, profile.fp_center,
+             profile.fp_offset, profile.fp_rotation);
 
     m_pickedUpItemId = 0;
     m_pickedUpItemSize = glm::vec3(1.0f, 1.0f, 1.0f);
