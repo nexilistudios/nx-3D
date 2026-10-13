@@ -54,6 +54,7 @@ void BombMode::clearAction()
 
 void BombMode::onTeamSelected(nexilis::server::Room& room, uint64_t playerId)
 {
+    m_economy.joined(room, playerId);
     // Halftime calls Room::setPlayerTeam while update() already holds m_mutex.
     if (m_swapping.load())
         return;
@@ -118,6 +119,15 @@ bool BombMode::closeToBomb(uint64_t playerId) const
 bool BombMode::onAction(nexilis::server::Room& room, uint64_t playerId, uint8_t action)
 {
     std::lock_guard lock(m_mutex);
+    if (nx3d::economy::itemForAction(action))
+        return m_economy.buy(room, playerId, action,
+                             m_phase == Phase::live && m_alive.contains(playerId));
+    if (action == nx3d::economy::kThrowGrenadeAction)
+        return m_economy.throwGrenade(room, playerId,
+                                     m_phase == Phase::live && m_alive.contains(playerId));
+    if (action == nx3d::economy::kDropPrimaryAction ||
+        action == nx3d::economy::kDropSecondaryAction)
+        return m_economy.dropWeapon(room, playerId, action);
     if (action == 0)
     {
         if (m_actionPlayer == playerId)
@@ -148,6 +158,7 @@ void BombMode::onPlayerDeath(nexilis::server::Room& room, uint64_t killerId, uin
         return;
     if (m_actionPlayer == victimId)
         clearAction();
+    m_economy.died(room, killerId, victimId);
     room.recordKill(killerId, victimId);
     auto* sender = nexilis::server::ClientStorage::getClientById(
             killerId == 0 ? victimId : killerId);
@@ -176,6 +187,16 @@ void BombMode::endRound(nexilis::server::Room& room, bool terroristsWin, const s
     m_phase = Phase::post;
     m_seconds = kBetweenSeconds;
     m_notice = std::string(terroristsWin ? "T win: " : "CT win: ") + reason;
+    for (auto id : m_players)
+    {
+        const auto team = room.getPlayerTeam(id);
+        if (team != kT && team != kCT)
+            continue;
+        const bool won = (team == kT) == terroristsWin;
+        m_economy.reward(room, id, won ? nx3d::economy::kRoundWinReward
+                                      : nx3d::economy::kRoundLossReward,
+                         won ? "round win" : "round loss");
+    }
     clearAction();
     publish(room);
 }
@@ -240,6 +261,7 @@ void BombMode::startRound(nexilis::server::Room& room)
     for (auto id : m_players)
     {
         room.resetPlayerHealth(id);
+        m_economy.respawned(room, id);
         auto* user = nexilis::server::ClientStorage::getClientById(id);
         if (!user)
             continue;
@@ -256,6 +278,7 @@ void BombMode::startRound(nexilis::server::Room& room)
 void BombMode::reconcile(nexilis::server::Room& room)
 {
     const auto& clients = room.getClients();
+    m_economy.reconcile(clients);
     auto present = [&clients](uint64_t id)
     {
         return std::find(clients.begin(), clients.end(), id) != clients.end();
@@ -272,6 +295,7 @@ void BombMode::reconcile(nexilis::server::Room& room)
 
 void BombMode::update(nexilis::server::Room& room, float dt)
 {
+    m_economy.updateGrenades(room, dt);
     std::lock_guard lock(m_mutex);
     reconcile(room);
     m_publishClock += dt;
@@ -299,12 +323,17 @@ void BombMode::update(nexilis::server::Room& room, float dt)
                         m_planted = true;
                         m_seconds = kBombSeconds;
                         m_notice = "Bomb planted";
+                        m_economy.reward(room, m_actionPlayer, nx3d::economy::kPlantReward,
+                                         "bomb planted");
                     }
                     clearAction();
                     publish(room);
                 }
-                else if (m_action == 2 && m_actionSeconds >= kDefuseSeconds)
+                else if (m_action == 2 && m_actionSeconds >=
+                         (m_economy.hasDefuseKit(m_actionPlayer) ? kDefuseSeconds * 0.5f : kDefuseSeconds))
                 {
+                    m_economy.reward(room, m_actionPlayer, nx3d::economy::kDefuseReward,
+                                     "bomb defused");
                     m_planted = false;
                     endRound(room, false, "Bomb defused");
                 }
@@ -343,6 +372,7 @@ void BombMode::update(nexilis::server::Room& room, float dt)
         {
             m_round = m_tScore = m_ctScore = 0;
             m_phase = Phase::waiting;
+            m_economy.resetMatch(room, m_players);
             startRound(room);
         }
     }

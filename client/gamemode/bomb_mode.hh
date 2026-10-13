@@ -15,6 +15,7 @@ public:
     void onEnter(ClientApp& app, const std::string& team) override;
     void update(ClientApp& app, float deltaTime) override;
     bool canMove() const override;
+    bool canBuy() const override;
     bool isEliminated() const override;
     void handleMouseButtonDown(ClientApp& app, const SDL_Event& event) override;
     void handleKeyDown(ClientApp& app, const SDL_Event& event) override;
@@ -25,6 +26,8 @@ private:
     bool m_alive = false;
     bool m_planted = false;
     bool m_using = false;
+    float m_beepTimer = 0.0f;
+    glm::vec3 m_bombPosition{0.0f};
     float m_seconds = 0.0f;
     uint64_t m_round = 0;
     uint64_t m_tScore = 0;

@@ -1,0 +1,24 @@
+# Original material palette with 1-pixel diffuse swatches
+newmtl glock_body
+Ka 0.059 0.068 0.072
+Kd 0.130 0.150 0.160
+map_Kd glock_body.png
+Ks 0.18 0.18 0.18
+Ns 32
+illum 2
+
+newmtl glock_detail
+Ka 0.018 0.023 0.027
+Kd 0.040 0.050 0.060
+map_Kd glock_detail.png
+Ks 0.18 0.18 0.18
+Ns 32
+illum 2
+
+newmtl glock_slide
+Ka 0.113 0.122 0.126
+Kd 0.250 0.270 0.280
+map_Kd glock_slide.png
+Ks 0.18 0.18 0.18
+Ns 32
+illum 2

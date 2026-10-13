@@ -1,6 +1,6 @@
 # nx-3D
 
-nx-3D is a multiplayer first-person shooter with a dedicated server and a Vulkan client. The server offers a bomb match and team deathmatch on de_dust2. Players choose Counter Terrorist or Terrorist and spawn with an M16 or AK-47 respectively. Weapons can be dropped and picked up from the map.
+nx-3D is a multiplayer first-person shooter with a dedicated server and a Vulkan client. The server offers a bomb match and team deathmatch on de_dust2. Players choose Counter Terrorist or Terrorist and spawn with a USP or Glock respectively. Weapons can be bought, dropped, and picked up from the map.
 
 ## Requirements
 
@@ -33,7 +33,7 @@ From the repository root, run the test script in the Nix development shell:
 nix develop -c ./scripts/run_tests.sh
 ```
 
-The script configures and builds in `build-tests`, then runs all nine game tests, including the three that link against Spear. If you are already inside the Nix shell, run `./scripts/run_tests.sh` directly. You can pass CTest options to select a case, for example `./scripts/run_tests.sh -R '^bomb_mode$'`.
+The script configures and builds in `build-tests`, then runs all registered game tests, including the three that link against Spear. If you are already inside the Nix shell, run `./scripts/run_tests.sh` directly. You can pass CTest options to select a case, for example `./scripts/run_tests.sh -R '^bomb_mode$'`.
 
 The **Tests** GitHub Actions workflow runs the full suite on pushes and pull requests. To start it manually, choose **Tests** in the Actions tab and select **Run workflow**, or run `gh workflow run tests.yml`. It uses the submodule revisions recorded in this repository.
 
@@ -80,7 +80,7 @@ Use `docker compose logs -f server` to view its output and `docker compose down`
 
 The client initially asks for a server address and username. Enter an IPv4 address or domain name (for example, `game.example.com`); the default is `127.0.0.1`. You can also start it with `-server <address> -username <name>` to connect immediately. Select a room with the arrow keys and Enter, then click a team to join.
 
-The flake also exposes packaged programs through `nix run .#server` and `nix run .#client`. Its Nexilis input uses SSH access to the private repository.
+The flake also exposes packaged programs through `nix run .#server` and `nix run .#client`.
 
 ## Controls
 
@@ -90,9 +90,12 @@ The flake also exposes packaged programs through `nix run .#server` and `nix run
 | Jump                              | Space                                     |
 | Fire                              | Hold left mouse button                    |
 | Reload                            | R                                         |
+| Equip primary, secondary, knife, utility | 1, 2, 3, 4                         |
+| Throw an equipped HE grenade       | Left mouse button in slot 4              |
 | Plant or defuse bomb (bomb match) | Hold E                                    |
 | Throw held weapon onto the ground | G                                         |
 | Pick up a nearby weapon           | F                                         |
+| Open buy menu at your team spawn  | B; Tab changes between list, radial, and CS2 grid layouts |
 | Change team                       | Escape, then click CT or T                |
 | Leaderboard                       | Hold Tab                                  |
 | Chat                              | Y, then Enter to send or Escape to cancel |
@@ -100,20 +103,20 @@ The flake also exposes packaged programs through `nix run .#server` and `nix run
 
 The equipped gun appears beside the camera and follows the view. It has walk bob and recoil. The gun mesh is selected from the team's weapon profile or the weapon picked up from the ground. First-person placement and animation live in `client/gun/first_person_gun.cc`; per-weapon mesh paths, scale, and center are in `client/gamemode/weapon_profiles.hh`.
 
-The AK-47 and M16 are original low-poly models in `assets/weapons/`. Run
-`python3 assets/weapons/generate.py` to regenerate their OBJ and MTL files.
+The AK-47, M16, Glock, USP, Desert Eagle, MP5, knife, and HE grenade have low-poly models in `assets/weapons/`. Run
+`python3 assets/weapons/generate.py` to regenerate the firearm OBJ and MTL files; the knife and grenade meshes are hand-authored.
 The AK-47 uses a black polymer and metal palette; the M16 uses charcoal and
 gunmetal. Their materials use generated 1-pixel swatch textures.
 
 Other players appear as custom low-poly OBJ figures: a blue armored Counter Terrorist and a tan Terrorist with a head wrap and utility vest. The figures and their texture atlases live in `assets/players/`; see its README for the generator and dimensions. Figures update when a player's team becomes known or changes. The client-side shot box spans the figures from headgear to boots.
 
-Both rifles hold 30 shots. R reloads a partly empty magazine in 2.5 seconds; firing is disabled while reloading. The held rifle dips and tilts during the reload, then returns to its ready position. The weapon HUD shows remaining ammunition and reload status. Ammunition is currently managed by the client, matching the existing client-reported hit model. Dead players see a red and black WASTED screen and cannot move or turn until respawning. Deathmatch respawns take 2 seconds; bomb rounds have a 4-second break. Fallen player models tumble under Bullet physics. A respawn or new bomb round refills the magazine.
+The rifles and MP5 fire automatically while held; pistols fire once per click. R reloads a partly empty magazine; firing is disabled while reloading. The held weapon dips and tilts during the reload, then returns to its ready position. The weapon HUD shows remaining ammunition and reload status. Ammunition is currently managed by the client, matching the existing client-reported hit model. Dead players see a red and black WASTED screen and cannot move or turn until respawning. Deathmatch respawns take 2 seconds; bomb rounds have a 4-second break. Fallen player models tumble under Bullet physics. A respawn or new bomb round refills the magazine.
 
-Reload and planting sounds play locally and are relayed to nearby players through Nexilis positional audio. A bomb explosion sound plays for everyone when the server declares an explosion win. The three original PCM assets are `assets/sounds/reload.wav`, `planting.wav`, and `explosion.wav`; regenerate them with `python3 assets/sounds/generate.py`.
+Reload and planting sounds play locally and are relayed to nearby players through Nexilis positional audio. A planted bomb beeps near its position, faster as detonation approaches. A bomb explosion sound plays for everyone when the server declares an explosion win. The four generated PCM assets are `assets/sounds/reload.wav`, `planting.wav`, `bomb_beep.wav`, and `explosion.wav`; regenerate them with `python3 assets/sounds/generate.py`.
 
 Gunshots use a louder volume curve and a 2500-unit spatial range so distant firing remains audible across much of the map while fading with distance. The volume control still mutes all sounds at zero.
 
-Weapons render in camera space to avoid shaking from world-coordinate rounding. Their default pose sits toward the lower right at an angled FPS stance. `client/gun/weapon_motion.hh` controls the subtle walking cadence, time-based recoil recovery, and reload motion; vertical movement, small ground-contact jitter, and respawn teleports do not drive the bob animation. G tosses the current rifle ahead as a physics-driven pickup. Press F near a dropped rifle to equip it; it stays on the ground until picked up.
+Weapons render in camera space to avoid shaking from world-coordinate rounding. Their default pose sits toward the lower right at an angled FPS stance. `client/gun/weapon_motion.hh` controls the subtle walking cadence, time-based recoil recovery, and reload motion; vertical movement, small ground-contact jitter, and respawn teleports do not drive the bob animation. G tosses the current weapon ahead as a physics-driven pickup. Press F near a dropped weapon to equip it; it stays on the ground until picked up.
 
 ## Bomb match rules and queue
 
@@ -121,7 +124,9 @@ The Bomb Match room starts when at least one player has chosen each team. If eit
 
 The match uses MR12: twelve rounds per half, side swap after round 12, first to 13 rounds wins, and a 12–12 score after round 24 is a draw. A round lasts 115 seconds. The Terrorists win by eliminating all Counter Terrorists or by letting a planted bomb explode. Counter Terrorists win by eliminating all Terrorists before the bomb is planted, defusing it, or surviving until time expires before a plant. If all Terrorists die after planting, the bomb still needs to be defused. There are five seconds between rounds; a completed match restarts after ten seconds.
 
-The first version uses one shared bomb: any living Terrorist may hold E for three seconds to plant at their current position. A Counter Terrorist within 120 game units of the planted bomb may hold E for five seconds to defuse. Releasing E cancels the action. The bomb explodes 40 seconds after planting. Its current placeholder is a red cube at the planted position, with a square bomb indicator in the HUD; there is no site restriction, dropped bomb, economy, freeze time, or overtime yet. The server checks team, life state, phase, and defuse range, but player positions and hit targets still come from clients.
+The first version uses one shared bomb: any living Terrorist may hold E for three seconds to plant at their current position. A Counter Terrorist within 120 game units of the planted bomb may hold E for five seconds to defuse, or 2.5 seconds with a defuse kit. Releasing E cancels the action. The bomb explodes 40 seconds after planting. Its current placeholder is a red cube at the planted position, with a square bomb indicator in the HUD; there is no site restriction, dropped bomb, freeze time, or overtime yet. The server checks team, life state, phase, and defuse range, but player positions and hit targets still come from clients.
+
+Players start with $800 and can hold up to $16000. Each credited kill earns $300; bomb plants and defuses earn $800; round wins earn $3250 and losses earn $1400. Press B while alive in your team's spawn area to open the buy menu. Click an item to buy it, press Tab to cycle the list, radial, and CS2 grid layouts, and press B or Escape to close. The server checks purchases against balance, team, life state, and spawn position. The catalog includes the three pistols, MP5, the existing rifles, ammo refill, health refill, HE grenades, and a CT-only defuse kit for bomb matches. Press 1 for a bought primary, 2 for your pistol, 3 for the knife, or 4 for a bought grenade. Left click throws the grenade; all clients see its flight, and the server applies blast damage after a two-second fuse. Grenades and defuse kits are lost on death or at the next round; weapons return to the team's default on respawn. Grenades currently use a simple arc and radial blast without world collision or blast occlusion.
 
 ## Manual releases
 

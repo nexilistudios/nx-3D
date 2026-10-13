@@ -69,6 +69,14 @@ Ui::Ui(VkDevice device,
                       descriptorPool, descriptorSetLayout, fontPath, 17),
       bombText(device, physDevice, commandPool, graphicsQueue,
                descriptorPool, descriptorSetLayout, fontPath, 20),
+      moneyText(device, physDevice, commandPool, graphicsQueue,
+                descriptorPool, descriptorSetLayout, fontPath, 20),
+      buyTitleText(device, physDevice, commandPool, graphicsQueue,
+                   descriptorPool, descriptorSetLayout, fontPath, 30),
+      buyHintText(device, physDevice, commandPool, graphicsQueue,
+                  descriptorPool, descriptorSetLayout, fontPath, 16),
+      buyNoticeText(device, physDevice, commandPool, graphicsQueue,
+                    descriptorPool, descriptorSetLayout, fontPath, 18),
 
       pauseTitle(device, physDevice, commandPool, graphicsQueue,
                  descriptorPool, descriptorSetLayout, fontPath, 48),
@@ -112,6 +120,7 @@ Ui::Ui(VkDevice device,
 
     buildLeaderboard();
     buildChat();
+    buildBuyMenu();
     // --- Lobby / connecting ----------------------------------------------
     titleText.setString("nx-3D Lobby");
     titleText.setColor(SDL_Color{0, 200, 255, 255});
@@ -193,6 +202,15 @@ Ui::Ui(VkDevice device,
     bombText.setString("");
     bombText.setPosition(glm::vec2(0.58f, 0.82f));
     bombText.setColor(SDL_Color{255, 100, 60, 255});
+    moneyText.setString("$800  |  B: Buy");
+    moneyText.setPosition(glm::vec2(0.56f, 0.69f));
+    moneyText.setColor(SDL_Color{130, 255, 160, 255});
+    buyTitleText.setColor(SDL_Color{255, 255, 255, 255});
+    buyTitleText.setPosition(glm::vec2(-0.40f, 0.65f));
+    buyHintText.setColor(SDL_Color{200, 220, 230, 255});
+    buyHintText.setPosition(glm::vec2(-0.68f, -0.68f));
+    buyNoticeText.setColor(SDL_Color{255, 215, 120, 255});
+    buyNoticeText.setPosition(glm::vec2(-0.48f, -0.55f));
 
     // --- Pause menu ----------------------------------------------------------
     pauseTitle.setString("");
@@ -523,6 +541,12 @@ void Ui::showGameHudTexts()
     registerText(roundText);
     registerText(matchStatusText);
     registerText(bombText);
+    registerText(moneyText);
+    registerText(buyTitleText);
+    registerText(buyHintText);
+    registerText(buyNoticeText);
+    for (auto& item : buyItemTexts)
+        registerText(*item);
     registerText(pauseTitle);
     registerText(pauseTeamTitle);
     registerText(pauseCTText);
@@ -543,6 +567,150 @@ void Ui::showGameHudTexts()
     registerText(chatInputText);
     for (auto& row : chatMessageRows)
         registerText(*row);
+}
+
+void Ui::buildBuyMenu()
+{
+    auto makeTexture = [&](unsigned char r, unsigned char g, unsigned char b, unsigned char a)
+    {
+        auto texture = std::make_shared<spear::rendering::vulkan::STBTexture>(
+                m_device, m_physDevice, m_commandPool, m_graphicsQueue);
+        unsigned char pixel[4] = {r, g, b, a};
+        texture->loadFromRGBA(pixel, 1, 1);
+        return texture;
+    };
+    m_buyBackdropQuad = std::make_shared<spear::ui::vulkan::Quad2D>(
+            m_device, m_physDevice, m_descriptorPool, m_descriptorSetLayout,
+            makeTexture(8, 14, 22, 218));
+    m_buyBackdropQuad->setPosition(glm::vec2(-1.0f, -1.0f));
+    m_buyBackdropQuad->setSize(glm::vec2(2.0f, 2.0f));
+    m_buyPanelQuad = std::make_shared<spear::ui::vulkan::Quad2D>(
+            m_device, m_physDevice, m_descriptorPool, m_descriptorSetLayout,
+            makeTexture(27, 42, 57, 245));
+    m_buyPanelQuad->setPosition(glm::vec2(-0.80f, -0.77f));
+    m_buyPanelQuad->setSize(glm::vec2(1.60f, 1.55f));
+
+    auto cardTexture = makeTexture(45, 66, 82, 255);
+
+    for (std::size_t i = 0; i < nx3d::economy::kItems.size(); ++i)
+    {
+        m_buyItemQuads.push_back(std::make_shared<spear::ui::vulkan::Quad2D>(
+                m_device, m_physDevice, m_descriptorPool, m_descriptorSetLayout,
+                cardTexture));
+        auto text = std::make_unique<spear::ui::vulkan::Text>(
+                m_device, m_physDevice, m_commandPool, m_graphicsQueue,
+                m_descriptorPool, m_descriptorSetLayout, m_fontPath, 17);
+        text->setString("");
+        buyItemTexts.push_back(std::move(text));
+    }
+}
+
+void Ui::showBuyMenu(BuyStyle style, const nx3d::economy::Snapshot& state,
+                     const std::string& team, const std::string& notice,
+                     bool bombMatch)
+{
+    m_buyVisible = true;
+    m_buyStyle = style;
+    const char* title = style == BuyStyle::List ? "BUY  |  LIST" :
+                        style == BuyStyle::Radial ? "BUY  |  RADIAL" : "BUY  |  CS2 GRID";
+    buyTitleText.setString(title);
+    buyHintText.setString("Click to buy  |  Tab: Change layout  |  B / Esc: Close");
+    buyNoticeText.setString(notice.empty() ? "Balance: $" + std::to_string(state.money) : notice);
+    constexpr float kPi = 3.14159265358979323846f;
+    for (std::size_t i = 0; i < nx3d::economy::kItems.size(); ++i)
+    {
+        const auto& item = nx3d::economy::kItems[i];
+        auto& text = *buyItemTexts[i];
+        const bool available = (!*item.team || team == item.team) && state.money >= item.price &&
+                               (item.kind != nx3d::economy::ItemKind::defuseKit || bombMatch) &&
+                               (item.kind != nx3d::economy::ItemKind::grenade ||
+                                state.grenades < nx3d::economy::kMaxGrenades);
+        text.setColor(available ? SDL_Color{235, 245, 250, 255}
+                                : SDL_Color{125, 142, 150, 255});
+        text.setString(std::string(item.name) + "  $" + std::to_string(item.price));
+        if (style == BuyStyle::List)
+        {
+            text.setPosition(glm::vec2(-0.63f, 0.40f - static_cast<float>(i) * 0.095f));
+            m_buyItemQuads[i]->setPosition(glm::vec2(-0.68f, 0.36f - static_cast<float>(i) * 0.095f));
+            m_buyItemQuads[i]->setSize(glm::vec2(1.35f, 0.085f));
+        }
+        else if (style == BuyStyle::Radial)
+        {
+            const float angle = -kPi * 0.5f + static_cast<float>(i) * 2.0f * kPi /
+                                                       static_cast<float>(nx3d::economy::kItems.size());
+            text.setPosition(glm::vec2(-0.15f + 0.57f * std::cos(angle),
+                                       0.04f + 0.43f * std::sin(angle)));
+            m_buyItemQuads[i]->setPosition(glm::vec2(-0.18f + 0.57f * std::cos(angle),
+                                                     -0.01f + 0.43f * std::sin(angle)));
+            m_buyItemQuads[i]->setSize(glm::vec2(0.34f, 0.10f));
+        }
+        else
+        {
+            text.setPosition(glm::vec2(-0.69f + static_cast<float>(i % 3) * 0.52f,
+                                       0.34f - static_cast<float>(i / 3) * 0.26f));
+            m_buyItemQuads[i]->setPosition(glm::vec2(-0.73f + static_cast<float>(i % 3) * 0.52f,
+                                                     0.23f - static_cast<float>(i / 3) * 0.26f));
+            m_buyItemQuads[i]->setSize(glm::vec2(0.50f, 0.22f));
+        }
+    }
+}
+
+void Ui::hideBuyMenu()
+{
+    m_buyVisible = false;
+    buyTitleText.setString("");
+    buyHintText.setString("");
+    buyNoticeText.setString("");
+    for (auto& text : buyItemTexts)
+        text->setString("");
+}
+
+int Ui::buyItemAt(float x, float y) const
+{
+    if (!m_buyVisible)
+        return -1;
+    constexpr float kPi = 3.14159265358979323846f;
+    if (m_buyStyle == BuyStyle::Radial)
+    {
+        const float dx = (x + 0.15f) / 0.57f;
+        const float dy = (y - 0.04f) / 0.43f;
+        const float radius = std::sqrt(dx * dx + dy * dy);
+        if (radius < 0.42f || radius > 1.25f)
+            return -1;
+        const float step = 2.0f * kPi / static_cast<float>(nx3d::economy::kItems.size());
+        const int sector = static_cast<int>(std::lround((std::atan2(dy, dx) + kPi * 0.5f) / step));
+        return (sector % static_cast<int>(nx3d::economy::kItems.size()) +
+                static_cast<int>(nx3d::economy::kItems.size())) %
+               static_cast<int>(nx3d::economy::kItems.size());
+    }
+    for (std::size_t i = 0; i < nx3d::economy::kItems.size(); ++i)
+    {
+        if (m_buyStyle == BuyStyle::List)
+        {
+            const float rowY = 0.40f - static_cast<float>(i) * 0.095f;
+            if (x >= -0.68f && x <= 0.63f && y >= rowY - 0.035f && y <= rowY + 0.055f)
+                return static_cast<int>(i);
+        }
+        else
+        {
+            const float rowX = -0.69f + static_cast<float>(i % 3) * 0.52f;
+            const float rowY = 0.34f - static_cast<float>(i / 3) * 0.26f;
+            if (x >= rowX - 0.03f && x <= rowX + 0.48f &&
+                y >= rowY - 0.08f && y <= rowY + 0.07f)
+                return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+void Ui::renderBuyOverlay(spear::ui::RenderContext ctx)
+{
+    if (!m_buyVisible)
+        return;
+    m_buyBackdropQuad->render(ctx);
+    m_buyPanelQuad->render(ctx);
+    for (auto& card : m_buyItemQuads)
+        card->render(ctx);
 }
 
 void Ui::renderPauseOverlay(spear::ui::RenderContext ctx, bool quitHovered,

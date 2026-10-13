@@ -1,0 +1,24 @@
+# Original material palette with 1-pixel diffuse swatches
+newmtl mp5_body
+Ka 0.054 0.059 0.063
+Kd 0.120 0.130 0.140
+map_Kd mp5_body.png
+Ks 0.18 0.18 0.18
+Ns 32
+illum 2
+
+newmtl mp5_detail
+Ka 0.020 0.023 0.025
+Kd 0.045 0.050 0.055
+map_Kd mp5_detail.png
+Ks 0.18 0.18 0.18
+Ns 32
+illum 2
+
+newmtl mp5_metal
+Ka 0.117 0.122 0.126
+Kd 0.260 0.270 0.280
+map_Kd mp5_metal.png
+Ks 0.18 0.18 0.18
+Ns 32
+illum 2

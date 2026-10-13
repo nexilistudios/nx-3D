@@ -1,0 +1,4 @@
+newmtl blade
+map_Kd mp5_metal.png
+newmtl grip
+map_Kd glock_body.png

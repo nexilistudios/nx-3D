@@ -2,6 +2,7 @@
 #define NX3D_SERVER_GAMEMODE_BOMB_MODE_HH
 
 #include <server/gamemode/game_mode.hh>
+#include <server/gamemode/economy.hh>
 
 #include <atomic>
 #include <deque>
@@ -61,6 +62,7 @@ private:
     std::atomic<bool> m_swapping{false};
     float m_bombX = 0.0f, m_bombY = 0.0f, m_bombZ = 0.0f;
     std::string m_notice = "Waiting for both teams";
+    Economy m_economy;
 };
 
 } // namespace nx3d::server::gamemode

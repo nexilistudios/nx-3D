@@ -38,7 +38,8 @@ Crosshair::Crosshair(VkDevice device,
     : Shape(nullptr, std::move(object_data), glm::vec4(1.0f)),
       m_device(device),
       m_physDevice(physDevice),
-      m_texture(std::move(texture))
+      m_texture(std::move(texture)),
+      m_descriptorPool(descriptorPool)
 {
     buildMesh();
 
@@ -68,6 +69,8 @@ Crosshair::Crosshair(VkDevice device,
 
 Crosshair::~Crosshair()
 {
+    if (m_descriptorSet != VK_NULL_HANDLE)
+        vkFreeDescriptorSets(m_device, m_descriptorPool, 1, &m_descriptorSet);
     if (m_vertexBuffer != VK_NULL_HANDLE)
         vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
     if (m_vertexMemory != VK_NULL_HANDLE)

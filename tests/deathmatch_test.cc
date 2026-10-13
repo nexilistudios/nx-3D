@@ -2,6 +2,7 @@
 #include <shared/fall_death.hh>
 
 #include <nexilis/client/packet.hh>
+#include <nexilis/command_type.hh>
 #include <nexilis/server/client_storage.hh>
 #include <nexilis/server/command/command.hh>
 #include <nexilis/server/room_storage.hh>
@@ -45,6 +46,11 @@ int main()
         victim.setClientId(20);
         auto addUser = [](uint64_t id, client::ClientAPI& api)
         {
+            require(api.readMessage(server::Command::clientMessageData(
+                            CommandType::room, "management", 0,
+                            {{"action", "create"}, {"room_id", 777}, {"client_id", id},
+                             {"room_name", "test"}, {"room_context", 1}})) == client::ReadResult::success,
+                    "Test client could not join room messages");
             auto user = std::make_unique<server::User>(id, "127.0.0.1");
             user->setRoomId(777);
             user->setUsername("player_" + std::to_string(id));
@@ -67,6 +73,15 @@ int main()
         room->joinRoom(20);
         room->setPlayerTeam(10, "Terrorist");
         room->setPlayerTeam(20, "Counter Terrorist");
+        auto* shopper = server::ClientStorage::getClientById(10);
+        shopper->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
+        require(room->onPlayerAction(10, 12), "Terrorist could not buy Desert Eagle at spawn");
+        nx3d::economy::Snapshot purchase;
+        require(nx3d::economy::decode(shooter.getChatSnapshot(777).back().message, purchase) &&
+                        purchase.money == 100 && purchase.weapon == "deagle",
+                "Weapon purchase did not update equipment and money");
+        shopper->getObject3D().setPosition(Vector3f{0.0f, 0.0f, 0.0f});
+        require(!room->onPlayerAction(10, 13), "Remote purchase was accepted");
         server::ServerConfig settings;
         server::Command command(settings);
         TestProtocol protocol;
@@ -121,6 +136,10 @@ int main()
         fallingPlayer->getObject3D().setPosition(Vector3f{0.0f, -600.0f, 0.0f});
         Registry::update(1.0f / 60.0f);
         require(room->getPlayerDeaths(20) == 102, "A later fall did not count as a death");
+        nx3d::economy::Snapshot balance;
+        require(nx3d::economy::decode(shooter.getChatSnapshot(777).back().message, balance) &&
+                        balance.money == nx3d::economy::kMaximumMoney,
+                "Kill rewards did not respect the money cap");
         Registry::clear();
         server::RoomStorage::clear();
         server::ClientStorage::clear();

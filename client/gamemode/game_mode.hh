@@ -2,6 +2,7 @@
 #define NX3D_CLIENT_GAMEMODE_GAME_MODE_HH
 
 #include <shared/gamemode.hh>
+#include <shared/economy.hh>
 
 #include <SDL3/SDL_events.h>
 
@@ -45,11 +46,23 @@ public:
     {
     }
 
+    virtual void onEconomySnapshot(ClientApp&, const nx3d::economy::Snapshot&)
+    {
+    }
+    virtual void onGrenadeThrown(ClientApp&, const nx3d::economy::GrenadeThrow&)
+    {
+    }
+
     /// Called every frame while the app is in the Game state.
     virtual void update(ClientApp& app, float delta_time) = 0;
 
     /// Whether the local player may move or turn the camera this frame.
     virtual bool canMove() const = 0;
+
+    virtual bool canBuy() const
+    {
+        return canMove();
+    }
 
     /// Whether to show the local death screen.
     virtual bool isEliminated() const = 0;

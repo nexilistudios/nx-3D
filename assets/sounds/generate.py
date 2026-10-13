@@ -1,7 +1,7 @@
 """Generate the original nx-3D gameplay sound effects.
 
 Run from any directory: python3 assets/sounds/generate.py
-Only the three WAV files next to this script are written.
+Only the four generated WAV files next to this script are written.
 """
 
 from __future__ import annotations
@@ -72,6 +72,19 @@ def explosion() -> list[float]:
     return result
 
 
+def bomb_beep() -> list[float]:
+    """Short, clean warning chirp repeated while the bomb is armed."""
+    duration = 0.14
+    result = []
+    for index in range(int(duration * RATE)):
+        t = index / RATE
+        attack = min(1.0, t / 0.008)
+        release = min(1.0, (duration - t) / 0.035)
+        envelope = attack * release
+        result.append(envelope * math.sin(2.0 * math.pi * 1050.0 * t))
+    return result
+
+
 def reload() -> list[float]:
     """Magazine release, insertion, bolt pull, and a final metal click."""
     rng = random.Random(303)
@@ -99,5 +112,6 @@ def reload() -> list[float]:
 
 if __name__ == "__main__":
     save("planting.wav", planting())
+    save("bomb_beep.wav", bomb_beep())
     save("explosion.wav", explosion())
     save("reload.wav", reload())

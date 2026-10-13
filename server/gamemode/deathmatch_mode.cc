@@ -19,11 +19,28 @@ nx3d::GameMode DeathmatchMode::type() const
     return nx3d::GameMode::deathmatch;
 }
 
+void DeathmatchMode::onTeamSelected(nexilis::server::Room& room, uint64_t playerId)
+{
+    m_economy.joined(room, playerId);
+}
+
+bool DeathmatchMode::onAction(nexilis::server::Room& room, uint64_t playerId, uint8_t action)
+{
+    if (action == nx3d::economy::kThrowGrenadeAction)
+        return m_economy.throwGrenade(room, playerId, room.getPlayerHealth(playerId) > 0.0f);
+    if (action == nx3d::economy::kDropPrimaryAction ||
+        action == nx3d::economy::kDropSecondaryAction)
+        return m_economy.dropWeapon(room, playerId, action);
+    return m_economy.buy(room, playerId, action,
+                         room.getPlayerHealth(playerId) > 0.0f, false);
+}
+
 void DeathmatchMode::onPlayerDeath(nexilis::server::Room& room, uint64_t killerId, uint64_t victimId)
 {
     using namespace nexilis;
 
     room.recordKill(killerId, victimId);
+    m_economy.died(room, killerId, victimId);
     {
         std::lock_guard lock(m_respawnMutex);
         m_respawnTimers[victimId] = 2.0f;
@@ -52,8 +69,10 @@ void DeathmatchMode::onPlayerDeath(nexilis::server::Room& room, uint64_t killerI
 
 void DeathmatchMode::update(nexilis::server::Room& room, float dt)
 {
+    m_economy.updateGrenades(room, dt);
     std::vector<uint64_t> ready;
     const auto clients = room.getClients();
+    m_economy.reconcile(clients);
     {
         std::lock_guard lock(m_respawnMutex);
         for (auto it = m_respawnTimers.begin(); it != m_respawnTimers.end();)
@@ -79,6 +98,7 @@ void DeathmatchMode::update(nexilis::server::Room& room, float dt)
         if (!sender)
             continue;
         room.resetPlayerHealth(victimId);
+        m_economy.respawned(room, victimId);
         nexilis::nx_data respawnData{
                 static_cast<uint8_t>(nexilis::CommandType::room),
                 static_cast<uint8_t>(nexilis::RoomCommandType::Root::player_3D),

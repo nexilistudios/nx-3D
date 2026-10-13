@@ -53,7 +53,7 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
     renderer.setBackgroundColor(0.1f, 0.1f, 0.2f, 1.0f);
     renderer.setCamera(&camera);
 
-    descriptorPool = vk::Texture::createDescriptorPool(renderer.getDevice(), 256);
+    descriptorPool = vk::Texture::createDescriptorPool(renderer.getDevice(), 512);
     descriptorSetLayout = vk::Texture::createDescriptorSetLayout(renderer.getDevice());
 
     renderer.initializeTexturedPipeline(descriptorSetLayout);
@@ -92,6 +92,9 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
             audio_system, nx3d::projectAssetPath("sounds/reload.wav"));
     planting_audio = std::make_unique<spear::audio::Sound>(
             audio_system, nx3d::projectAssetPath("sounds/planting.wav"));
+    bomb_beep_audio = std::make_unique<spear::audio::Sound>(
+            audio_system, nx3d::projectAssetPath("sounds/bomb_beep.wav"));
+    bomb_beep_audio->setSpatialRange(900.0f, 2500.0f);
     explosion_audio = std::make_unique<spear::audio::Sound>(
             audio_system, nx3d::projectAssetPath("sounds/explosion.wav"));
     walk_audio = std::make_unique<spear::audio::Sound>(
@@ -140,6 +143,11 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
                                   {
         if (currentState == State::Game && !chatActive)
             openChat(); });
+
+    eventHandler.handleKeyPressed(SDLK_B, [this]()
+                                  {
+        if (currentState == State::Game && !chatActive)
+            openBuyMenu(); });
 
     eventHandler.handleInput(SDLK_P, [this]()
                              {
@@ -292,6 +300,11 @@ void ClientApp::enterGame(const std::string& team)
 {
     pose_send_elapsed = 1.0f;
     ui->showGameHudTexts();
+    economyState = {};
+    buyNotice.clear();
+    buyErrorSeconds = 0.0f;
+    ui->moneyText.setString("$800  |  B: Buy");
+    ui->hideBuyMenu();
     renderer.setUIRenderer(&ui->renderer());
     scene_manager.loadScene(game_scene_id);
     renderer.setScene(scene_manager.getCurrentScene());
@@ -313,15 +326,17 @@ void ClientApp::changeVolume(float delta)
 void ClientApp::applyAudioVolume()
 {
     if (gunshot_audio)
-        gunshot_audio->setVolume(std::sqrt(audioVolume));
+        gunshot_audio->setVolume(0.8f * std::sqrt(audioVolume));
     if (hitmarker_audio)
         hitmarker_audio->setVolume(audioVolume);
     if (reload_audio)
         reload_audio->setVolume(audioVolume);
     if (planting_audio)
         planting_audio->setVolume(audioVolume);
+    if (bomb_beep_audio)
+        bomb_beep_audio->setVolume(0.6f * std::sqrt(audioVolume));
     if (explosion_audio)
-        explosion_audio->setVolume(audioVolume);
+        explosion_audio->setVolume(std::min(1.0f, 2.5f * std::sqrt(audioVolume)));
     if (walk_audio)
         walk_audio->setVolume(audioVolume);
     if (step_audio)
@@ -372,6 +387,42 @@ void ClientApp::resumeGame()
         ui->pauseQuitText.setString("");
         ui->pauseInstructions.setString("");
     }
+}
+
+void ClientApp::openBuyMenu()
+{
+    if (currentState != State::Game || !game_mode || !game_mode->canBuy())
+        return;
+    const std::string ownTeam = ui->teamDisplayText.getString();
+    const auto pos = camera.getPosition();
+    if (!nx3d::economy::inBuyZone(ownTeam, pos.x, pos.y, pos.z))
+    {
+        buyError = "Buy only in your team spawn";
+        buyErrorSeconds = 2.0f;
+        ui->matchStatusText.setString(buyError);
+        return;
+    }
+    SDL_Event release{};
+    release.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    release.button.button = SDL_BUTTON_LEFT;
+    game_mode->handleMouseButtonUp(*this, release);
+    currentState = State::Buy;
+    buyNotice.clear();
+    buyErrorSeconds = 0.0f;
+    eventHandler.clearMovementKeys();
+    SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), false);
+    ui->showBuyMenu(buyStyle, economyState, ownTeam, buyNotice,
+                    selectedRoomGameMode == nx3d::GameMode::bomb);
+}
+
+void ClientApp::closeBuyMenu()
+{
+    if (currentState != State::Buy)
+        return;
+    currentState = State::Game;
+    ui->hideBuyMenu();
+    eventHandler.clearMovementKeys();
+    SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
 }
 
 void ClientApp::openChat()
@@ -438,6 +489,31 @@ void ClientApp::updateChatMessages()
         {
             const auto& message = messages[chatMessagesConsumed];
             const auto* sender = message.getClient();
+            if (!sender && std::string_view(message.getPayload()).starts_with(nx3d::economy::kGrenadeMessagePrefix))
+            {
+                nx3d::economy::GrenadeThrow event;
+                if (game_mode && nx3d::economy::decodeGrenade(message.getPayload(), event))
+                    game_mode->onGrenadeThrown(*this, event);
+                continue;
+            }
+            if (!sender && std::string_view(message.getPayload()).starts_with(nx3d::economy::kMessagePrefix))
+            {
+                nx3d::economy::Snapshot state;
+                if (nx3d::economy::decode(message.getPayload(), state))
+                {
+                    economyState = std::move(state);
+                    ui->moneyText.setString("$" + std::to_string(economyState.money) + "  |  B: Buy" +
+                                           (economyState.hasDefuseKit ? "  |  KIT" : ""));
+                    if (game_mode)
+                        game_mode->onEconomySnapshot(*this, economyState);
+                    buyNotice = economyState.notice;
+                    if (currentState == State::Buy && game_mode)
+                        ui->showBuyMenu(buyStyle, economyState,
+                                        ui->teamDisplayText.getString(), buyNotice,
+                                        selectedRoomGameMode == nx3d::GameMode::bomb);
+                }
+                continue;
+            }
             const std::string name = sender ? sender->getUsername() : std::string("unknown");
 
             chatMessages.push_back(
@@ -785,6 +861,54 @@ void ClientApp::run()
                 }
             }
         }
+        else if (currentState == State::Buy)
+        {
+            SDL_Event event;
+            while (SDL_PollEvent(&event))
+            {
+                if (event.type == SDL_EVENT_QUIT)
+                    cleanQuit();
+                else if (event.type == SDL_EVENT_WINDOW_RESIZED)
+                {
+                    window.resize();
+                    auto size = window.getSize();
+                    renderer.setViewPort(size.x, size.y);
+                }
+                else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
+                {
+                    if (event.key.key == SDLK_ESCAPE || event.key.key == SDLK_B)
+                        closeBuyMenu();
+                    else if (event.key.key == SDLK_TAB)
+                    {
+                        buyStyle = buyStyle == ui::Ui::BuyStyle::List ? ui::Ui::BuyStyle::Radial :
+                                   buyStyle == ui::Ui::BuyStyle::Radial ? ui::Ui::BuyStyle::Cs2 :
+                                                                           ui::Ui::BuyStyle::List;
+                        ui->showBuyMenu(buyStyle, economyState,
+                                        ui->teamDisplayText.getString(), buyNotice,
+                                        selectedRoomGameMode == nx3d::GameMode::bomb);
+                    }
+                }
+                else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+                         event.button.button == SDL_BUTTON_LEFT)
+                {
+                    int width = 0, height = 0;
+                    SDL_GetWindowSize(window.getSDLWindow(), &width, &height);
+                    const float x = static_cast<float>(event.button.x) / static_cast<float>(width ? width : 1) * 2.0f - 1.0f;
+                    const float y = 1.0f - static_cast<float>(event.button.y) / static_cast<float>(height ? height : 1) * 2.0f;
+                    const int index = ui->buyItemAt(x, y);
+                    if (index >= 0 && ready && client_api.clientInRoom())
+                    {
+                        const auto pos = camera.getPosition();
+                        const auto forward = camera.getFront();
+                        const float yaw = std::atan2(-forward.x, -forward.z);
+                        tcp_client.sendMessage(packet::Room::Player3D::position(
+                                client_api, nexilis::Vector3f({pos.x, pos.y, pos.z}), yaw));
+                        tcp_client.sendMessage(packet::Room::Player3D::matchAction(
+                                client_api, nx3d::economy::kItems[static_cast<std::size_t>(index)].action));
+                    }
+                }
+            }
+        }
         else if (currentState == State::Game && chatActive)
         {
             // Chat typing takes over the keyboard: events are polled manually
@@ -834,7 +958,8 @@ void ClientApp::run()
         // Pausing stops player input, but an airborne player still needs
         // gravity and ground detection so they do not remain suspended until
         // the game is resumed.
-        if (currentState == State::Paused && !movement_controller.isOnGround())
+        if ((currentState == State::Paused || currentState == State::Buy) &&
+            !movement_controller.isOnGround())
         {
             static const std::unordered_map<SDL_Keycode, bool> noMovementKeys = {
                     {SDLK_W, false}, {SDLK_S, false}, {SDLK_A, false},
@@ -849,7 +974,7 @@ void ClientApp::run()
         shared_world->stepSimulation(1.0f / 60.f);
 
         // --- Game update + network sync ---
-        if (currentState == State::Game)
+        if (currentState == State::Game || currentState == State::Buy)
         {
             camera.updateRecoil(delta_time);
 
@@ -862,6 +987,19 @@ void ClientApp::run()
             if (game_mode)
             {
                 game_mode->update(*this, delta_time);
+                if (buyErrorSeconds > 0.0f)
+                {
+                    buyErrorSeconds = std::max(0.0f, buyErrorSeconds - delta_time);
+                    ui->matchStatusText.setString(buyError);
+                }
+                if (currentState == State::Buy)
+                {
+                    const auto pos = camera.getPosition();
+                    if (!game_mode->canBuy() ||
+                        !nx3d::economy::inBuyZone(ui->teamDisplayText.getString(),
+                                                  pos.x, pos.y, pos.z))
+                        closeBuyMenu();
+                }
                 const std::string deathText = game_mode->isEliminated() ? "WASTED" : "";
                 if (ui->wastedText.getString() != deathText)
                     ui->wastedText.setString(deathText);

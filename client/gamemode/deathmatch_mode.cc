@@ -82,7 +82,7 @@ void DeathmatchMode::onEnter(ClientApp& app, const std::string& team)
     app.ui->hideLeaderboard();
     m_leaderboard.clear();
 
-    const auto& spawns = (m_team == "Terrorist") ? m_tSpawns : m_ctSpawns;
+    const auto& spawns = (m_team == "Terrorist") ? nx3d::economy::kTSpawns : nx3d::economy::kCtSpawns;
     m_lastSpawnIndex = SIZE_MAX;
     if (!spawns.empty())
     {
@@ -114,6 +114,26 @@ void DeathmatchMode::onEnter(ClientApp& app, const std::string& team)
 void DeathmatchMode::update(ClientApp& app, float delta_time)
 {
     using packet = nexilis::client::Packet;
+
+    m_fireCooldown = std::max(0.0f, m_fireCooldown - delta_time);
+    for (auto it = m_grenadeVisuals.begin(); it != m_grenadeVisuals.end();)
+    {
+        it->age += delta_time;
+        if (it->age >= nx3d::economy::kGrenadeFuseSeconds)
+        {
+            if (app.explosion_audio)
+                app.explosion_audio->play();
+            app.scene_manager.getCurrentScene()->removeObject(it->model->getId());
+            app.pendingDestroy[(app.frameCount - 1) % 3].push_back(std::move(it->model));
+            it = m_grenadeVisuals.erase(it);
+            continue;
+        }
+        const float progress = it->age / nx3d::economy::kGrenadeFuseSeconds;
+        const glm::vec3 position = it->start + (it->end - it->start) * progress +
+                                   glm::vec3(0.0f, std::sin(progress * 3.14159265f) * 55.0f, 0.0f);
+        it->model->setPosition({position.x, position.y, position.z});
+        ++it;
+    }
 
     if (m_reloadRemaining > 0.0f)
     {
@@ -151,15 +171,11 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
         m_firstPersonGun->updateAnimation(delta_time, velocity, app.movement_controller.isOnGround());
 
     // --- Automatic fire while the trigger is held ---
-    if (m_health > 0 && m_triggerHeld && m_weaponPickedUp)
+    if (m_health > 0 && m_triggerHeld && m_weaponPickedUp &&
+        getWeaponProfile(m_pickedUpItemType).automatic && m_fireCooldown <= 0.0f)
     {
-        m_fireCooldown -= delta_time;
-        // A while loop keeps the cadence correct even after a big frame time.
-        while (m_triggerHeld && m_fireCooldown <= 0.0f)
-        {
-            m_fireCooldown += fireIntervalSeconds();
-            fireWeapon(app);
-        }
+        fireWeapon(app);
+        m_fireCooldown = fireIntervalSeconds();
     }
 
     // --- Consume damage events ---
@@ -199,7 +215,7 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
     {
         if (evt.target_id == app.client_api.getClientId())
         {
-            const auto& spawns = (m_team == "Terrorist") ? m_tSpawns : m_ctSpawns;
+            const auto& spawns = (m_team == "Terrorist") ? nx3d::economy::kTSpawns : nx3d::economy::kCtSpawns;
             if (!spawns.empty())
             {
                 app.camera.setPosition(pickSpawnPoint());
@@ -220,11 +236,7 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
                 app.reload_audio->stop();
             refreshWeaponHud(app);
 
-            if (!m_weaponPickedUp)
-            {
-                m_weaponPickedUp = true;
-                equipWeaponForTeam(app);
-            }
+            equipWeaponForTeam(app);
         }
         else
         {
@@ -259,16 +271,21 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
 
 void DeathmatchMode::handleMouseButtonDown(ClientApp& app, const SDL_Event& event)
 {
+    if (event.button.button == SDL_BUTTON_LEFT && m_health > 0 && m_activeSlot == 4)
+    {
+        throwGrenade(app);
+        return;
+    }
     if (m_health <= 0 || !m_weaponPickedUp || event.button.button != SDL_BUTTON_LEFT)
         return;
-    if (m_reloadRemaining > 0.0f || m_ammo == 0)
+    if (m_reloadRemaining > 0.0f || (m_ammo == 0 && m_activeSlot != 3) ||
+        m_fireCooldown > 0.0f)
         return;
 
     // Start a fresh burst: the first shot fires immediately, subsequent shots
     // are paced by the weapon's rate of fire while the trigger is held.
-    m_triggerHeld = true;
+    m_triggerHeld = getWeaponProfile(m_pickedUpItemType).automatic;
     m_burstShots = 0;
-    m_fireCooldown = 0.0f;
     fireWeapon(app);
     m_fireCooldown = fireIntervalSeconds();
 }
@@ -280,7 +297,6 @@ void DeathmatchMode::handleMouseButtonUp(ClientApp& app, const SDL_Event& event)
 
     m_triggerHeld = false;
     m_burstShots = 0;
-    m_fireCooldown = 0.0f;
 }
 
 float DeathmatchMode::fireIntervalSeconds() const
@@ -291,6 +307,30 @@ float DeathmatchMode::fireIntervalSeconds() const
 void DeathmatchMode::fireWeapon(ClientApp& app)
 {
     using packet = nexilis::client::Packet;
+
+    if (m_activeSlot == 3)
+    {
+        const glm::vec3 origin = app.camera.getPosition();
+        const glm::vec3 direction = glm::normalize(app.camera.getFront());
+        const auto players = app.client_api.getRemotePlayersSnapshot(
+                app.client_api.clientRoomId(), app.client_api.getClientId());
+        float closest = 100.0f;
+        uint64_t target = 0;
+        for (const auto& player : players)
+        {
+            if (app.remote_dead_players.contains(player.id)) continue;
+            const float distance = playerHitDistance(origin, direction,
+                                                     {player.x, player.y, player.z}, player.yaw);
+            if (distance < closest)
+            {
+                closest = distance;
+                target = player.id;
+            }
+        }
+        if (target && !mapBlocksShot(app, origin, direction, closest))
+            app.tcp_client.sendMessage(packet::Room::Player3D::shoot(app.client_api, target, 35.0f));
+        return;
+    }
 
     if (m_reloadRemaining > 0.0f || m_ammo == 0)
     {
@@ -358,7 +398,8 @@ void DeathmatchMode::fireWeapon(ClientApp& app)
     if (hitTargetId != 0 && !mapBlocksShot(app, rayOrigin, rayDir, closestDist))
     {
         app.tcp_client.sendMessage(
-                packet::Room::Player3D::shoot(app.client_api, hitTargetId, 35.0f));
+                packet::Room::Player3D::shoot(app.client_api, hitTargetId,
+                                              getWeaponProfile(m_pickedUpItemType).damage));
     }
 }
 
@@ -368,11 +409,13 @@ void DeathmatchMode::handleKeyDown(ClientApp& app, const SDL_Event& event)
     if (event.key.repeat)
         return;
 
-    if (event.key.key == SDLK_R && m_health > 0 && m_weaponPickedUp)
+    if (m_health > 0 && event.key.key >= SDLK_1 && event.key.key <= SDLK_4)
+        equipSlot(app, static_cast<int>(event.key.key - SDLK_0));
+    else if (event.key.key == SDLK_R && m_health > 0 && m_weaponPickedUp && m_activeSlot <= 2)
         startReload(app);
-    else if (event.key.key == SDLK_G && m_health > 0 && m_weaponPickedUp)
+    else if (event.key.key == SDLK_G && m_health > 0 && m_weaponPickedUp && m_activeSlot <= 2)
         dropCurrentWeapon(app);
-    else if (event.key.key == SDLK_F && m_health > 0 && !m_weaponPickedUp)
+    else if (event.key.key == SDLK_F && m_health > 0)
         pickupNearbyWeapon(app);
     else if (event.key.key == SDLK_TAB && app.client_api.clientInRoom())
     {
@@ -401,6 +444,76 @@ void DeathmatchMode::changeTeam(ClientApp& app, const std::string& team)
     // team's spawn points.
     m_weaponPickedUp = true;
     equipWeaponForTeam(app);
+}
+
+void DeathmatchMode::onEconomySnapshot(ClientApp& app, const nx3d::economy::Snapshot& state)
+{
+    auto syncSlot = [](GunSlot& slot, const std::string& type)
+    {
+        if (type.empty() && slot.itemId != 0)
+            return;
+        if (slot.type != type)
+        {
+            slot.type = type;
+            slot.ammo = -1;
+            slot.itemId = 0;
+            slot.itemSize = glm::vec3(1.0f);
+        }
+    };
+    syncSlot(m_primary, state.primary);
+    syncSlot(m_secondary, state.secondary);
+    m_grenades = state.grenades;
+    if (state.effect == "weapon" && hasWeaponProfile(state.weapon))
+    {
+        const int slot = nx3d::economy::isSecondary(state.weapon) ? 2 : 1;
+        GunSlot& purchased = slot == 1 ? m_primary : m_secondary;
+        if (purchased.itemId != 0 && app.ready && app.client_api.clientInRoom())
+            app.tcp_client.sendMessage(nexilis::client::Packet::Room::GameItem::destroy(
+                    app.client_api, purchased.itemId));
+        purchased.type = state.weapon;
+        purchased.ammo = -1;
+        purchased.itemId = 0;
+        purchased.itemSize = glm::vec3(1.0f);
+        equipSlot(app, slot, true);
+    }
+    else if ((m_activeSlot == 1 && m_primary.type.empty()) ||
+             (m_activeSlot == 2 && m_secondary.type.empty()) ||
+             (m_activeSlot == 4 && m_grenades == 0))
+        equipSlot(app, !m_primary.type.empty() ? 1 :
+                      !m_secondary.type.empty() ? 2 : 3);
+    if (state.effect == "ammo")
+    {
+        m_reloadRemaining = 0.0f;
+        if (!m_primary.type.empty())
+            m_primary.ammo = getWeaponProfile(m_primary.type).magazine_size;
+        if (!m_secondary.type.empty())
+            m_secondary.ammo = getWeaponProfile(m_secondary.type).magazine_size;
+        if (m_activeSlot == 1 || m_activeSlot == 2)
+        {
+            m_ammo = (m_activeSlot == 1 ? m_primary : m_secondary).ammo;
+            refreshWeaponHud(app);
+        }
+    }
+    if (m_activeSlot == 4)
+        refreshWeaponHud(app);
+    if (state.effect == "health")
+    {
+        m_health = 100;
+        app.ui->healthText.setString("HP: 100");
+    }
+}
+
+void DeathmatchMode::onGrenadeThrown(ClientApp& app, const nx3d::economy::GrenadeThrow& event)
+{
+    if (event.owner == app.client_api.getClientId())
+        return; // The thrower has already started the local animation.
+    const glm::vec3 start(event.x, event.y, event.z);
+    glm::vec3 direction(event.endX - event.x, 0.0f, event.endZ - event.z);
+    if (glm::length(direction) < 0.001f)
+        return;
+    direction = glm::normalize(direction);
+    showGrenade(app, start + direction * 18.0f,
+                glm::vec3(event.endX, event.y, event.endZ));
 }
 
 void DeathmatchMode::handleKeyUp(ClientApp& app, const SDL_Event& event)
@@ -445,24 +558,13 @@ void DeathmatchMode::equipGun(ClientApp& app,
     m_firstPersonGun->setViewRotation(fpRotation);
     app.scene_manager.getCurrentScene()->addObject(m_firstPersonGun);
 
-    m_crosshair = std::make_shared<nx3d::client::Crosshair>(
-            app.renderer.getDevice(), app.renderer.getPhysicalDevice(),
-            app.crosshair_texture, app.descriptorPool, app.descriptorSetLayout,
-            blt::ObjectData(app.shared_world, 0.0f,
-                            glm::vec3(0.0f, -1000.0f, 0.0f), app.default_size));
-    app.ui->renderer().setOverlayCallback([this, &app]()
-                                          {
-        auto ctx = spear::ui::RenderContext{spear::rendering::vulkan::g_frameContext.commandBuffer};
-        if (app.currentState == ClientApp::State::Paused)
-            app.ui->renderPauseOverlay(ctx, app.quitHovered,
-                                       app.ctTeamHovered, app.tTeamHovered);
-        else if (app.game_mode && app.game_mode->isEliminated())
-            app.ui->renderDeathOverlay(ctx);
-        if (app.ui->isLeaderboardVisible())
-            app.ui->renderLeaderboardOverlay(ctx);
-        app.ui->renderChatOverlay(ctx);
-        if (m_crosshair && m_health > 0)
-            m_crosshair->render(app.camera); });
+    if (m_activeSlot <= 2)
+        m_crosshair = std::make_shared<nx3d::client::Crosshair>(
+                app.renderer.getDevice(), app.renderer.getPhysicalDevice(),
+                app.crosshair_texture, app.descriptorPool, app.descriptorSetLayout,
+                blt::ObjectData(app.shared_world, 0.0f,
+                                glm::vec3(0.0f, -1000.0f, 0.0f), app.default_size));
+    installOverlay(app);
 
     m_weaponName = weaponName;
     const auto& profile = getWeaponProfile(m_pickedUpItemType);
@@ -472,30 +574,28 @@ void DeathmatchMode::equipGun(ClientApp& app,
     refreshWeaponHud(app);
 }
 
-void DeathmatchMode::unequipGun(ClientApp& app)
+void DeathmatchMode::installOverlay(ClientApp& app)
 {
-    if (app.reload_audio)
-        app.reload_audio->stop();
-    if (m_crosshair)
-    {
-        vkDeviceWaitIdle(app.renderer.getDevice());
-        m_crosshair.reset();
-        app.ui->renderer().setOverlayCallback(nullptr);
-    }
-    if (m_firstPersonGun)
-    {
-        app.scene_manager.getCurrentScene()->removeObject(m_firstPersonGun->getId());
-        vkDeviceWaitIdle(app.renderer.getDevice());
-        m_firstPersonGun.reset();
-    }
-    app.ui->weaponHudText.setString("");
-    m_weaponName.clear();
-    m_reloadRemaining = 0.0f;
+    app.ui->renderer().setOverlayCallback([this, &app]()
+                                          {
+        auto ctx = spear::ui::RenderContext{spear::rendering::vulkan::g_frameContext.commandBuffer};
+        if (app.currentState == ClientApp::State::Paused)
+            app.ui->renderPauseOverlay(ctx, app.quitHovered,
+                                       app.ctTeamHovered, app.tTeamHovered);
+        else if (app.currentState == ClientApp::State::Buy)
+            app.ui->renderBuyOverlay(ctx);
+        else if (app.game_mode && app.game_mode->isEliminated())
+            app.ui->renderDeathOverlay(ctx);
+        if (app.ui->isLeaderboardVisible())
+            app.ui->renderLeaderboardOverlay(ctx);
+        app.ui->renderChatOverlay(ctx);
+        if (m_crosshair && m_health > 0 && app.currentState == ClientApp::State::Game)
+            m_crosshair->render(app.camera); });
 }
 
 glm::vec3 DeathmatchMode::pickSpawnPoint()
 {
-    const auto& spawns = (m_team == "Terrorist") ? m_tSpawns : m_ctSpawns;
+    const auto& spawns = (m_team == "Terrorist") ? nx3d::economy::kTSpawns : nx3d::economy::kCtSpawns;
     if (spawns.empty())
         return glm::vec3{0.0f};
 
@@ -503,31 +603,119 @@ glm::vec3 DeathmatchMode::pickSpawnPoint()
     if (spawns.size() > 1 && index == m_lastSpawnIndex)
         index = (index + 1) % spawns.size();
     m_lastSpawnIndex = index;
-    return spawns[index];
+    return {spawns[index].x, spawns[index].y, spawns[index].z};
 }
 
 void DeathmatchMode::equipWeaponForTeam(ClientApp& app)
 {
-    const bool isCt = (m_team == "Counter Terrorist");
-    const auto& profile = getWeaponProfile(isCt ? "m16" : "ak47");
+    if (app.ready && app.client_api.clientInRoom())
+    {
+        for (const auto& slot : {m_primary, m_secondary})
+            if (slot.itemId != 0)
+                app.tcp_client.sendMessage(nexilis::client::Packet::Room::GameItem::destroy(
+                        app.client_api, slot.itemId));
+    }
+    m_primary = {};
+    m_secondary = {};
+    m_secondary.type = nx3d::economy::defaultWeapon(m_team);
+    m_grenades = 0;
+    m_activeSlot = 0;
+    equipSlot(app, 2);
+}
 
-    m_pickedUpItemType = profile.type;
-
+void DeathmatchMode::equipSlot(ClientApp& app, int slot, bool force)
+{
+    if (slot < 1 || slot > 4 || m_health <= 0)
+        return;
+    GunSlot* selected = slot == 1 ? &m_primary : slot == 2 ? &m_secondary : nullptr;
+    if ((selected && selected->type.empty()) || (slot == 4 && m_grenades == 0))
+        return;
+    if (!force && slot == m_activeSlot &&
+        m_pickedUpItemType == (selected ? selected->type : slot == 3 ? "knife" : "grenade"))
+        return;
+    GunSlot* previous = m_activeSlot == 1 ? &m_primary :
+                        m_activeSlot == 2 ? &m_secondary : nullptr;
+    if (previous && previous != selected && previous->type == m_pickedUpItemType)
+    {
+        previous->ammo = m_ammo;
+        previous->itemId = m_pickedUpItemId;
+        previous->itemSize = m_pickedUpItemSize;
+    }
+    m_activeSlot = slot;
+    m_triggerHeld = false;
+    m_burstShots = 0;
+    m_fireCooldown = 0.0f;
+    m_pickedUpItemType = selected ? selected->type : slot == 3 ? "knife" : "grenade";
+    m_weaponPickedUp = slot != 4;
+    m_pickedUpItemId = selected ? selected->itemId : 0;
+    m_pickedUpItemSize = selected ? selected->itemSize : glm::vec3(1.0f);
+    const auto& profile = getWeaponProfile(m_pickedUpItemType);
     equipGun(app, profile.name, profile.obj_path, profile.mtl_path,
-             profile.fp_scale, profile.fp_center,
-             profile.fp_offset, profile.fp_rotation);
+             profile.fp_scale, profile.fp_center, profile.fp_offset, profile.fp_rotation);
+    if (selected && selected->ammo >= 0)
+        m_ammo = selected->ammo;
+    if (slot >= 3)
+        m_ammo = 0;
+    refreshWeaponHud(app);
+}
 
-    m_pickedUpItemId = 0;
-    m_pickedUpItemSize = glm::vec3(1.0f, 1.0f, 1.0f);
+void DeathmatchMode::throwGrenade(ClientApp& app)
+{
+    if (!app.ready || !app.client_api.clientInRoom() || m_grenades <= 0)
+        return;
+    using packet = nexilis::client::Packet;
+    const glm::vec3 origin = app.camera.getPosition();
+    glm::vec3 direction = app.camera.getFront();
+    direction.y = 0.0f;
+    if (glm::length(direction) < 0.001f)
+        direction = glm::vec3(0.0f, 0.0f, -1.0f);
+    direction = glm::normalize(direction);
+    const float yaw = std::atan2(-direction.x, -direction.z);
+    app.tcp_client.sendMessage(packet::Room::Player3D::position(
+            app.client_api, nexilis::Vector3f({origin.x, origin.y, origin.z}), yaw));
+    app.tcp_client.sendMessage(packet::Room::Player3D::matchAction(
+            app.client_api, nx3d::economy::kThrowGrenadeAction));
+    --m_grenades;
+    showGrenade(app, origin + direction * 18.0f,
+                origin + direction * nx3d::economy::kGrenadeThrowDistance);
+    if (m_grenades == 0)
+        equipSlot(app, !m_primary.type.empty() ? 1 :
+                      !m_secondary.type.empty() ? 2 : 3);
+    else
+        refreshWeaponHud(app);
+}
+
+void DeathmatchMode::showGrenade(ClientApp& app, glm::vec3 start, glm::vec3 end)
+{
+    auto model = std::make_shared<spear::rendering::vulkan::TexturedCube>(
+            app.renderer.getDevice(), app.renderer.getPhysicalDevice(),
+            app.crosshair_texture, app.descriptorPool, app.descriptorSetLayout,
+            blt::ObjectData(app.shared_world, 0.0f, start,
+                            app.default_size), glm::vec4(0.28f, 0.55f, 0.20f, 1.0f));
+    model->scale(glm::vec3(8.0f));
+    app.scene_manager.getCurrentScene()->addObject(model);
+    m_grenadeVisuals.push_back({model, start, end, 0.0f});
 }
 
 void DeathmatchMode::refreshWeaponHud(ClientApp& app)
 {
     if (m_weaponName.empty())
         return;
+    if (m_activeSlot == 3)
+    {
+        app.ui->weaponHudText.setString("3 Knife  |  1 Primary  2 Secondary  4 Utility");
+        return;
+    }
+    if (m_activeSlot == 4)
+    {
+        app.ui->weaponHudText.setString("4 HE Grenade x" + std::to_string(m_grenades) +
+                                        "  |  Left click: Throw");
+        return;
+    }
     const std::string suffix = m_reloadRemaining > 0.0f ? "  RELOADING" : m_ammo == 0 ? "  [R] RELOAD"
                                                                                       : "";
-    app.ui->weaponHudText.setString(m_weaponName + "  " + std::to_string(m_ammo) + "/" +
+    app.ui->weaponHudText.setString(std::to_string(m_activeSlot) + " " + m_weaponName + "  " +
+                                    std::to_string(m_ammo) + "/" +
                                     std::to_string(m_magazineSize) + suffix);
 }
 
@@ -560,11 +748,9 @@ void DeathmatchMode::dropCurrentWeapon(ClientApp& app)
     if (!app.ready || !app.client_api.clientInRoom())
         return;
 
-    m_weaponPickedUp = false;
     m_triggerHeld = false;
     m_burstShots = 0;
     m_fireCooldown = 0.0f;
-    unequipGun(app);
 
     // If we were holding a map pickup, remove the original from the server.
     if (m_pickedUpItemId != 0)
@@ -588,7 +774,13 @@ void DeathmatchMode::dropCurrentWeapon(ClientApp& app)
     app.tcp_client.sendMessage(
             packet::Room::GameItem::create(app.client_api, pos, dim,
                                            profile.type, "on_ground", profile.obj_path));
+    app.tcp_client.sendMessage(packet::Room::Player3D::matchAction(
+            app.client_api, m_activeSlot == 1 ? nx3d::economy::kDropPrimaryAction :
+                                            nx3d::economy::kDropSecondaryAction));
     app.pending_weapon_throw = ClientApp::PendingWeaponThrow{dropPos, throwDirection};
+    (m_activeSlot == 1 ? m_primary : m_secondary) = {};
+    equipSlot(app, m_activeSlot == 1 ? (!m_secondary.type.empty() ? 2 : 3) :
+                  (!m_primary.type.empty() ? 1 : 3));
 }
 
 void DeathmatchMode::pickupNearbyWeapon(ClientApp& app)
@@ -603,6 +795,10 @@ void DeathmatchMode::pickupNearbyWeapon(ClientApp& app)
     {
         if (item.status != "on_ground" || !hasWeaponProfile(item.item_type))
             continue;
+        const int slot = nx3d::economy::isSecondary(item.item_type) ? 2 : 1;
+        GunSlot& inventory = slot == 1 ? m_primary : m_secondary;
+        if (!inventory.type.empty())
+            continue;
         glm::vec3 itemPos(item.x, item.y, item.z);
         auto localItem = app.remote_game_items.find(item.id);
         if (localItem != app.remote_game_items.end())
@@ -613,10 +809,10 @@ void DeathmatchMode::pickupNearbyWeapon(ClientApp& app)
         if (glm::distance(camPos, itemPos) >= 100.0f)
             continue;
 
-        m_weaponPickedUp = true;
-        m_pickedUpItemId = item.id;
-        m_pickedUpItemSize = glm::vec3(item.w, item.h, item.d);
-        m_pickedUpItemType = item.item_type;
+        inventory.type = item.item_type;
+        inventory.ammo = -1;
+        inventory.itemId = item.id;
+        inventory.itemSize = glm::vec3(item.w, item.h, item.d);
         app.tcp_client.sendMessage(packet::Room::GameItem::update(app.client_api, item.id, "picked_up"));
 
         if (localItem != app.remote_game_items.end())
@@ -626,10 +822,7 @@ void DeathmatchMode::pickupNearbyWeapon(ClientApp& app)
             app.remote_game_items.erase(localItem);
         }
 
-        const auto& profile = getWeaponProfile(item.item_type);
-        equipGun(app, profile.name, profile.obj_path, profile.mtl_path,
-                 profile.fp_scale, profile.fp_center,
-                 profile.fp_offset, profile.fp_rotation);
+        equipSlot(app, slot);
         return;
     }
 }

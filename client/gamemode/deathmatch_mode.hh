@@ -6,6 +6,8 @@
 #include <client/gun/first_person_gun.hh>
 #include <client/ui/ui.hh>
 
+#include <spear/rendering/vulkan/shapes/textured_cube.hh>
+
 #include <glm/glm.hpp>
 
 #include <cstdint>
@@ -41,19 +43,24 @@ public:
     void handleKeyDown(ClientApp& app, const SDL_Event& event) override;
     void handleKeyUp(ClientApp& app, const SDL_Event& event) override;
     void changeTeam(ClientApp& app, const std::string& team) override;
+    void onEconomySnapshot(ClientApp& app, const nx3d::economy::Snapshot& state) override;
+    void onGrenadeThrown(ClientApp& app, const nx3d::economy::GrenadeThrow& event) override;
 
 protected:
     void equipGun(ClientApp& app, const std::string& weaponName,
                   const std::string& objPath, const std::string& mtlPath,
                   float fpScale, glm::vec3 fpCenter,
                   glm::vec3 fpOffset, glm::vec3 fpRotation);
-    void unequipGun(ClientApp& app);
     void equipWeaponForTeam(ClientApp& app);
     void dropCurrentWeapon(ClientApp& app);
     void pickupNearbyWeapon(ClientApp& app);
     void fireWeapon(ClientApp& app);
     void startReload(ClientApp& app);
     void refreshWeaponHud(ClientApp& app);
+    void equipSlot(ClientApp& app, int slot, bool force = false);
+    void throwGrenade(ClientApp& app);
+    void showGrenade(ClientApp& app, glm::vec3 start, glm::vec3 end);
+    void installOverlay(ClientApp& app);
     float fireIntervalSeconds() const;
     glm::vec3 pickSpawnPoint();
 
@@ -74,6 +81,25 @@ protected:
     int m_health = 100;
     int m_hitmarkerFrames = 0;
     std::string m_weaponName;
+    struct GunSlot
+    {
+        std::string type;
+        int ammo = -1;
+        uint64_t itemId = 0;
+        glm::vec3 itemSize{1.0f};
+    };
+    GunSlot m_primary;
+    GunSlot m_secondary;
+    int m_activeSlot = 2;
+    int m_grenades = 0;
+    struct GrenadeVisual
+    {
+        std::shared_ptr<spear::rendering::vulkan::TexturedCube> model;
+        glm::vec3 start;
+        glm::vec3 end;
+        float age = 0.0f;
+    };
+    std::vector<GrenadeVisual> m_grenadeVisuals;
     int m_ammo = 0;
     int m_magazineSize = 0;
     float m_reloadRemaining = 0.0f;
@@ -90,20 +116,6 @@ protected:
     // same spawn the player died at.
     size_t m_lastSpawnIndex = SIZE_MAX;
 
-    // Team spawn points (de_dust2 coordinates).
-    std::vector<glm::vec3> m_ctSpawns{
-            {355.0f, -48.0f, -2364.0f},
-            {178.0f, -48.0f, -2408.0f},
-            {381.0f, -48.0f, -2470.0f},
-            {180.0f, -48.0f, -2368.0f},
-            {123.0f, -48.0f, -2519.0f}};
-
-    std::vector<glm::vec3> m_tSpawns{
-            {-592.0f, 192.0f, 764.0f},
-            {-834.0f, 192.0f, 797.0f},
-            {-561.0f, 192.0f, 771.0f},
-            {-801.0f, 192.0f, 777.0f},
-            {-705.0f, 204.0f, 947.0f}};
 };
 
 } // namespace nx3d::client::gamemode

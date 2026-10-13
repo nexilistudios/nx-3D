@@ -14,7 +14,8 @@ void require(bool condition, const char* message)
         throw std::runtime_error(message);
 }
 
-size_t validate(const std::string& name)
+size_t validate(const std::string& name, size_t minFaces, size_t minVertices,
+                size_t expectedMaterials, float expectedMinZ, float expectedMaxZ)
 {
     const auto directory = std::filesystem::path(PROJECT_ROOT) / "assets" / "weapons";
     spear::OBJLoader loader;
@@ -25,9 +26,9 @@ size_t validate(const std::string& name)
     const auto& faces = loader.getFaces();
     const auto& vertices = loader.getVertices();
     const auto& materials = loader.getMaterials();
-    require(faces.size() >= 350 && vertices.size() >= 700,
+    require(faces.size() >= minFaces && vertices.size() >= minVertices,
             "Weapon model is incomplete");
-    require(materials.size() == 4, "Weapon material palette is incomplete");
+    require(materials.size() == expectedMaterials, "Weapon material palette is incomplete");
     for (const auto& material : materials)
         require(std::filesystem::exists(material.texturePath),
                 "Weapon material texture is missing");
@@ -38,7 +39,7 @@ size_t validate(const std::string& name)
         minZ = std::min(minZ, vertex.z);
         maxZ = std::max(maxZ, vertex.z);
     }
-    require(minZ < -1.0f && maxZ > 1.8f, "Weapon is not aligned along +Z");
+    require(minZ < expectedMinZ && maxZ > expectedMaxZ, "Weapon is not aligned along +Z");
 
     for (const auto& face : faces)
     {
@@ -55,8 +56,14 @@ int main()
 {
     try
     {
-        require(validate("ak47") != validate("m16"),
+        require(validate("ak47", 350, 700, 4, -1.0f, 1.8f) !=
+                        validate("m16", 350, 700, 4, -1.0f, 1.8f),
                 "AK-47 and M16 should have distinct geometry");
+        for (const auto& pistol : {"glock", "usp", "deagle"})
+            validate(pistol, 60, 100, 3, -0.35f, 0.7f);
+        validate("mp5", 120, 200, 3, -1.0f, 1.5f);
+        validate("knife", 20, 16, 2, -0.8f, 0.7f);
+        validate("grenade", 20, 16, 2, -0.15f, 0.15f);
     }
     catch (const std::exception& error)
     {

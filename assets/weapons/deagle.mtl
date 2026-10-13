@@ -1,0 +1,24 @@
+# Original material palette with 1-pixel diffuse swatches
+newmtl deagle_body
+Ka 0.108 0.113 0.122
+Kd 0.240 0.250 0.270
+map_Kd deagle_body.png
+Ks 0.18 0.18 0.18
+Ns 32
+illum 2
+
+newmtl deagle_detail
+Ka 0.036 0.041 0.045
+Kd 0.080 0.090 0.100
+map_Kd deagle_detail.png
+Ks 0.18 0.18 0.18
+Ns 32
+illum 2
+
+newmtl deagle_slide
+Ka 0.225 0.230 0.239
+Kd 0.500 0.510 0.530
+map_Kd deagle_slide.png
+Ks 0.18 0.18 0.18
+Ns 32
+illum 2

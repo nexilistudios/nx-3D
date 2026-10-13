@@ -17,6 +17,11 @@ bool BombMode::canMove() const
     return !isEliminated();
 }
 
+bool BombMode::canBuy() const
+{
+    return m_phase == "live" && m_active && m_alive && DeathmatchMode::canMove();
+}
+
 bool BombMode::isEliminated() const
 {
     return isBombPlayerEliminated(m_round, m_active, m_alive,
@@ -55,7 +60,11 @@ void BombMode::update(ClientApp& app, float dt)
         m_phase = event.phase;
         m_notice = event.notice;
         m_seconds = event.seconds;
+        if (!event.bomb_planted || !m_planted)
+            m_beepTimer = 0.0f;
         m_planted = event.bomb_planted;
+        if (m_planted)
+            m_bombPosition = {event.bomb_x, event.bomb_y, event.bomb_z};
         m_active = event.active;
         m_alive = event.alive;
         if ((!m_alive || event.phase != "live") && m_using && app.planting_audio)
@@ -105,6 +114,17 @@ void BombMode::update(ClientApp& app, float dt)
 
     if (m_phase == "live" || m_phase == "post")
         m_seconds = std::max(0.0f, m_seconds - dt);
+    if (m_phase == "live" && m_planted && m_seconds > 0.0f)
+    {
+        m_beepTimer -= dt;
+        if (m_beepTimer <= 0.0f)
+        {
+            if (app.bomb_beep_audio)
+                app.bomb_beep_audio->playAt(m_bombPosition);
+            m_beepTimer = m_seconds <= 5.0f ? 0.28f :
+                          m_seconds <= 10.0f ? 0.55f : 0.9f;
+        }
+    }
     const int seconds = static_cast<int>(std::ceil(m_seconds));
     const std::string roundText = "T " + std::to_string(m_tScore) + " : " +
                                   std::to_string(m_ctScore) + " CT   ROUND " + std::to_string(m_round) +
@@ -117,7 +137,10 @@ void BombMode::update(ClientApp& app, float dt)
     else if (m_phase == "live" && !m_alive)
         status = "Eliminated | Waiting for next round";
     else if (m_phase == "live" && m_alive)
-        status = m_planted ? (m_team == "Counter Terrorist" ? "Hold E near bomb to defuse" : "Defend the bomb")
+        status = m_planted ? (m_team == "Counter Terrorist" ?
+                                      (app.economyState.hasDefuseKit ? "Hold E near bomb to defuse (kit: 2.5s)"
+                                                                     : "Hold E near bomb to defuse (5s)")
+                                      : "Defend the bomb")
                            : (m_team == "Terrorist" ? "Hold E to plant bomb" : "Stop the plant");
     if (app.ui->matchStatusText.getString() != status)
         app.ui->matchStatusText.setString(status);

@@ -1,0 +1,24 @@
+# Original material palette with 1-pixel diffuse swatches
+newmtl usp_body
+Ka 0.054 0.063 0.077
+Kd 0.120 0.140 0.170
+map_Kd usp_body.png
+Ks 0.18 0.18 0.18
+Ns 32
+illum 2
+
+newmtl usp_detail
+Ka 0.023 0.027 0.032
+Kd 0.050 0.060 0.070
+map_Kd usp_detail.png
+Ks 0.18 0.18 0.18
+Ns 32
+illum 2
+
+newmtl usp_slide
+Ka 0.158 0.167 0.171
+Kd 0.350 0.370 0.380
+map_Kd usp_slide.png
+Ks 0.18 0.18 0.18
+Ns 32
+illum 2

@@ -1,7 +1,9 @@
 #include <server/gamemode/game_mode_registry.hh>
 
 #include <nexilis/client/client_api.hh>
+#include <nexilis/command_type.hh>
 #include <nexilis/server/client_storage.hh>
+#include <nexilis/server/command/command.hh>
 #include <nexilis/server/room_storage.hh>
 
 #include <stdexcept>
@@ -31,6 +33,11 @@ int main()
     GameModeRegistry::assignRoom(*room, nx3d::GameMode::bomb);
     auto add = [&](uint64_t id, client::ClientAPI& api, const char* team)
     {
+        check(api.readMessage(server::Command::clientMessageData(
+                      CommandType::room, "management", 0,
+                      {{"action", "create"}, {"room_id", 777}, {"client_id", id},
+                       {"room_name", "Bomb test"}, {"room_context", 1}})) == client::ReadResult::success,
+              "Test client could not join room messages");
         auto user = std::make_unique<server::User>(id, "127.0.0.1");
         user->setRoomId(777);
         user->setUsername("player_" + std::to_string(id));
@@ -71,6 +78,20 @@ int main()
     auto first = t.consumeMatchEvents();
     check(bomb(first).round == 1 && bomb(first).alive, "Bad first round state");
 
+    auto* ctUser = server::ClientStorage::getClientById(20);
+    ctUser->getObject3D().setPosition(Vector3f{355.0f, -48.0f, -2364.0f});
+    check(room->onPlayerAction(20, 16), "CT could not buy a defuse kit at spawn");
+    nx3d::economy::Snapshot kitState;
+    check(nx3d::economy::decode(ct.getChatSnapshot(777).back().message, kitState) &&
+                  kitState.money == 400 && kitState.hasDefuseKit,
+          "Defuse kit purchase did not debit money or grant equipment");
+    ctUser->getObject3D().setPosition(Vector3f{0.0f, 0.0f, 0.0f});
+    check(!room->onPlayerAction(20, 12), "Purchase outside spawn was accepted");
+    auto* tUser = server::ClientStorage::getClientById(10);
+    tUser->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
+    check(!room->onPlayerAction(10, 16), "Terrorist bought a defuse kit");
+    tUser->getObject3D().setPosition(Vector3f{0.0f, 0.0f, 0.0f});
+
     add(30, queued, "Terrorist");
     check(!room->canDamage(30, 20), "Queued player could shoot");
     auto queueEvents = queued.consumeMatchEvents();
@@ -81,10 +102,10 @@ int main()
     auto planted = t.consumeMatchEvents();
     check(bomb(planted).bomb_planted, "Bomb did not plant");
     check(room->onPlayerAction(20, 2), "Defuse rejected");
-    GameModeRegistry::update(5.1f);
+    GameModeRegistry::update(2.6f);
     auto defused = ct.consumeMatchEvents();
     check(bomb(defused).counter_terrorist_score == 1,
-          "Defuse did not score");
+          "Defuse kit did not shorten the defuse and score");
 
     GameModeRegistry::update(3.9f);
     check(!room->canDamage(30, 20), "Next round began too early");

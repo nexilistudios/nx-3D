@@ -30,6 +30,30 @@ GunManager::GunManager()
             .spread = 1.0f,
             .model_path = "assets/weapons/m16.obj",
         },
+        {
+            .name = "Glock", .type = GunType::Glock, .damage = 24.0f,
+            .fire_rate = 6.67f, .magazine_size = 20, .reload_time = 2.0f,
+            .range = 100.0f, .spread = 1.0f,
+            .model_path = "assets/weapons/glock.obj",
+        },
+        {
+            .name = "USP", .type = GunType::USP, .damage = 30.0f,
+            .fire_rate = 5.83f, .magazine_size = 12, .reload_time = 2.1f,
+            .range = 100.0f, .spread = 1.0f,
+            .model_path = "assets/weapons/usp.obj",
+        },
+        {
+            .name = "Desert Eagle", .type = GunType::Deagle, .damage = 35.0f,
+            .fire_rate = 4.33f, .magazine_size = 7, .reload_time = 2.2f,
+            .range = 100.0f, .spread = 1.0f,
+            .model_path = "assets/weapons/deagle.obj",
+        },
+        {
+            .name = "MP5", .type = GunType::MP5, .damage = 26.0f,
+            .fire_rate = 13.33f, .magazine_size = 30, .reload_time = 2.4f,
+            .range = 100.0f, .spread = 1.0f,
+            .model_path = "assets/weapons/mp5.obj",
+        },
     };
 }
 

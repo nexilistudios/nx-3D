@@ -1,4 +1,4 @@
-"""Generate original low-poly AK-47 and M16 OBJ assets for nx-3D.
+"""Generate original low-poly weapon OBJ assets for nx-3D.
 
 The rifles point along +Z, with +Y up. All geometry and materials are authored
 here; no downloaded models or textures are used.
@@ -19,6 +19,18 @@ MATERIALS = {
     "m16_metal": (0.260, 0.270, 0.275),
     "m16_edge": (0.350, 0.360, 0.360),
     "m16_shadow": (0.080, 0.085, 0.090),
+    "glock_body": (0.13, 0.15, 0.16),
+    "glock_slide": (0.25, 0.27, 0.28),
+    "glock_detail": (0.04, 0.05, 0.06),
+    "usp_body": (0.12, 0.14, 0.17),
+    "usp_slide": (0.35, 0.37, 0.38),
+    "usp_detail": (0.05, 0.06, 0.07),
+    "deagle_body": (0.24, 0.25, 0.27),
+    "deagle_slide": (0.50, 0.51, 0.53),
+    "deagle_detail": (0.08, 0.09, 0.10),
+    "mp5_body": (0.12, 0.13, 0.14),
+    "mp5_metal": (0.26, 0.27, 0.28),
+    "mp5_detail": (0.045, 0.05, 0.055),
 }
 
 
@@ -168,10 +180,55 @@ def m16():
     return gun
 
 
+def pistol(name):
+    gun = Mesh()
+    body, slide, detail = (f"{name}_body", f"{name}_slide", f"{name}_detail")
+    heavy = name == "deagle"
+    width = .14 if heavy else .11
+    front = .91 if heavy else .72
+    gun.box(-width, width, -.08, .16, -.40, front, body)
+    gun.box(-width * 1.06, width * 1.06, .09, .25, -.42, front, slide)
+    gun.box(-.078, .078, -.68, -.05, -.20, .12, body)
+    gun.box(-.084, .084, -.70, -.64, -.23, .15, detail)
+    gun.box(-.025, .025, -.37, -.15, .22, .25, detail)
+    gun.box(-.077, .077, -.11, -.06, .13, .40, detail)
+    gun.cylinder_z(front - .05, front + .17, .042 if heavy else .035,
+                   .055, slide, 8)
+    gun.box(-.025, .025, .24, .30, -.32, -.28, detail)
+    gun.box(-.026, .026, .24, .31, front - .08, front - .04, detail)
+    if name == "usp":
+        gun.cylinder_z(front + .10, front + .48, .061, .055, detail, 10)
+    if heavy:
+        gun.box(-width, width, .20, .29, -.32, front - .08, slide)
+    return gun
+
+
+def mp5():
+    gun = Mesh()
+    gun.box(-.12, .12, -.13, .14, -.45, .54, "mp5_metal")
+    gun.box(-.15, .15, -.10, .04, .49, 1.17, "mp5_body")
+    gun.box(-.075, .075, -.20, -.13, -1.12, -.43, "mp5_metal")
+    gun.box(-.14, .14, -.37, -.15, -1.19, -1.08, "mp5_body")
+    gun.box(-.08, .08, -.63, -.12, -.28, .02, "mp5_body")
+    gun.box(-.06, .06, -.67, -.21, .24, .41, "mp5_detail")
+    gun.box(-.10, .10, -.72, -.65, .22, .43, "mp5_metal")
+    gun.cylinder_z(.56, 1.56, .048, .025, "mp5_metal", 10)
+    gun.cylinder_z(1.47, 1.67, .065, .025, "mp5_detail", 8)
+    gun.box(-.085, .085, .14, .19, -.29, .34, "mp5_detail")
+    gun.box(-.023, .023, .17, .31, 1.10, 1.14, "mp5_metal")
+    for z in (.61, .77, .93, 1.09):
+        gun.box(-.156, -.148, -.07, .02, z, z + .025, "mp5_detail")
+        gun.box(.148, .156, -.07, .02, z, z + .025, "mp5_detail")
+    return gun
+
+
 def main():
     output = Path(__file__).resolve().parent
     ak47().write("ak47", output)
     m16().write("m16", output)
+    for name in ("glock", "usp", "deagle"):
+        pistol(name).write(name, output)
+    mp5().write("mp5", output)
 
 
 if __name__ == "__main__":

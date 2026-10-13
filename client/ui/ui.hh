@@ -2,6 +2,7 @@
 #define NX3D_CLIENT_UI_UI_HH
 
 #include <spear/spear_vulkan.hh>
+#include <shared/economy.hh>
 
 #include <cstdint>
 #include <memory>
@@ -29,6 +30,7 @@ struct LeaderboardEntry
 class Ui
 {
 public:
+    enum class BuyStyle { List, Radial, Cs2 };
     explicit Ui(VkDevice device,
                 VkPhysicalDevice physDevice,
                 VkCommandPool commandPool,
@@ -65,6 +67,12 @@ public:
     void showTeamSelectTexts();
     /// Register the in-game HUD (clears previous UI).
     void showGameHudTexts();
+    void showBuyMenu(BuyStyle style, const nx3d::economy::Snapshot& state,
+                     const std::string& team, const std::string& notice,
+                     bool bombMatch);
+    void hideBuyMenu();
+    int buyItemAt(float x, float y) const;
+    void renderBuyOverlay(spear::ui::RenderContext ctx);
 
     /// Render the pause menu overlay (quads only; used from the overlay
     /// callback that also draws the crosshair).
@@ -114,6 +122,11 @@ public:
     spear::ui::vulkan::Text roundText;
     spear::ui::vulkan::Text matchStatusText;
     spear::ui::vulkan::Text bombText;
+    spear::ui::vulkan::Text moneyText;
+    spear::ui::vulkan::Text buyTitleText;
+    spear::ui::vulkan::Text buyHintText;
+    spear::ui::vulkan::Text buyNoticeText;
+    std::vector<std::unique_ptr<spear::ui::vulkan::Text>> buyItemTexts;
 
     spear::ui::vulkan::Text pauseTitle;
     spear::ui::vulkan::Text pauseTeamTitle;
@@ -158,6 +171,7 @@ private:
     void buildDeathOverlay();
     void buildLeaderboard();
     void buildChat();
+    void buildBuyMenu();
     void setRowText(spear::ui::vulkan::Text& text, const LeaderboardEntry& entry);
 
     VkDevice m_device;
@@ -191,6 +205,11 @@ private:
 
     std::shared_ptr<spear::ui::vulkan::Quad2D> m_chatBackdropQuad;
     bool m_chatVisible = false;
+    std::shared_ptr<spear::ui::vulkan::Quad2D> m_buyBackdropQuad;
+    std::shared_ptr<spear::ui::vulkan::Quad2D> m_buyPanelQuad;
+    std::vector<std::shared_ptr<spear::ui::vulkan::Quad2D>> m_buyItemQuads;
+    bool m_buyVisible = false;
+    BuyStyle m_buyStyle = BuyStyle::List;
 };
 
 } // namespace nx3d::client::ui

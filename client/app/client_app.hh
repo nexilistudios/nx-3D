@@ -52,6 +52,7 @@ public:
         Joining,
         TeamSelect,
         Game,
+        Buy,
         Paused
     };
 
@@ -81,6 +82,7 @@ public:
     std::unique_ptr<spear::audio::Sound> hitmarker_audio;
     std::unique_ptr<spear::audio::Sound> reload_audio;
     std::unique_ptr<spear::audio::Sound> planting_audio;
+    std::unique_ptr<spear::audio::Sound> bomb_beep_audio;
     std::unique_ptr<spear::audio::Sound> explosion_audio;
     std::unique_ptr<spear::audio::Sound> walk_audio;
     /// Short positional "step" clip for sounds other players make when
@@ -142,6 +144,11 @@ public:
     bool quitHovered = false;
     bool ctTeamHovered = false;
     bool tTeamHovered = false;
+    nx3d::economy::Snapshot economyState;
+    ui::Ui::BuyStyle buyStyle = ui::Ui::BuyStyle::List;
+    std::string buyNotice;
+    std::string buyError;
+    float buyErrorSeconds = 0.0f;
 
     // --- Textures -------------------------------------------------------------
     std::shared_ptr<spear::rendering::vulkan::STBTexture> wallnut_texture;
@@ -228,6 +235,8 @@ public:
     void setVolumeNormalized(float normalized);
     void pauseGame();
     void resumeGame();
+    void openBuyMenu();
+    void closeBuyMenu();
     void cleanQuit();
 
 private:

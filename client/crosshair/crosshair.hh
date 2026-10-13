@@ -50,6 +50,7 @@ private:
     uint32_t m_vertexCount = 0;
 
     std::shared_ptr<spear::rendering::vulkan::Texture> m_texture;
+    VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
     VkDescriptorSet m_descriptorSet = VK_NULL_HANDLE;
 };
 

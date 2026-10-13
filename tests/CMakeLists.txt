@@ -27,6 +27,10 @@ add_executable(bomb_player_state_test bomb_player_state_test.cc)
 target_include_directories(bomb_player_state_test PRIVATE ..)
 add_test(NAME bomb_player_state COMMAND bomb_player_state_test)
 
+add_executable(economy_test economy_test.cc)
+target_include_directories(economy_test PRIVATE ..)
+add_test(NAME economy COMMAND economy_test)
+
 find_package(glm REQUIRED)
 add_executable(weapon_motion_test weapon_motion_test.cc)
 target_include_directories(weapon_motion_test PRIVATE ..)

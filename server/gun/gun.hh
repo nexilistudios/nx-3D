@@ -11,7 +11,11 @@ namespace nx3d::server::gun
 enum class GunType : uint8_t
 {
     AK47,
-    M16
+    M16,
+    Glock,
+    USP,
+    Deagle,
+    MP5
 };
 
 struct GunDef

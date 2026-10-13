@@ -1,0 +1,4 @@
+newmtl casing
+map_Kd glock_detail.png
+newmtl cap
+map_Kd mp5_metal.png
