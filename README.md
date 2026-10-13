@@ -84,23 +84,23 @@ The flake also exposes packaged programs through `nix run .#server` and `nix run
 
 ## Controls
 
-| Action                            | Control                                   |
-| --------------------------------- | ----------------------------------------- |
-| Move and look                     | WASD and mouse                            |
-| Jump                              | Space                                     |
-| Fire                              | Hold left mouse button                    |
-| Reload                            | R                                         |
-| Equip primary, secondary, knife, HE, smoke | 1, 2, 3, 4, 5                    |
-| Throw an equipped HE grenade       | Left mouse button in slot 4              |
-| Throw an equipped smoke grenade    | Left mouse button in slot 5              |
-| Plant or defuse bomb (bomb match) | Hold E                                    |
-| Throw held weapon onto the ground | G                                         |
-| Pick up a nearby weapon           | F                                         |
-| Open buy menu at your team spawn  | B; Tab changes between list, radial, and CS2 grid layouts |
-| Change team                       | Escape, then click CT or T                |
-| Leaderboard                       | Hold Tab                                  |
-| Chat                              | Y, then Enter to send or Escape to cancel |
-| Pause or resume                   | Escape                                    |
+| Action                                     | Control                                                   |
+| ------------------------------------------ | --------------------------------------------------------- |
+| Move and look                              | WASD and mouse                                            |
+| Jump                                       | Space                                                     |
+| Fire                                       | Hold left mouse button                                    |
+| Reload                                     | R                                                         |
+| Equip primary, secondary, knife, HE, smoke | 1, 2, 3, 4, 5                                             |
+| Throw an equipped HE grenade               | Left mouse button in slot 4                               |
+| Throw an equipped smoke grenade            | Left mouse button in slot 5                               |
+| Plant or defuse bomb (bomb match)          | Hold E                                                    |
+| Throw held weapon onto the ground          | G                                                         |
+| Pick up a nearby weapon                    | F                                                         |
+| Open buy menu at your team spawn           | B; Tab changes between list, radial, and CS2 grid layouts |
+| Change team                                | Escape, then click CT or T                                |
+| Leaderboard                                | Hold Tab                                                  |
+| Chat                                       | Y, then Enter to send or Escape to cancel                 |
+| Pause or resume                            | Escape                                                    |
 
 The equipped gun appears beside the camera and follows the view. It has walk bob and recoil. The gun mesh is selected from the team's weapon profile or the weapon picked up from the ground. First-person placement and animation live in `client/gun/first_person_gun.cc`; per-weapon mesh paths, scale, and center are in `client/gamemode/weapon_profiles.hh`.
 
