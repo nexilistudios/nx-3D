@@ -25,6 +25,21 @@ add_executable(nx-3D-server ${NX3D_SERVER_SOURCES})
 target_include_directories(nx-3D-server PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_link_libraries(nx-3D-server PRIVATE Nexilis::nexilis)
 
+# The server uses boost::json directly, so link it explicitly instead of
+# relying on Nexilis::nexilis. An installed Nexilis built with vendored Boost
+# only exposes boost_json's headers; the library itself is a transitive
+# dependency of libnexilis, which the linker rejects ("DSO missing from
+# command line").
+if(NEXILIS_USE_SUBMODULES)
+    if(NX3D_USE_SYSTEM_NEXILIS)
+        find_library(NX3D_BOOST_JSON_LIBRARY boost_json REQUIRED
+                HINTS ${CMAKE_PREFIX_PATH} PATH_SUFFIXES lib lib64)
+        target_link_libraries(nx-3D-server PRIVATE "${NX3D_BOOST_JSON_LIBRARY}")
+    endif()
+else()
+    target_link_libraries(nx-3D-server PRIVATE Boost::json)
+endif()
+
 if(WIN32)
     target_link_libraries(nx-3D-server PRIVATE ws2_32 mswsock)
 endif()

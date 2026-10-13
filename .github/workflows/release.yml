@@ -7,6 +7,11 @@ on:
         description: "Optional release version; blank increments the patch version"
         required: false
         type: string
+      update_flake_lock:
+        description: 'Update flake.lock (nix flake update) and verify the Nix build before releasing'
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -269,8 +274,36 @@ jobs:
           path: dist/nx-3D-client-v${{ needs.prepare.outputs.version }}-windows-x64.zip
           if-no-files-found: error
 
+  nix:
+    needs: prepare
+    if: inputs.update_flake_lock
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          submodules: recursive
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.RELEASE_READ_TOKEN || github.token }}
+      - name: Update flake inputs (nixpkgs)
+        run: nix flake update
+      # The refreshed lock is only released if everything still builds with it.
+      - name: Build all packages with the updated lock
+        run: nix build --print-build-logs .#nexilis .#server .#client
+      - name: Check flake
+        run: nix flake check --no-build --all-systems
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flake-lock
+          path: flake.lock
+          if-no-files-found: error
+
   publish:
-    needs: [prepare, linux, linux_client, windows, windows_client]
+    needs: [prepare, linux, linux_client, windows, windows_client, nix]
+    # The nix job is skipped when update_flake_lock is off.
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -281,9 +314,14 @@ jobs:
           fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
-          pattern: "*"
+          pattern: '*-{server,client}'
           merge-multiple: true
           path: release-assets
+      - uses: actions/download-artifact@v4
+        if: needs.nix.result == 'success'
+        with:
+          name: flake-lock
+          path: .
       - name: Check all release archives
         env:
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
@@ -320,6 +358,10 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add VERSION.txt flake.nix
+          # Present only when the nix job refreshed and verified the lock.
+          if [[ "${{ needs.nix.result }}" == 'success' ]]; then
+            git add flake.lock
+          fi
           git commit -m "Release $RELEASE_TAG"
           git tag -a "$RELEASE_TAG" -m "nx-3D $RELEASE_TAG"
           git push --atomic origin "HEAD:refs/heads/$DEFAULT_BRANCH" "refs/tags/$RELEASE_TAG"

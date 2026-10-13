@@ -1,0 +1,39 @@
+name: Nix
+
+on:
+  push:
+    branches: [main]
+    paths: ['flake.nix', 'flake.lock', 'server/**', 'client/**', 'cmake/**', 'nexilis', 'spear', '.github/workflows/nix.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [nexilis, server, client]
+    steps:
+      # The flake builds from the spear/nexilis submodules (self.submodules).
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: cachix/install-nix-action@v31
+      - run: nix build --print-build-logs .#${{ matrix.package }}
+
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: cachix/install-nix-action@v31
+      - run: nix flake check --no-build --all-systems
+      - run: nix develop --command true
