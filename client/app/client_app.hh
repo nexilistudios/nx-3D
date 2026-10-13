@@ -17,10 +17,12 @@
 #include <SDL3/SDL.h>
 
 #include <atomic>
+#include <array>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -36,6 +38,21 @@ inline constexpr uint8_t kSoundFootstep = 0;
 inline constexpr uint8_t kSoundShoot = 1;
 inline constexpr uint8_t kSoundReload = 2;
 inline constexpr uint8_t kSoundPlanting = 3;
+inline constexpr uint8_t kSoundAk47 = 4;
+inline constexpr uint8_t kSoundM16 = 5;
+inline constexpr uint8_t kSoundGlock = 6;
+inline constexpr uint8_t kSoundUsp = 7;
+inline constexpr uint8_t kSoundDeagle = 8;
+inline constexpr uint8_t kSoundMp5 = 9;
+inline constexpr uint8_t shotSoundForWeapon(const std::string_view type)
+{
+    if (type == "m16") return kSoundM16;
+    if (type == "glock") return kSoundGlock;
+    if (type == "usp") return kSoundUsp;
+    if (type == "deagle") return kSoundDeagle;
+    if (type == "mp5") return kSoundMp5;
+    return kSoundAk47;
+}
 } // namespace audio
 
 /// Owns the entire client application: windowing, rendering, UI, networking and
@@ -78,12 +95,14 @@ public:
     VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
     VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
     spear::audio::AudioSystem audio_system;
-    std::unique_ptr<spear::audio::Sound> gunshot_audio;
+    std::array<std::unique_ptr<spear::audio::Sound>, 6> gunshot_audio;
+    spear::audio::Sound* gunshotSound(uint8_t sound);
     std::unique_ptr<spear::audio::Sound> hitmarker_audio;
     std::unique_ptr<spear::audio::Sound> reload_audio;
     std::unique_ptr<spear::audio::Sound> planting_audio;
     std::unique_ptr<spear::audio::Sound> bomb_beep_audio;
     std::unique_ptr<spear::audio::Sound> explosion_audio;
+    std::unique_ptr<spear::audio::Sound> smoke_audio;
     std::unique_ptr<spear::audio::Sound> walk_audio;
     /// Short positional "step" clip for sounds other players make when
     /// walking. A single footfall cut from walk.mp3, played at world
@@ -154,6 +173,7 @@ public:
     std::shared_ptr<spear::rendering::vulkan::STBTexture> wallnut_texture;
     std::shared_ptr<spear::rendering::vulkan::STBTexture> niilo_texture;
     std::shared_ptr<spear::rendering::vulkan::STBTexture> crosshair_texture;
+    std::shared_ptr<spear::rendering::vulkan::STBTexture> smoke_texture;
     glm::vec3 default_size{1.0f};
 
     // --- Remote entities (network sync) --------------------------------------

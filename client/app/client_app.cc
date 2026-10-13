@@ -1,4 +1,5 @@
 #include <client/app/client_app.hh>
+#include <shared/ammunition.hh>
 
 #include <client/chat/chat_text.hh>
 #include <client/gamemode/bomb_mode.hh>
@@ -76,6 +77,11 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
             renderer.getCommandPool(), renderer.getGraphicsQueue());
     unsigned char whitePixel[4] = {255, 255, 255, 255};
     crosshair_texture->loadFromRGBA(whitePixel, 1, 1);
+    smoke_texture = std::make_shared<vk::STBTexture>(
+            renderer.getDevice(), renderer.getPhysicalDevice(),
+            renderer.getCommandPool(), renderer.getGraphicsQueue());
+    unsigned char smokePixel[4] = {137, 146, 150, 255};
+    smoke_texture->loadFromRGBA(smokePixel, 1, 1);
 
     // --- Scenes ---
     setupScenes();
@@ -83,9 +89,14 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
 
     // --- Audio ---
     audio_system.init();
-    gunshot_audio = std::make_unique<spear::audio::Sound>(
-            audio_system, nx3d::projectAssetPath("sounds/gunshot.wav"));
-    gunshot_audio->setSpatialRange(1200.0f, 2500.0f);
+    constexpr std::array<const char*, 6> shots = {
+            "ak47", "m16", "glock", "usp", "deagle", "mp5"};
+    for (std::size_t i = 0; i < shots.size(); ++i)
+    {
+        gunshot_audio[i] = std::make_unique<spear::audio::Sound>(
+                audio_system, nx3d::projectAssetPath(std::string("sounds/") + shots[i] + ".wav"));
+        gunshot_audio[i]->setSpatialRange(1200.0f, 2500.0f);
+    }
     hitmarker_audio = std::make_unique<spear::audio::Sound>(
             audio_system, nx3d::projectAssetPath("sounds/hitmarker.wav"));
     reload_audio = std::make_unique<spear::audio::Sound>(
@@ -97,6 +108,8 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
     bomb_beep_audio->setSpatialRange(900.0f, 2500.0f);
     explosion_audio = std::make_unique<spear::audio::Sound>(
             audio_system, nx3d::projectAssetPath("sounds/explosion.wav"));
+    smoke_audio = std::make_unique<spear::audio::Sound>(
+            audio_system, nx3d::projectAssetPath("sounds/smoke.wav"));
     walk_audio = std::make_unique<spear::audio::Sound>(
             audio_system, nx3d::projectAssetPath("sounds/walk.mp3"));
     step_audio = std::make_unique<spear::audio::Sound>(
@@ -325,8 +338,8 @@ void ClientApp::changeVolume(float delta)
 
 void ClientApp::applyAudioVolume()
 {
-    if (gunshot_audio)
-        gunshot_audio->setVolume(0.8f * std::sqrt(audioVolume));
+    for (auto& sound : gunshot_audio)
+        if (sound) sound->setVolume(0.8f * std::sqrt(audioVolume));
     if (hitmarker_audio)
         hitmarker_audio->setVolume(audioVolume);
     if (reload_audio)
@@ -337,10 +350,19 @@ void ClientApp::applyAudioVolume()
         bomb_beep_audio->setVolume(0.6f * std::sqrt(audioVolume));
     if (explosion_audio)
         explosion_audio->setVolume(std::min(1.0f, 2.5f * std::sqrt(audioVolume)));
+    if (smoke_audio)
+        smoke_audio->setVolume(0.65f * audioVolume);
     if (walk_audio)
         walk_audio->setVolume(audioVolume);
     if (step_audio)
         step_audio->setVolume(audioVolume);
+}
+
+spear::audio::Sound* ClientApp::gunshotSound(uint8_t sound)
+{
+    if (sound == audio::kSoundShoot) sound = audio::kSoundAk47;
+    if (sound < audio::kSoundAk47 || sound > audio::kSoundMp5) return nullptr;
+    return gunshot_audio[sound - audio::kSoundAk47].get();
 }
 
 void ClientApp::setVolumeNormalized(float normalized)
@@ -1319,11 +1341,12 @@ void ClientApp::syncRemoteGameItems()
 
     for (auto& item : game_items)
     {
-        if (item.status == "on_ground" && gamemode::hasWeaponProfile(item.item_type))
+        const std::string weaponType(nx3d::ammunition::pickupWeaponType(item.item_type));
+        if (item.status == "on_ground" && gamemode::hasWeaponProfile(weaponType))
         {
             if (remote_game_items.find(item.id) == remote_game_items.end())
             {
-                const auto& profile = gamemode::getWeaponProfile(item.item_type);
+                const auto& profile = gamemode::getWeaponProfile(weaponType);
                 auto obj = std::make_shared<vk::OBJModel>(
                         renderer.getDevice(), renderer.getPhysicalDevice(),
                         renderer.getCommandPool(), renderer.getGraphicsQueue(),

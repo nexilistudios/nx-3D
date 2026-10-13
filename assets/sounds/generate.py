@@ -1,7 +1,7 @@
 """Generate the original nx-3D gameplay sound effects.
 
 Run from any directory: python3 assets/sounds/generate.py
-Only the four generated WAV files next to this script are written.
+Writes five utility clips and six distinct weapon shots next to this script.
 """
 
 from __future__ import annotations
@@ -110,8 +110,77 @@ def reload() -> list[float]:
     return result
 
 
+def gunshot(seed: int, duration: float, body_pitch: float, crack: float,
+            thump: float, tail: float, slide: float, slide_delay: float) -> list[float]:
+    """Make a punchy report from muzzle noise, a short bass body, and action clack.
+
+    The noise carries the shot; the low sweep adds a little game-style weight
+    without turning the report into a pitched electronic sound.
+    """
+    rng = random.Random(seed)
+    result = []
+    fast_noise = 0.0
+    mid_noise = 0.0
+    low_noise = 0.0
+    for index in range(int(duration * RATE)):
+        t = index / RATE
+        noise = rng.uniform(-1.0, 1.0)
+        fast_noise += 0.38 * (noise - fast_noise)
+        mid_noise += 0.075 * (noise - mid_noise)
+        low_noise += 0.012 * (noise - low_noise)
+
+        # High-frequency muzzle snap, then the broader pressure wave.
+        muzzle = crack * (noise - mid_noise) * math.exp(-t * 105.0)
+        pressure = (fast_noise - low_noise) * (0.65 + 0.35 * thump) * math.exp(-t * 32.0)
+        bass = thump * math.sin(2.0 * math.pi *
+                                (body_pitch * t - body_pitch * 1.6 * t * t)) * math.exp(-t * 46.0)
+        decay = tail * mid_noise * math.exp(-t * 12.0)
+
+        # The delayed bolt/slide is especially audible on the pistols.
+        action = 0.0
+        if t >= slide_delay:
+            action_time = t - slide_delay
+            action = slide * (0.7 * (noise - fast_noise) +
+                              0.3 * math.sin(2.0 * math.pi * 1600.0 * action_time)) * \
+                     math.exp(-action_time * 110.0)
+
+        # Mild saturation gives the impact some arcade weight without clipping.
+        result.append(math.tanh(1.4 * (muzzle + pressure + 0.36 * bass +
+                                       1.5 * decay + action)))
+    return result
+
+
+def smoke() -> list[float]:
+    """A soft canister pop followed by a pressurized hiss."""
+    rng = random.Random(407)
+    filtered = 0.0
+    result = []
+    for index in range(int(1.6 * RATE)):
+        t = index / RATE
+        noise = rng.uniform(-1.0, 1.0)
+        filtered += 0.11 * (noise - filtered)
+        pop = 0.9 * noise * math.exp(-t * 95.0)
+        hiss = ((1.0 - math.exp(-t * 30.0)) * math.exp(-t * 1.65) *
+                (0.33 * noise + 0.9 * filtered))
+        result.append(pop + hiss)
+    return result
+
+
 if __name__ == "__main__":
     save("planting.wav", planting())
     save("bomb_beep.wav", bomb_beep())
     save("explosion.wav", explosion())
     save("reload.wav", reload())
+    save("smoke.wav", smoke())
+    for name, settings in {
+        # Rifle reports are longer and deeper; the M16 has a brighter snap.
+        "ak47": (401, 0.36, 112.0, 1.05, 1.10, 1.15, 0.24, 0.060),
+        "m16": (402, 0.29, 145.0, 1.20, 0.78, 0.75, 0.22, 0.050),
+        # Pistols end quickly, with a distinct slide cycling behind the crack.
+        "glock": (403, 0.21, 185.0, 0.95, 0.48, 0.42, 0.44, 0.038),
+        "usp": (404, 0.20, 165.0, 0.90, 0.55, 0.48, 0.50, 0.044),
+        "deagle": (405, 0.43, 82.0, 1.25, 1.45, 1.35, 0.42, 0.070),
+        # The MP5 has the shortest, tightest report for rapid fire.
+        "mp5": (406, 0.17, 175.0, 0.78, 0.42, 0.38, 0.30, 0.033),
+    }.items():
+        save(f"{name}.wav", gunshot(*settings))

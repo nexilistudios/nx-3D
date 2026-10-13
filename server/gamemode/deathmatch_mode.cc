@@ -26,8 +26,9 @@ void DeathmatchMode::onTeamSelected(nexilis::server::Room& room, uint64_t player
 
 bool DeathmatchMode::onAction(nexilis::server::Room& room, uint64_t playerId, uint8_t action)
 {
-    if (action == nx3d::economy::kThrowGrenadeAction)
-        return m_economy.throwGrenade(room, playerId, room.getPlayerHealth(playerId) > 0.0f);
+    if (action == nx3d::economy::kThrowGrenadeAction || action == nx3d::economy::kThrowSmokeAction)
+        return m_economy.throwGrenade(room, playerId, room.getPlayerHealth(playerId) > 0.0f,
+                                      action == nx3d::economy::kThrowSmokeAction);
     if (action == nx3d::economy::kDropPrimaryAction ||
         action == nx3d::economy::kDropSecondaryAction)
         return m_economy.dropWeapon(room, playerId, action);

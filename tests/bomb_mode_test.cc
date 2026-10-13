@@ -1,4 +1,5 @@
 #include <server/gamemode/game_mode_registry.hh>
+#include <shared/economy.hh>
 
 #include <nexilis/client/client_api.hh>
 #include <nexilis/command_type.hh>
@@ -90,6 +91,19 @@ int main()
     auto* tUser = server::ClientStorage::getClientById(10);
     tUser->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
     check(!room->onPlayerAction(10, 16), "Terrorist bought a defuse kit");
+    check(room->onPlayerAction(10, 20), "Terrorist could not buy smoke");
+    check(room->onPlayerAction(10, nx3d::economy::kThrowSmokeAction),
+          "Smoke throw was rejected");
+    nx3d::economy::GrenadeThrow smoke;
+    check(nx3d::economy::decodeGrenade(t.getChatSnapshot(777).back().message, smoke) &&
+                  smoke.smoke && smoke.owner == 10,
+          "Smoke event was not broadcast with its type");
+    check(!room->onPlayerAction(10, nx3d::economy::kThrowSmokeAction),
+          "Smoke could be thrown after inventory ran out");
+    ctUser->getObject3D().setPosition(Vector3f{smoke.endX, 192.0f, smoke.endZ});
+    GameModeRegistry::update(2.1f);
+    check(room->getPlayerHealth(20) == 100.0f, "Smoke damaged a player");
+    ctUser->getObject3D().setPosition(Vector3f{0.0f, 0.0f, 0.0f});
     tUser->getObject3D().setPosition(Vector3f{0.0f, 0.0f, 0.0f});
 
     add(30, queued, "Terrorist");

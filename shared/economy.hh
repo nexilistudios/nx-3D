@@ -34,7 +34,7 @@ struct Item
     const char* team; // Empty means both teams.
 };
 
-inline constexpr std::array<Item, 10> kItems{{
+inline constexpr std::array<Item, 11> kItems{{
         {10, "Glock", "glock", 400, ItemKind::weapon, "Terrorist"},
         {11, "USP", "usp", 500, ItemKind::weapon, "Counter Terrorist"},
         {12, "Desert Eagle", "deagle", 700, ItemKind::weapon, ""},
@@ -45,12 +45,16 @@ inline constexpr std::array<Item, 10> kItems{{
         {17, "Ammo refill", "", 250, ItemKind::ammo, ""},
         {18, "Health refill", "", 350, ItemKind::health, ""},
         {19, "HE grenade", "", 300, ItemKind::grenade, ""},
+        {20, "Smoke grenade", "", 300, ItemKind::grenade, ""},
 }};
 inline constexpr uint8_t kThrowGrenadeAction = 30;
 inline constexpr uint8_t kDropPrimaryAction = 31;
 inline constexpr uint8_t kDropSecondaryAction = 32;
+inline constexpr uint8_t kThrowSmokeAction = 33;
 inline constexpr int kMaxGrenades = 2;
+inline constexpr int kMaxSmokes = 2;
 inline constexpr float kGrenadeFuseSeconds = 2.0f;
+inline constexpr float kSmokeDurationSeconds = 12.0f;
 inline constexpr float kGrenadeThrowDistance = 180.0f;
 inline constexpr float kGrenadeBlastRadius = 170.0f;
 inline constexpr float kGrenadeMaxDamage = 90.0f;
@@ -116,6 +120,7 @@ struct Snapshot
     std::string primary;
     std::string secondary;
     int grenades = 0;
+    int smokes = 0;
 };
 
 inline constexpr std::string_view kMessagePrefix = "\x1eNX3D_ECONOMY ";
@@ -126,6 +131,7 @@ struct GrenadeThrow
     uint64_t owner = 0;
     float x = 0.0f, y = 0.0f, z = 0.0f;
     float endX = 0.0f, endZ = 0.0f;
+    bool smoke = false;
 };
 
 inline std::string encodeGrenade(const GrenadeThrow& throwEvent)
@@ -133,7 +139,7 @@ inline std::string encodeGrenade(const GrenadeThrow& throwEvent)
     return std::string(kGrenadeMessagePrefix) + std::to_string(throwEvent.owner) + " " +
            std::to_string(throwEvent.x) + " " + std::to_string(throwEvent.y) + " " +
            std::to_string(throwEvent.z) + " " + std::to_string(throwEvent.endX) + " " +
-           std::to_string(throwEvent.endZ);
+           std::to_string(throwEvent.endZ) + " " + (throwEvent.smoke ? "1" : "0");
 }
 
 inline bool decodeGrenade(std::string_view message, GrenadeThrow& throwEvent)
@@ -142,10 +148,13 @@ inline bool decodeGrenade(std::string_view message, GrenadeThrow& throwEvent)
         return false;
     std::istringstream input{std::string(message.substr(kGrenadeMessagePrefix.size()))};
     GrenadeThrow next;
-    if (!(input >> next.owner >> next.x >> next.y >> next.z >> next.endX >> next.endZ) ||
+    int smoke = 0;
+    if (!(input >> next.owner >> next.x >> next.y >> next.z >> next.endX >> next.endZ >> smoke) ||
+        (smoke != 0 && smoke != 1) ||
         next.owner == 0 || !std::isfinite(next.x) || !std::isfinite(next.y) ||
         !std::isfinite(next.z) || !std::isfinite(next.endX) || !std::isfinite(next.endZ))
         return false;
+    next.smoke = smoke != 0;
     throwEvent = next;
     return true;
 }
@@ -156,7 +165,7 @@ inline std::string encode(const Snapshot& state)
            state.weapon + " " + (state.hasDefuseKit ? "1" : "0") + " " +
            state.effect + " " + (state.primary.empty() ? "-" : state.primary) + " " +
            (state.secondary.empty() ? "-" : state.secondary) + " " +
-           std::to_string(state.grenades) + " " + state.notice;
+           std::to_string(state.grenades) + " " + std::to_string(state.smokes) + " " + state.notice;
 }
 
 inline bool decode(std::string_view message, Snapshot& state)
@@ -167,9 +176,10 @@ inline bool decode(std::string_view message, Snapshot& state)
     Snapshot next;
     int kit = 0;
     if (!(input >> next.money >> next.weapon >> kit >> next.effect >>
-          next.primary >> next.secondary >> next.grenades) ||
+          next.primary >> next.secondary >> next.grenades >> next.smokes) ||
         next.money < 0 || next.money > kMaximumMoney || (kit != 0 && kit != 1) ||
-        next.grenades < 0 || next.grenades > kMaxGrenades)
+        next.grenades < 0 || next.grenades > kMaxGrenades ||
+        next.smokes < 0 || next.smokes > kMaxSmokes)
         return false;
     if (next.primary == "-") next.primary.clear();
     if (next.secondary == "-") next.secondary.clear();

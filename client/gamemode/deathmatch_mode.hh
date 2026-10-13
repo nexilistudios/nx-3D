@@ -59,7 +59,7 @@ protected:
     void refreshWeaponHud(ClientApp& app);
     void equipSlot(ClientApp& app, int slot, bool force = false);
     void throwGrenade(ClientApp& app);
-    void showGrenade(ClientApp& app, glm::vec3 start, glm::vec3 end);
+    void showGrenade(ClientApp& app, glm::vec3 start, glm::vec3 end, bool smoke);
     void installOverlay(ClientApp& app);
     float fireIntervalSeconds() const;
     glm::vec3 pickSpawnPoint();
@@ -85,6 +85,7 @@ protected:
     {
         std::string type;
         int ammo = -1;
+        int reserve = -1;
         uint64_t itemId = 0;
         glm::vec3 itemSize{1.0f};
     };
@@ -92,15 +93,19 @@ protected:
     GunSlot m_secondary;
     int m_activeSlot = 2;
     int m_grenades = 0;
+    int m_smokes = 0;
     struct GrenadeVisual
     {
         std::shared_ptr<spear::rendering::vulkan::TexturedCube> model;
         glm::vec3 start;
         glm::vec3 end;
         float age = 0.0f;
+        bool smoke = false;
+        std::vector<std::shared_ptr<spear::rendering::vulkan::TexturedCube>> puffs;
     };
     std::vector<GrenadeVisual> m_grenadeVisuals;
     int m_ammo = 0;
+    int m_reserveAmmo = 0;
     int m_magazineSize = 0;
     float m_reloadRemaining = 0.0f;
     glm::vec3 m_prevCamPos{0.0f};

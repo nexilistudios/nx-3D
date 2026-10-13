@@ -122,9 +122,10 @@ bool BombMode::onAction(nexilis::server::Room& room, uint64_t playerId, uint8_t 
     if (nx3d::economy::itemForAction(action))
         return m_economy.buy(room, playerId, action,
                              m_phase == Phase::live && m_alive.contains(playerId));
-    if (action == nx3d::economy::kThrowGrenadeAction)
+    if (action == nx3d::economy::kThrowGrenadeAction || action == nx3d::economy::kThrowSmokeAction)
         return m_economy.throwGrenade(room, playerId,
-                                     m_phase == Phase::live && m_alive.contains(playerId));
+                                     m_phase == Phase::live && m_alive.contains(playerId),
+                                     action == nx3d::economy::kThrowSmokeAction);
     if (action == nx3d::economy::kDropPrimaryAction ||
         action == nx3d::economy::kDropSecondaryAction)
         return m_economy.dropWeapon(room, playerId, action);

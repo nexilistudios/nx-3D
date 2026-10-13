@@ -1,5 +1,6 @@
 #include <server/gamemode/game_mode_registry.hh>
 #include <shared/fall_death.hh>
+#include <shared/economy.hh>
 
 #include <nexilis/client/packet.hh>
 #include <nexilis/command_type.hh>

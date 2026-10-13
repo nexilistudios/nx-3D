@@ -29,6 +29,7 @@ struct WeaponProfile
     /// Fully-automatic fire rate in rounds per minute (LMB held down).
     float rounds_per_minute = 600.0f;
     int magazine_size = 30;
+    int reserve_magazines = 3;
     float reload_seconds = 2.5f;
     float damage = 35.0f;
     bool automatic = true;
@@ -142,9 +143,18 @@ inline const WeaponProfile& getWeaponProfile(const std::string& type)
             .fp_offset = glm::vec3(0.7f, -0.7f, 1.8f),
             .magazine_size = 0, .automatic = false,
     };
+    static const WeaponProfile kSmoke = {
+            .name = "Smoke Grenade", .type = "smoke",
+            .obj_path = nx3d::projectAssetPath("weapons/grenade.obj"),
+            .mtl_path = nx3d::projectAssetPath("weapons/grenade.mtl"),
+            .fp_scale = 0.75f,
+            .fp_offset = glm::vec3(0.7f, -0.7f, 1.8f),
+            .magazine_size = 0, .automatic = false,
+    };
 
     if (type == "knife") return kKnife;
     if (type == "grenade") return kGrenade;
+    if (type == "smoke") return kSmoke;
     if (type == "glock") return kGlock;
     if (type == "usp") return kUsp;
     if (type == "deagle") return kDeagle;
