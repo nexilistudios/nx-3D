@@ -279,19 +279,20 @@ jobs:
     if: inputs.update_flake_lock
     runs-on: ubuntu-24.04
     steps:
+      # The flake fetches nexilis and spear itself, so no submodule checkout.
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-          submodules: recursive
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.RELEASE_READ_TOKEN || github.token }}
+      # nexilis and spear stay pinned to the submodule commits.
       - name: Update flake inputs (nixpkgs)
-        run: nix flake update
+        run: nix flake update nixpkgs
       # The refreshed lock is only released if everything still builds with it.
-      - name: Build all packages with the updated lock
-        run: nix build --print-build-logs .#nexilis .#server .#client
+      - name: Build and test all packages with the updated lock
+        run: nix flake check --print-build-logs
       - name: Check flake
         run: nix flake check --no-build --all-systems
       - uses: actions/upload-artifact@v4
@@ -341,23 +342,11 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
-
-          current = Path('VERSION.txt').read_text().strip()
-          version = os.environ['RELEASE_VERSION']
-          flake_path = Path('flake.nix')
-          flake = flake_path.read_text()
-          old = f'version = "{current}";'
-          if flake.count(old) != 3:
-              raise SystemExit(f'Expected three flake.nix version fields matching {current}')
-          flake_path.write_text(flake.replace(old, f'version = "{version}";'))
-          Path('VERSION.txt').write_text(version + '\n')
-          PY
+          # The Nix packages read their version from this file too.
+          printf '%s\n' "$RELEASE_VERSION" > VERSION.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add VERSION.txt flake.nix
+          git add VERSION.txt
           # Present only when the nix job refreshed and verified the lock.
           if [[ "${{ needs.nix.result }}" == 'success' ]]; then
             git add flake.lock

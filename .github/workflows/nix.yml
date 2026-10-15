@@ -3,7 +3,20 @@ name: Nix
 on:
   push:
     branches: [main]
-    paths: ['flake.nix', 'flake.lock', 'server/**', 'client/**', 'cmake/**', 'nexilis', 'spear', '.github/workflows/nix.yml']
+    paths:
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'nix/**'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'server/**'
+      - 'client/**'
+      - 'shared/**'
+      - 'tests/**'
+      - 'assets/**'
+      - 'nexilis'
+      - 'spear'
+      - '.github/workflows/nix.yml'
   workflow_dispatch:
 
 permissions:
@@ -14,26 +27,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        package: [nexilis, server, client]
-    steps:
-      # The flake builds from the spear/nexilis submodules (self.submodules).
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: cachix/install-nix-action@v31
-      - run: nix build --print-build-logs .#${{ matrix.package }}
-
   check:
     runs-on: ubuntu-24.04
     steps:
+      # The flake fetches nexilis and spear itself, so no submodule checkout.
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - name: Check that the flake pins the submodule commits
+        run: |
+          status=0
+          for input in nexilis spear; do
+            submodule="$(git rev-parse "HEAD:$input")"
+            locked="$(jq -r ".nodes.$input.locked.rev" flake.lock)"
+            if [ "$submodule" != "$locked" ]; then
+              echo "::error file=flake.nix::flake.lock pins $input to $locked, but the submodule is at $submodule. Set that rev in the $input URL in flake.nix and run 'nix flake lock'."
+              status=1
+            fi
+          done
+          exit "$status"
       - uses: cachix/install-nix-action@v31
+      # Builds the server (running its tests), the client and the NixOS VM test.
+      - run: nix flake check --print-build-logs
       - run: nix flake check --no-build --all-systems
       - run: nix develop --command true

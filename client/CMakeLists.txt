@@ -44,14 +44,20 @@ file(GLOB_RECURSE NX3D_CLIENT_SOURCES CONFIGURE_DEPENDS
 list(FILTER NX3D_CLIENT_SOURCES EXCLUDE REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/build/")
 
 add_executable(nx_3D_client ${NX3D_CLIENT_SOURCES})
+# Packages that install the assets elsewhere point the binary at them here.
+set(NX3D_DATA_DIR "" CACHE STRING "Runtime directory containing assets/ and spear/ (default: the source tree)")
 if(NX3D_PORTABLE_CLIENT)
-  set(PROJECT_ROOT ".")
-  # The bundled client runs from its archive directory; Spear assets live in spear/.
+  # The bundled client runs from its archive directory.
+  set(NX3D_DATA_DIR ".")
+endif()
+if(NX3D_DATA_DIR)
+  set(PROJECT_ROOT "${NX3D_DATA_DIR}")
+  # Spear assets live in spear/ next to the game assets.
   foreach(_property COMPILE_DEFINITIONS INTERFACE_COMPILE_DEFINITIONS)
     get_target_property(_definitions spear ${_property})
     if(_definitions)
       list(FILTER _definitions EXCLUDE REGEX "^SPEAR_ROOT=")
-      list(APPEND _definitions "SPEAR_ROOT=\"./spear\"")
+      list(APPEND _definitions "SPEAR_ROOT=\"${NX3D_DATA_DIR}/spear\"")
       set_target_properties(spear PROPERTIES ${_property} "${_definitions}")
     endif()
   endforeach()

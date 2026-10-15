@@ -3,290 +3,82 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    self.submodules = true;
+
+    # The same commits as the nexilis and spear submodules (CI checks this).
+    # GitHub archives carry no submodules, so the flake fetches them itself.
+    # After bumping a submodule, update its rev here and run `nix flake lock`.
+    nexilis = {
+      url = "github:Nexilislib/nexilis/a555c16072d312e1dc1c7db49b4529fad0910949";
+      flake = false;
+    };
+    spear = {
+      url = "github:NeuronActivation/spear/9f387ec07d3b78b4092f8e7efbfc6befe9edb83f";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs }:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      nexilis,
+      spear,
+    }:
     let
-      systems = [ "x86_64-linux" "aarch64-linux" ];
-      forAllSystems = f: nixpkgs.lib.genAttrs systems f;
-      spear = self.outPath + "/spear";
-      nexilis = self.outPath + "/nexilis";
-
-      # The game server. Waits for a keypress on stdin to stop, which is fine
-      # when run interactively but makes systemd services exit immediately, so
-      # the NixOS module feeds it a never-ending stream of input.
-      mkServer = pkgs: nexilisPkg: pkgs.stdenv.mkDerivation {
-        pname = "nx-3d-server";
-        version = "0.1.2";
-
-        src = self.outPath;
-
-        nativeBuildInputs = [ pkgs.cmake ];
-        buildInputs = [ nexilisPkg pkgs.boost pkgs.openssl pkgs.bullet pkgs.glm ];
-        cmakeFlags = [ "-DNX3D_USE_SYSTEM_NEXILIS=ON" ];
-
-        preConfigure = ''
-          # Work on a writable copy so hardcoded paths can be patched.
-          cp -a "$src" "$PWD/repo"
-          chmod -R u+w "$PWD/repo"
-          export NX3D_REPO_ROOT="$PWD/repo"
-
-          # The upstream skeleton expects nexilis to be pre-built at
-          # ../nexilis/nexilis/build; in Nix it is a store path instead.
-          sed -i "s|set(CMAKE_PREFIX_PATH \".*\")|set(CMAKE_PREFIX_PATH \"${nexilisPkg}\")|" \
-            repo/server/CMakeLists.txt
-
-          cd "$PWD/repo/server"
-        '';
-
-        # By the install phase the cmake module has cd'd into the build dir.
-        installPhase = ''
-          runHook preInstall
-          mkdir -p "$out/bin"
-          cp "$PWD/nx-3D-server" "$out/bin/"
-          runHook postInstall
-        '';
-
-        meta.mainProgram = "nx-3D-server";
-      };
-
-      # The game client. Compiles the spear engine as a CMake subdirectory,
-      # exactly like a manual build would, but with the source coming from the
-      # the Spear submodule included in this flake's source.
-      mkClient = pkgs: nexilisPkg: pkgs.stdenv.mkDerivation {
-        pname = "nx-3d-client";
-        version = "0.1.2";
-
-        src = self.outPath;
-
-        nativeBuildInputs = [ pkgs.cmake pkgs.pkg-config ];
-        cmakeFlags = [ "-DNX3D_USE_SYSTEM_NEXILIS=ON" ];
-        buildInputs = [
-          nexilisPkg
-          pkgs.boost
-          pkgs.openssl
-          pkgs.sdl3
-          pkgs.sdl3-image
-          pkgs.sdl3-ttf
-          pkgs.sdl3-mixer
-          pkgs.glew
-          pkgs.libGL
-          pkgs.libGLU
-          pkgs.vulkan-loader
-          pkgs.vulkan-headers
-          pkgs.bullet
-          pkgs.glm
-          pkgs.glslang
-          pkgs.spirv-tools
-          pkgs.shaderc
-          pkgs.stb
-          pkgs.vulkan-validation-layers
-        ];
-
-        preConfigure = ''
-          cp -a "$src" "$PWD/repo"
-          chmod -R u+w "$PWD/repo"
-          export NX3D_REPO_ROOT="$PWD/repo"
-
-          sed -i "s|set(CMAKE_PREFIX_PATH \".*\")|set(CMAKE_PREFIX_PATH \"${nexilisPkg}\")|" \
-            repo/client/CMakeLists.txt
-
-          # Point the CMake subdirectory at the Spear submodule in the source.
-          sed -i "s|add_subdirectory(../spear/engine spear_engine)|add_subdirectory(${spear}/engine spear_engine)|" \
-            repo/client/CMakeLists.txt
-
-          # Assets are installed to $out/share/nx-3D (PROJECT_ROOT is used to
-          # resolve the assets/ directory at runtime).
-          sed -i "s|set(PROJECT_ROOT \".*\")|set(PROJECT_ROOT \"$out/share/nx-3D\")|" \
-            repo/client/CMakeLists.txt
-
-cd "$PWD/repo/client"
-          '';
-
-        # By the install phase the cmake module has cd'd into the build dir.
-        installPhase = ''
-          runHook preInstall
-          mkdir -p "$out/bin" "$out/share/nx-3D"
-          cp "$PWD/nx_3D_client" "$out/bin/"
-          cp -a "$NX3D_REPO_ROOT/assets" "$out/share/nx-3D/assets"
-          runHook postInstall
-        '';
-
-        meta.mainProgram = "nx_3D_client";
-      };
+      forAllSystems =
+        f:
+        nixpkgs.lib.genAttrs [
+          "x86_64-linux"
+          "aarch64-linux"
+        ] (system: f nixpkgs.legacyPackages.${system});
     in
     {
-      packages = forAllSystems (system:
+      packages = forAllSystems (
+        pkgs:
         let
-          pkgs = nixpkgs.legacyPackages.${system};
-
-          nexilisPkg = pkgs.stdenv.mkDerivation {
-            pname = "nexilis";
-            version = "0.1.2";
-
-            src = nexilis;
-
-            nativeBuildInputs = [ pkgs.cmake ];
-            buildInputs = [ pkgs.boost pkgs.openssl ];
-
-            preConfigure = ''
-              cp -a "$src" "$PWD/nexilis-src"
-              chmod -R u+w "$PWD/nexilis-src"
-              cd "$PWD/nexilis-src"
-
-              # The CMake project lives in a nested "nexilis" directory
-              # (client/server reference ../nexilis/nexilis/build).
-              if [ -d nexilis ]; then
-                cd nexilis
-              fi
-
-              export NEXILIS_SOURCE_ROOT="$PWD"
-            '';
-
-            # nexilis's CMakeLists installs libraries and the CMake package
-            # config but never copies the headers, so do that here (the
-            # exported Nexilis::nexilis target expects them at $out/include).
-            # By the install phase the cmake module has cd'd into the build
-            # dir, so `make install` resolves the right project.
-            installPhase = ''
-              runHook preInstall
-              make install
-              mkdir -p "$out/include"
-              cp -a "$NEXILIS_SOURCE_ROOT/include/." "$out/include/"
-
-              # `make install` ships libboost_json but not the vendored Boost
-              # libraries it links against (e.g. libboost_container).
-              for lib in $(find . -name 'libboost_*.so*'); do
-                [ -e "$out/lib/$(basename "$lib")" ] || cp -a "$lib" "$out/lib/"
-              done
-
-              # The installed package config records absolute paths of the
-              # vendored Boost headers inside the (temporary) build tree. Ship
-              # those headers in $out/include and point the config there.
-              for inc in "$NEXILIS_SOURCE_ROOT"/third-party/boost/libs/*/include; do
-                [ -d "$inc" ] && cp -a --no-preserve=mode "$inc/." "$out/include/"
-              done
-              sed -i "s|^set(NEXILIS_BOOST_INCLUDE_DIRS .*|set(NEXILIS_BOOST_INCLUDE_DIRS \"$out/include\")|" \
-                "$out"/lib*/cmake/Nexilis/NexilisConfig.cmake
-              runHook postInstall
-            '';
-          };
-        in
-        {
-          nexilis = nexilisPkg;
-          server = mkServer pkgs nexilisPkg;
-          client = mkClient pkgs nexilisPkg;
-          default = mkClient pkgs nexilisPkg;
-        });
-
-      apps = forAllSystems (system:
-        let
-          pkgs = nixpkgs.legacyPackages.${system};
-          server = self.packages.${system}.server;
-          client = self.packages.${system}.client;
-        in
-        {
-          server = { type = "app"; program = "${server}/bin/nx-3D-server"; };
-          # The client is fully RPATH-linked, so a host-wide LD_LIBRARY_PATH
-          # only risks mixing in libraries built against another glibc.
-          client = {
-            type = "app";
-            program = "${pkgs.writeShellScript "nx-3D-client" ''
-              unset LD_LIBRARY_PATH
-              exec ${client}/bin/nx_3D_client "$@"
-            ''}";
-          };
-          # `nix run` with no attribute launches the client.
-          default = self.apps.${system}.client;
-        });
-
-      devShells = forAllSystems (system:
-        let
-          pkgs = nixpkgs.legacyPackages.${system};
-          server = self.packages.${system}.server;
-          client = self.packages.${system}.client;
-        in
-        {
-          default = pkgs.mkShell {
-            name = "nx-3D-dev";
-
-            # Everything both components need to build (and debug) in place.
-            inputsFrom = [ server client ];
-            packages = [ pkgs.git pkgs.gdb pkgs.cmake pkgs.ninja ];
-
-            shellHook = ''
-              # A host-wide LD_LIBRARY_PATH (e.g. from NixOS audio/GPU setups)
-              # can leak libraries built against a different glibc into the
-              # link step ("undefined reference to sqrtf@GLIBC_2.43").
-              unset LD_LIBRARY_PATH
-              echo "nx-3D development shell"
-              echo "  build server: cmake -S server -B server/build && cmake --build server/build"
-              echo "  build client: cmake -S client -B client/build && cmake --build client/build"
-              # The engine enables VK_LAYER_KHRONOS_validation unconditionally,
-              # so make the validation layer visible to the Vulkan loader.
-              export VK_LAYER_PATH="${pkgs.vulkan-validation-layers}/share/vulkan/explicit_layer.d"
-            '';
-          };
-        });
-
-      nixosModules.default = { config, lib, pkgs, ... }:
-        let
-          packages = self.packages.${pkgs.system};
-        in
-        {
-          options.services.nx3dServer = {
-            enable = lib.mkEnableOption "the headless nx-3D dedicated game server";
-
-            package = lib.mkOption {
-              type = lib.types.package;
-              default = packages.server;
-              description = "The nx-3D server package to run as a service.";
+          build =
+            component:
+            pkgs.callPackage ./nix/package.nix {
+              nexilis-src = nexilis;
+              spear-src = spear;
+              inherit component;
             };
-          };
+        in
+        rec {
+          server = build "server";
+          client = build "client";
+          # `nix run` launches the client.
+          default = client;
+        }
+      );
 
-          options.programs.nx3dClient = {
-            enable = lib.mkEnableOption "the nx-3D game client";
+      checks = forAllSystems (pkgs: {
+        inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) server client;
+        nixos-module = pkgs.testers.runNixOSTest (import ./nix/test.nix self);
+      });
 
-            package = lib.mkOption {
-              type = lib.types.package;
-              default = packages.client;
-              description = "The nx-3D client package to install.";
-            };
-          };
-
-          config = lib.mkMerge [
-            (lib.mkIf config.services.nx3dServer.enable {
-              systemd.services.nx3dServer = {
-                description = "nx-3D dedicated game server";
-                wantedBy = [ "multi-user.target" ];
-                after = [ "network.target" ];
-
-                serviceConfig = {
-                  Type = "simple";
-                  # The server only stops when it reads input on stdin, so feed
-                  # it a stream that never ends (otherwise it exits on EOF).
-                  ExecStart = "${pkgs.bash}/bin/bash -c 'tail -f /dev/null | ${config.services.nx3dServer.package}/bin/nx-3D-server'";
-                  DynamicUser = true;
-                  Restart = "on-failure";
-                  RestartSec = 3;
-                  ProtectSystem = "strict";
-                  ProtectHome = true;
-                  NoNewPrivileges = true;
-                };
-              };
-            })
-
-            (lib.mkIf config.programs.nx3dClient.enable {
-              environment.systemPackages = [
-                config.programs.nx3dClient.package
-                pkgs.vulkan-loader
-                pkgs.mesa
-                pkgs.sdl3
-                pkgs.sdl3-mixer
-              ];
-            })
+      devShells = forAllSystems (pkgs: {
+        default = pkgs.mkShell {
+          name = "nx-3D-dev";
+          inputsFrom = [ self.packages.${pkgs.stdenv.hostPlatform.system}.client ];
+          packages = [
+            pkgs.clang-tools
+            pkgs.gdb
           ];
+
+          shellHook = ''
+            # A host-wide LD_LIBRARY_PATH (e.g. from NixOS audio/GPU setups)
+            # can leak libraries built against a different glibc into the
+            # link step ("undefined reference to sqrtf@GLIBC_2.43").
+            unset LD_LIBRARY_PATH
+            # Spear enables VK_LAYER_KHRONOS_validation when the loader finds it.
+            export VK_LAYER_PATH="${pkgs.vulkan-validation-layers}/share/vulkan/explicit_layer.d"
+          '';
         };
+      });
+
+      formatter = forAllSystems (pkgs: pkgs.nixfmt-tree);
+
+      nixosModules.default = import ./nix/module.nix self;
     };
 }

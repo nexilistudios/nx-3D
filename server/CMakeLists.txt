@@ -23,7 +23,14 @@ list(FILTER NX3D_SERVER_SOURCES EXCLUDE REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/buil
 
 add_executable(nx-3D-server ${NX3D_SERVER_SOURCES})
 target_include_directories(nx-3D-server PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
-target_compile_definitions(nx-3D-server PRIVATE PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/..")
+# Packages that install the assets elsewhere point the binary at them here.
+set(NX3D_DATA_DIR "" CACHE STRING "Runtime directory containing assets/ (default: the source tree)")
+if(NX3D_DATA_DIR)
+    set(PROJECT_ROOT "${NX3D_DATA_DIR}")
+else()
+    set(PROJECT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/..")
+endif()
+target_compile_definitions(nx-3D-server PRIVATE PROJECT_ROOT="${PROJECT_ROOT}")
 find_package(Bullet REQUIRED)
 find_package(glm REQUIRED)
 target_include_directories(nx-3D-server PRIVATE ${BULLET_INCLUDE_DIRS})

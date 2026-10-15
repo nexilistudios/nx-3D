@@ -39,7 +39,7 @@ The **Tests** GitHub Actions workflow runs the full suite on pushes and pull req
 
 The default build compiles Nexilis from the checked-out submodule in the same build as its consumers. Rebuild after updating submodules: newer Nexilis headers with an older `libnexilis.so` can corrupt the client event queues and crash on damage/death messages. Restart all running clients and servers after rebuilding.
 
-Standalone `cmake -S client -B client/build` and `cmake -S server -B server/build` builds also compile their own matching Nexilis library. For a server-only root build, pass `-DNX3D_BUILD_CLIENT=OFF`; disable regression tests with `-DBUILD_TESTING=OFF` if GLM is unavailable. Packagers can opt into an external package with `-DNX3D_USE_SYSTEM_NEXILIS=ON -DNexilis_DIR=/path/to/package`, provided its headers and library match. The Nix packages use this explicit external-package mode.
+Standalone `cmake -S client -B client/build` and `cmake -S server -B server/build` builds also compile their own matching Nexilis library. For a server-only root build, pass `-DNX3D_BUILD_CLIENT=OFF`; disable regression tests with `-DBUILD_TESTING=OFF` if GLM is unavailable. Packagers can opt into an external package with `-DNX3D_USE_SYSTEM_NEXILIS=ON -DNexilis_DIR=/path/to/package`, provided its headers and library match. Installed builds pass `-DNX3D_DATA_DIR=/path/to/data` to compile in the directory holding `assets/` instead of the source tree; for the client it also holds `spear/` with Spear's `assets/` and `shaders/`. The Nix packages do this and build Nexilis in-tree.
 
 Run the server first, then the client in another terminal:
 
@@ -80,7 +80,29 @@ Use `docker compose logs -f server` to view its output and `docker compose down`
 
 The client initially asks for a server address and username. Enter an IPv4 address or domain name (for example, `game.example.com`); the default is `127.0.0.1`. You can also start it with `-server <address> -username <name>` to connect immediately. Select a room with the arrow keys and Enter, then click a team to join.
 
-The flake also exposes packaged programs through `nix run .#server` and `nix run .#client`.
+### Nix
+
+The flake packages both programs. `nix run` starts the client and `.#server` the dedicated server, with or without a checkout:
+
+```sh
+nix run github:nexilistudios/nx-3D -- -server 127.0.0.1 -username player
+nix run github:nexilistudios/nx-3D#server -- --tcp-port 55200 --tcp-session-port 55202 --udp-port 55201
+```
+
+From a checkout, use `nix run` and `nix run .#server`. The packages build Nexilis and Spear in-tree like the CMake build above, but against the nixpkgs Boost, and install the assets under `share/nx-3D`. The client needs a Vulkan driver the Nix-built loader can find, such as NixOS with `hardware.graphics.enable`. `nix flake check` builds both packages, runs the game tests, and boots a NixOS VM with the server module.
+
+GitHub source archives omit submodules, so the flake fetches Nexilis and Spear itself at the commits in its `inputs`. Keep them equal to the submodule commits: after bumping a submodule, put the same revision in the `nexilis` or `spear` URL in `flake.nix` and run `nix flake lock`. The **Nix** workflow fails when they differ. Uncommitted changes in the submodule checkouts do not reach the Nix packages; build those with CMake in `nix develop`.
+
+On NixOS, import the module to run the server as a service. It accepts `tcpPort`, `tcpSessionPort`, and `udpPort`; `openFirewall` opens all three. `programs.nx3dClient.enable = true;` installs the client.
+
+```nix
+# Host flake inputs: nx-3D.url = "github:nexilistudios/nx-3D";
+imports = [ inputs.nx-3D.nixosModules.default ];
+services.nx3dServer = {
+  enable = true;
+  openFirewall = true;
+};
+```
 
 ## Controls
 
@@ -137,7 +159,7 @@ Players start with $800 and can hold up to $16000. Each credited kill earns $300
 
 Commit and push the default branch, then run **Game release** from the GitHub Actions tab or use `gh workflow run release.yml`. Leave the version input blank to increment the patch version from `VERSION.txt`, or enter a newer version such as `0.2.0`. Watch the run with `gh run list --workflow release.yml`.
 
-After all builds succeed, the workflow updates `VERSION.txt` and the package versions in `flake.nix`, tags the release, and publishes five GitHub release assets: Linux and Windows archives for both server and client, plus a source archive. The source archive contains this repository's tracked files and submodule references; clone the tagged repository with submodules to build from source. Linux clients run `run.sh` from the extracted archive; Windows clients run `run.bat`. The release workflow has no schedule.
+After all builds succeed, the workflow updates `VERSION.txt` (the Nix packages read their version from it), tags the release, and publishes five GitHub release assets: Linux and Windows archives for both server and client, plus a source archive. The source archive contains this repository's tracked files and submodule references; clone the tagged repository with submodules to build from source. Linux clients run `run.sh` from the extracted archive; Windows clients run `run.bat`. The release workflow has no schedule.
 
 ## Verification and release status
 
@@ -159,4 +181,4 @@ Before a public release, exercise multiplayer sessions on real Vulkan hardware, 
 | `tests/`, `cmake/`                | Gameplay regression checks and shared dependency build configuration |
 | `spear/`, `nexilis/`              | Engine and networking submodules                                     |
 
-The server creates one bomb room and one deathmatch room. The client uses Nexilis for room and player synchronization, while `spear` supplies Vulkan rendering, physics, input, and audio. Client assets are resolved relative to the repository root compiled into `PROJECT_ROOT` by CMake.
+The server creates one bomb room and one deathmatch room. The client uses Nexilis for room and player synchronization, while `spear` supplies Vulkan rendering, physics, input, and audio. Client assets are resolved relative to the repository root compiled into `PROJECT_ROOT` by CMake, or to `NX3D_DATA_DIR` when that is set.
