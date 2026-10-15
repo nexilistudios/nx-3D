@@ -30,6 +30,8 @@ public:
     void update(nexilis::server::Room& room, float dt);
     DroppedWeapon dropWeapon(uint64_t playerId, uint8_t slot, const std::string& type);
     void pickupWeapon(uint64_t playerId, uint8_t slot, const DroppedWeapon& weapon);
+    bool equipWeapon(nexilis::server::Room& room, uint64_t playerId,
+                     const std::string& weapon);
     void refill(uint64_t playerId);
     std::optional<nexilis::server::Room::ShotHit> fire(
             nexilis::server::Room& room, uint64_t shooterId,
@@ -55,6 +57,9 @@ private:
         bool grounded = false;
         bool jumpHeld = false;
         bool crouched = false;
+        std::string animation = "idle";
+        std::string activeWeapon;
+        std::chrono::steady_clock::time_point lastAnimationBroadcast{};
         WeaponState primary;
         WeaponState secondary;
         WeaponState knife;

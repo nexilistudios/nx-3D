@@ -45,6 +45,8 @@ public:
     void changeTeam(ClientApp& app, const std::string& team) override;
     void onEconomySnapshot(ClientApp& app, const nx3d::economy::Snapshot& state) override;
     void onGrenadeThrown(ClientApp& app, const nx3d::economy::GrenadeThrow& event) override;
+    void onAuthoritativeAnimation(ClientApp& app, const std::string& state,
+                                  const std::string& weapon, float duration) override;
 
 protected:
     void equipGun(ClientApp& app, const std::string& weaponName,

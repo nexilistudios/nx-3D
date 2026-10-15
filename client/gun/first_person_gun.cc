@@ -7,6 +7,16 @@
 namespace nx3d::client::gun
 {
 
+namespace
+{
+std::string partPath(const std::string& path, const char* part)
+{
+    const auto extension = path.rfind(".obj");
+    return extension == std::string::npos ? path :
+           path.substr(0, extension) + "_" + part + ".obj";
+}
+}
+
 // ---------------------------------------------------------------------------
 // Constructor
 // ---------------------------------------------------------------------------
@@ -21,13 +31,21 @@ FirstPersonGun::FirstPersonGun(VkDevice device,
                                VkDescriptorSetLayout descriptorSetLayout,
                                spear::physics::bullet::ObjectData&& object_data,
                                float model_scale,
-                               glm::vec3 model_center)
+                               glm::vec3 model_center,
+                               bool separated_magazine)
     : OBJModel(device, physDevice, commandPool, graphicsQueue,
-               object_path, material_path, descriptorPool, descriptorSetLayout,
+               separated_magazine ? partPath(object_path, "body") : object_path,
+               material_path, descriptorPool, descriptorSetLayout,
                std::move(object_data), /* flip_winding = */ false),
       m_modelScale(model_scale),
       m_modelCenter(model_center)
 {
+    if (separated_magazine)
+        m_magazine = std::make_unique<OBJModel>(
+                device, physDevice, commandPool, graphicsQueue,
+                partPath(object_path, "magazine"), material_path,
+                descriptorPool, descriptorSetLayout,
+                spear::physics::bullet::ObjectData({}, 0.0f, {}, {1.0f, 1.0f, 1.0f}));
 }
 
 // ---------------------------------------------------------------------------
@@ -69,6 +87,14 @@ void FirstPersonGun::render(spear::Camera& camera)
     spear::Camera viewCamera(glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f),
                              -90.0f, 0.0f, 0.0f, 0.0f, fov);
     OBJModel::render(viewCamera);
+    if (m_magazine)
+    {
+        glm::mat4 magazineModel = model;
+        magazineModel = glm::translate(magazineModel,
+                                       glm::vec3(0.0f, -0.75f * m_motion.magazineOffset(), 0.0f));
+        m_magazine->setModel(magazineModel);
+        m_magazine->render(viewCamera);
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -70,6 +70,8 @@ class Figure:
         self.palette = palette
         self.vertices: list[tuple[float, float, float]] = []
         self.faces: list[tuple[int, int, int, str]] = []
+        self.face_parts: list[str] = []
+        self.part = "torso"
         self.used_colors: dict[str, tuple[int, int, int]] = {}
 
     def color(self, material: str, shade: str = "base") -> str:
@@ -84,6 +86,7 @@ class Figure:
         start = len(self.vertices) + 1
         self.vertices.extend((a, b, c))
         self.faces.append((start, start + 1, start + 2, color))
+        self.face_parts.append(self.part)
 
     def quad(self, a: tuple[float, float, float], b: tuple[float, float, float],
              c: tuple[float, float, float], d: tuple[float, float, float], color: str) -> None:
@@ -173,6 +176,7 @@ class Figure:
         self.box("belt", 0, -28.5, -0.1, 17.5, 2.7, 10.5)
         self.box("detail", 0, -28.4, -5.5, 3.5, 2.7, 0.9)
         for side in (-1, 1):
+            self.part = "left_leg" if side < 0 else "right_leg"
             hip = (side * 4.9, -33, 0)
             knee = (side * 5.5, -43, -0.7)
             ankle = (side * 5.8, -58, 0.2)
@@ -181,12 +185,14 @@ class Figure:
             self.box("armor" if not terrorist else "belt", side * 5.5, -43,
                      -3.1, 6.5, 4.8, 1.3)
             self.box("boots", side * 5.8, -60.0, -2.1, 7.1, 8.0, 12.0)
+            self.part = "left_arm" if side < 0 else "right_arm"
             shoulder = (side * 11.4, -12.4, 0)
             elbow = (side * 14.3, -22.2, -0.8)
             wrist = (side * 14.6, -31.1, -3.3)
             self.limb("uniform", shoulder, elbow, 4.0, 3.2)
             self.limb("skin" if terrorist else "uniform", elbow, wrist, 3.1, 2.3)
             self.box("gloves", wrist[0], -32.5, wrist[2], 4.8, 5.2, 5.0)
+        self.part = "torso"
         self.limb("skin", (0, -10, 0), (0, -5, 0), 2.8, 2.5)
         self.ellipsoid("skin", (0, 0.5, -0.2), (5.1, 7.0, 4.8))
 
@@ -225,19 +231,33 @@ class Figure:
         width = 1 << math.ceil(math.log2(len(colors) * 16))
         texture_coords = {key: ((index * 16 + 8) / width, 0.5)
                           for index, key in enumerate(keys)}
-        lines = [
-            "# Original low-poly nx-3D player model; regenerate with generate.py",
-            f"mtllib {self.name}.mtl",
-            f"o {self.name}",
-        ]
-        lines.extend(f"v {x:.4f} {y:.4f} {z:.4f}" for x, y, z in self.vertices)
-        lines.extend(f"vt {u:.6f} {v:.6f}" for u, v in texture_coords.values())
-        lines.append("usemtl atlas")
         uv_index = {key: index + 1 for index, key in enumerate(keys)}
-        for a, b, c, color in self.faces:
-            uv = uv_index[color]
-            lines.append(f"f {a}/{uv} {b}/{uv} {c}/{uv}")
-        (DESTINATION / f"{self.name}.obj").write_text("\n".join(lines) + "\n")
+
+        def write_obj(path: Path, selected: list[tuple[int, int, int, str]]) -> None:
+            vertices: list[tuple[float, float, float]] = []
+            faces: list[tuple[int, int, int, str]] = []
+            for a, b, c, color in selected:
+                start = len(vertices) + 1
+                vertices.extend((self.vertices[a - 1], self.vertices[b - 1], self.vertices[c - 1]))
+                faces.append((start, start + 1, start + 2, color))
+            lines = [
+                "# Original low-poly nx-3D player model; regenerate with generate.py",
+                f"mtllib {self.name}.mtl",
+                f"o {path.stem}",
+            ]
+            lines.extend(f"v {x:.4f} {y:.4f} {z:.4f}" for x, y, z in vertices)
+            lines.extend(f"vt {u:.6f} {v:.6f}" for u, v in texture_coords.values())
+            lines.append("usemtl atlas")
+            for a, b, c, color in faces:
+                uv = uv_index[color]
+                lines.append(f"f {a}/{uv} {b}/{uv} {c}/{uv}")
+            path.write_text("\n".join(lines) + "\n")
+
+        write_obj(DESTINATION / f"{self.name}.obj", self.faces)
+        for part in ("torso", "left_arm", "right_arm", "left_leg", "right_leg"):
+            selected = [face for face, face_part in zip(self.faces, self.face_parts)
+                        if face_part == part]
+            write_obj(DESTINATION / f"{self.name}_{part}.obj", selected)
         (DESTINATION / f"{self.name}.mtl").write_text(
             f"newmtl atlas\nKd 1 1 1\nmap_Kd {self.name}.png\n"
         )

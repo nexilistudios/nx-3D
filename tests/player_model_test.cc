@@ -58,8 +58,28 @@ int main()
 {
     try
     {
-        require(validate("counter_terrorist") != validate("terrorist"),
+        const auto counterTerroristFaces = validate("counter_terrorist");
+        const auto terroristFaces = validate("terrorist");
+        require(counterTerroristFaces != terroristFaces,
                 "T and CT meshes should have distinct equipment");
+        const std::filesystem::path directory =
+                std::filesystem::path(PROJECT_ROOT) / "assets" / "players";
+        for (const std::string name : {"counter_terrorist", "terrorist"})
+        {
+            size_t partFaces = 0;
+            for (const char* part : {"torso", "left_arm", "right_arm", "left_leg", "right_leg"})
+            {
+                spear::OBJLoader partLoader;
+                require(partLoader.load((directory / (name + "_" + part + ".obj")).string(),
+                                        (directory / (name + ".mtl")).string(), false),
+                        "Animated player part did not load");
+                require(!partLoader.getFaces().empty(), "Animated player part is empty");
+                partFaces += partLoader.getFaces().size();
+            }
+            require(partFaces == (name == "counter_terrorist" ? counterTerroristFaces
+                                                           : terroristFaces),
+                    "Animated player parts do not cover the full mesh");
+        }
     }
     catch (const std::exception& error)
     {

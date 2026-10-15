@@ -53,6 +53,11 @@ public:
     {
     }
 
+    virtual void onAuthoritativeAnimation(ClientApp&, const std::string&,
+                                          const std::string&, float)
+    {
+    }
+
     /// Called every frame while the app is in the Game state.
     virtual void update(ClientApp& app, float delta_time) = 0;
 

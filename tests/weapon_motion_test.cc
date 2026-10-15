@@ -42,15 +42,19 @@ int main()
             require(glm::length(motion.bob) < 0.000001f, "Weapon fails to settle at rest");
 
             motion.startReload(2.0f);
+            require(motion.magazineOffset() == 0.0f,
+                    "Magazine starts detached");
             for (int frame = 0; frame < fps; ++frame)
                 motion.update(1.0f / fps, {}, true);
             require(motion.reload_offset.y < -0.23f && motion.reload_tilt < -17.0f,
                     "Reload pose does not lower and tilt the gun");
+            require(motion.magazineOffset() > 0.99f,
+                    "Reload does not pull the magazine out");
             for (int frame = 0; frame < fps; ++frame)
                 motion.update(1.0f / fps, {}, true);
             require(motion.reload_duration == 0.0f &&
                             glm::length(motion.reload_offset) == 0.0f &&
-                            motion.reload_tilt == 0.0f,
+                            motion.reload_tilt == 0.0f && motion.magazineOffset() == 0.0f,
                     "Reload animation does not settle when reloading finishes");
         }
         WeaponMotion motion;

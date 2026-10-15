@@ -51,6 +51,13 @@ inline constexpr uint8_t kThrowGrenadeAction = 30;
 inline constexpr uint8_t kDropPrimaryAction = 31;
 inline constexpr uint8_t kDropSecondaryAction = 32;
 inline constexpr uint8_t kThrowSmokeAction = 33;
+// Client requests a visible slot change; the server resolves the weapon from
+// its inventory before broadcasting it to other players.
+inline constexpr uint8_t kEquipPrimaryAction = 40;
+inline constexpr uint8_t kEquipSecondaryAction = 41;
+inline constexpr uint8_t kEquipKnifeAction = 42;
+inline constexpr uint8_t kEquipGrenadeAction = 43;
+inline constexpr uint8_t kEquipSmokeAction = 44;
 inline constexpr int kMaxGrenades = 2;
 inline constexpr int kMaxSmokes = 2;
 inline constexpr float kGrenadeFuseSeconds = 2.0f;

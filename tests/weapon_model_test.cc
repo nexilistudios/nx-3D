@@ -50,6 +50,23 @@ size_t validate(const std::string& name, size_t minFaces, size_t minVertices,
     }
     return faces.size();
 }
+
+void validateReloadParts(const std::string& name)
+{
+    const auto directory = std::filesystem::path(PROJECT_ROOT) / "assets" / "weapons";
+    const auto material = (directory / (name + ".mtl")).string();
+    spear::OBJLoader complete, body, magazine;
+    require(complete.load((directory / (name + ".obj")).string(), material, false),
+            "Complete gun OBJ did not load");
+    require(body.load((directory / (name + "_body.obj")).string(), material, false),
+            "Gun body OBJ did not load");
+    require(magazine.load((directory / (name + "_magazine.obj")).string(), material, false),
+            "Magazine OBJ did not load");
+    require(!body.getFaces().empty() && !magazine.getFaces().empty() &&
+                    body.getFaces().size() + magazine.getFaces().size() ==
+                            complete.getFaces().size(),
+            "Gun body and magazine do not reconstruct the complete gun");
+}
 } // namespace
 
 int main()
@@ -62,6 +79,8 @@ int main()
         for (const auto& pistol : {"glock", "usp", "deagle"})
             validate(pistol, 60, 100, 3, -0.35f, 0.7f);
         validate("mp5", 120, 200, 3, -1.0f, 1.5f);
+        for (const auto& gun : {"ak47", "m16", "glock", "usp", "deagle", "mp5"})
+            validateReloadParts(gun);
         validate("knife", 20, 16, 2, -0.8f, 0.7f);
         validate("grenade", 20, 16, 2, -0.15f, 0.15f);
     }

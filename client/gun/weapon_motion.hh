@@ -11,6 +11,16 @@
 namespace nx3d::client::gun
 {
 
+// The magazine exits, pauses briefly, then seats before the weapon settles.
+inline float magazineTravel(float progress)
+{
+    if (progress < 0.18f)
+        return std::clamp(progress / 0.18f, 0.0f, 1.0f);
+    if (progress < 0.58f)
+        return 1.0f;
+    return std::clamp((0.84f - progress) / 0.26f, 0.0f, 1.0f);
+}
+
 // Presentation state only: update once per simulation frame, never per draw.
 struct WeaponMotion
 {
@@ -21,6 +31,12 @@ struct WeaponMotion
     float reload_duration = 0.0f;
     glm::vec3 reload_offset{0.0f};
     float reload_tilt = 0.0f;
+
+    float magazineOffset() const
+    {
+        return reload_duration > 0.0f
+                       ? magazineTravel(reload_elapsed / reload_duration) : 0.0f;
+    }
 
     void update(float dt, const glm::vec3& velocity, bool grounded)
     {

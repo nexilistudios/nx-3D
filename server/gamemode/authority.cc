@@ -336,6 +336,17 @@ void publishStance(nexilis::server::Room& room, nexilis::server::User& user, boo
             {{"action", "dimensions"}, {"room_id", room.getId()}, {"client_id", user.getId()}, {"x", 36.0f}, {"y", height}, {"z", 18.0f}}));
 }
 
+void publishAnimation(nexilis::server::Room& room, nexilis::server::User& user,
+                      const std::string& state, float duration = 0.0f,
+                      const std::string& weapon = {})
+{
+    room.broadcastToAll(nexilis::server::Command::clientMessageData(
+            nexilis::CommandType::room, "player_3D", 0,
+            {{"action", "animation"}, {"room_id", room.getId()},
+             {"client_id", user.getId()}, {"state", state.c_str()},
+             {"weapon", weapon.c_str()}, {"duration", duration}}));
+}
+
 struct WeaponRule
 {
     float damage;
@@ -388,10 +399,13 @@ void Authority::spawn(nexilis::server::Room& room, uint64_t playerId)
         auto& state = m_players[playerId];
         state = PlayerState{};
         state.lastInput = std::chrono::steady_clock::now();
+        state.activeWeapon = nx3d::economy::defaultWeapon(team);
     }
     user->getObject3D().setPosition({point.x, point.y, point.z});
     publishStance(room, *user, false);
     publishPosition(room, *user);
+    publishAnimation(room, *user, "idle", 0.0f,
+                     std::string(nx3d::economy::defaultWeapon(team)));
 }
 
 bool Authority::move(nexilis::server::Room& room, uint64_t playerId,
@@ -440,6 +454,9 @@ void Authority::update(nexilis::server::Room& room, float dt)
             continue;
         bool stanceChanged = false;
         bool crouched = false;
+        bool animationChanged = false;
+        std::string animation;
+        std::string activeWeapon;
         {
             std::lock_guard lock(m_mutex);
             auto it = m_players.find(playerId);
@@ -455,11 +472,24 @@ void Authority::update(nexilis::server::Room& room, float dt)
             const bool crouch = (flags & nx3d::kMoveCrouch) != 0;
             const bool silentWalk = (flags & nx3d::kMoveSilentWalk) != 0;
             auto position = asGlm(user->getObject3D().getPosition());
+            const glm::vec2 previousHorizontal(position.x, position.z);
             const bool wasCrouched = state.crouched;
             mapPhysics().advance(position, direction, jump, crouch, silentWalk, state.crouched,
                                  state.jumpHeld, state.grounded, state.verticalVelocity, dt);
             stanceChanged = state.crouched != wasCrouched;
             crouched = state.crouched;
+            const bool moving = glm::distance(previousHorizontal,
+                                              glm::vec2(position.x, position.z)) > 0.01f;
+            animation = state.crouched ? "crouching" : !moving ? "idle"
+                        : silentWalk ? "sneaking" : "running";
+            animationChanged = animation != state.animation ||
+                               now - state.lastAnimationBroadcast >= std::chrono::milliseconds(500);
+            if (animationChanged)
+            {
+                state.animation = animation;
+                state.lastAnimationBroadcast = now;
+            }
+            activeWeapon = state.activeWeapon;
             position.x = std::clamp(position.x, -nx3d::kMaxHorizontalPosition,
                                     nx3d::kMaxHorizontalPosition);
             position.z = std::clamp(position.z, -nx3d::kMaxHorizontalPosition,
@@ -471,6 +501,8 @@ void Authority::update(nexilis::server::Room& room, float dt)
         }
         if (stanceChanged)
             publishStance(room, *user, crouched);
+        if (animationChanged)
+            publishAnimation(room, *user, animation, 0.0f, activeWeapon);
         publishPosition(room, *user);
     }
 }
@@ -504,6 +536,25 @@ void Authority::pickupWeapon(uint64_t playerId, uint8_t slot, const DroppedWeapo
     gun.reserve = weapon.reserve;
 }
 
+bool Authority::equipWeapon(nexilis::server::Room& room, uint64_t playerId,
+                            const std::string& weapon)
+{
+    auto* user = nexilis::server::ClientStorage::getClientById(playerId);
+    if (!user || user->getRoomId() != room.getId() ||
+        room.getPlayerHealth(playerId) <= 0.0f || room.getPlayerTeam(playerId).empty() ||
+        (!weaponRule(weapon) && weapon != "grenade" && weapon != "smoke"))
+        return false;
+    {
+        std::lock_guard lock(m_mutex);
+        auto it = m_players.find(playerId);
+        if (it == m_players.end())
+            return false;
+        it->second.activeWeapon = weapon;
+    }
+    publishAnimation(room, *user, "equipped", 0.0f, weapon);
+    return true;
+}
+
 void Authority::refill(uint64_t playerId)
 {
     std::lock_guard lock(m_mutex);
@@ -535,6 +586,7 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
     if (!rule)
         return std::nullopt;
     const auto now = std::chrono::steady_clock::now();
+    bool reloadStarted = false;
     {
         std::lock_guard lock(m_mutex);
         auto it = m_players.find(shooterId);
@@ -561,23 +613,38 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
         {
             if (gun.reloadEnd == std::chrono::steady_clock::time_point{} &&
                 gun.magazine < rule->magazine && gun.reserve > 0)
+            {
                 gun.reloadEnd = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
                                               std::chrono::duration<float>(rule->reloadSeconds));
-            return std::nullopt;
+                reloadStarted = true;
+                state.activeWeapon = weapon;
+            }
         }
-        const glm::vec3 aim = asGlm(direction);
-        const float aimLength = glm::length(aim);
-        if (!std::isfinite(aimLength) || aimLength < 0.5f || aimLength > 1.5f ||
-            gun.reloadEnd != std::chrono::steady_clock::time_point{} ||
-            (rule->magazine > 0 && gun.magazine <= 0))
-            return std::nullopt;
-        if (nexilis::server::GameplayLimits::get().getMaxShootingRate() > 0.0f &&
-            now - gun.lastShot < std::chrono::duration<float>(60.0f / rule->roundsPerMinute - 0.002f))
-            return std::nullopt;
-        gun.lastShot = now;
-        if (rule->magazine > 0)
-            --gun.magazine;
+        else
+        {
+            const glm::vec3 aim = asGlm(direction);
+            const float aimLength = glm::length(aim);
+            if (!std::isfinite(aimLength) || aimLength < 0.5f || aimLength > 1.5f ||
+                gun.reloadEnd != std::chrono::steady_clock::time_point{} ||
+                (rule->magazine > 0 && gun.magazine <= 0))
+                return std::nullopt;
+            if (nexilis::server::GameplayLimits::get().getMaxShootingRate() > 0.0f &&
+                now - gun.lastShot < std::chrono::duration<float>(60.0f / rule->roundsPerMinute - 0.002f))
+                return std::nullopt;
+            gun.lastShot = now;
+            state.activeWeapon = weapon;
+            if (rule->magazine > 0)
+                --gun.magazine;
+        }
     }
+
+    if (action == 1)
+    {
+        if (reloadStarted)
+            publishAnimation(room, *shooter, "reloading", rule->reloadSeconds, weapon);
+        return std::nullopt;
+    }
+    publishAnimation(room, *shooter, "shooting", 0.16f, weapon);
 
     const glm::vec3 origin = asGlm(shooter->getObject3D().getPosition());
     const glm::vec3 aim = glm::normalize(asGlm(direction));

@@ -541,7 +541,7 @@ void DeathmatchMode::equipGun(ClientApp& app,
             app.descriptorPool, app.descriptorSetLayout,
             blt::ObjectData(app.shared_world, 0.0f,
                             glm::vec3(0.0f, -1000.0f, 0.0f), app.default_size),
-            fpScale, fpCenter);
+            fpScale, fpCenter, hasWeaponProfile(m_pickedUpItemType));
     m_firstPersonGun->setViewOffset(fpOffset);
     m_firstPersonGun->setViewRotation(fpRotation);
     app.scene_manager.getCurrentScene()->addObject(m_firstPersonGun);
@@ -639,6 +639,9 @@ void DeathmatchMode::equipSlot(ClientApp& app, int slot, bool force)
     m_fireCooldown = 0.0f;
     m_pickedUpItemType = selected ? selected->type : slot == 3 ? "knife" :
                          slot == 4 ? "grenade" : "smoke";
+    if (app.ready && app.client_api.clientInRoom())
+        app.tcp_client.sendMessage(nexilis::client::Packet::Room::Player3D::matchAction(
+                app.client_api, static_cast<uint8_t>(nx3d::economy::kEquipPrimaryAction + slot - 1)));
     m_weaponPickedUp = slot <= 3;
     m_pickedUpItemId = selected ? selected->itemId : 0;
     m_pickedUpItemSize = selected ? selected->itemSize : glm::vec3(1.0f);
@@ -724,6 +727,20 @@ void DeathmatchMode::refreshWeaponHud(ClientApp& app)
                                     std::to_string(m_reserveAmmo) + suffix);
 }
 
+void DeathmatchMode::onAuthoritativeAnimation(ClientApp& app,
+                                               const std::string& state,
+                                               const std::string& weapon,
+                                               float duration)
+{
+    if (state != "reloading" || weapon != m_pickedUpItemType ||
+        m_activeSlot > 2 || m_health <= 0 || duration <= 0.0f)
+        return;
+    m_reloadRemaining = duration;
+    if (m_firstPersonGun)
+        m_firstPersonGun->startReload(duration);
+    refreshWeaponHud(app);
+}
+
 void DeathmatchMode::startReload(ClientApp& app)
 {
     if (m_reloadRemaining > 0.0f || m_ammo >= m_magazineSize || m_reserveAmmo <= 0)
@@ -735,8 +752,6 @@ void DeathmatchMode::startReload(ClientApp& app)
     if (app.ready && app.client_api.clientInRoom())
         app.tcp_client.sendMessage(nexilis::client::Packet::Room::Player3D::reload(
                 app.client_api, static_cast<uint8_t>(m_activeSlot)));
-    if (m_firstPersonGun)
-        m_firstPersonGun->startReload(m_reloadRemaining);
     refreshWeaponHud(app);
     if (app.reload_audio)
         app.reload_audio->play();

@@ -51,12 +51,15 @@ class Mesh:
     def __init__(self):
         self.vertices = []
         self.faces = []
+        self.parts = []
+        self.part = "body"
 
     def face(self, points, material):
         start = len(self.vertices) + 1
         self.vertices.extend(points)
         for index in range(1, len(points) - 1):
             self.faces.append((material, (start, start + index, start + index + 1)))
+            self.parts.append(self.part)
 
     def box(self, x0, x1, y0, y1, z0, z1, material):
         a = (x0, y0, z0)
@@ -94,15 +97,19 @@ class Mesh:
             self.face((near[i], near[j], far[j], far[i]), material)
 
     def write(self, name, directory):
-        obj = [f"# Original procedural low-poly {name} model", f"mtllib {name}.mtl"]
-        obj.extend(f"v {x:.5f} {y:.5f} {z:.5f}" for x, y, z in self.vertices)
-        material = None
-        for face_material, indices in self.faces:
-            if face_material != material:
-                material = face_material
-                obj.append(f"usemtl {material}")
-            obj.append("f " + " ".join(map(str, indices)))
-        (directory / f"{name}.obj").write_text("\n".join(obj) + "\n")
+        for part in (None, "body", "magazine"):
+            obj = [f"# Original procedural low-poly {name} model", f"mtllib {name}.mtl"]
+            obj.extend(f"v {x:.5f} {y:.5f} {z:.5f}" for x, y, z in self.vertices)
+            material = None
+            for (face_material, indices), face_part in zip(self.faces, self.parts):
+                if part is not None and face_part != part:
+                    continue
+                if face_material != material:
+                    material = face_material
+                    obj.append(f"usemtl {material}")
+                obj.append("f " + " ".join(map(str, indices)))
+            suffix = "" if part is None else f"_{part}"
+            (directory / f"{name}{suffix}.obj").write_text("\n".join(obj) + "\n")
         mtl = ["# Original material palette with 1-pixel diffuse swatches"]
         for material_name in sorted({face[0] for face in self.faces}):
             r, g, b = MATERIALS[material_name]
@@ -127,9 +134,11 @@ def ak47():
     gun.box(-.11, .11, -.34, -.12, -1.23, -1.15, "ak_shadow")
     gun.silhouette([(-.30, -.11), (-.48, -.12), (-.62, -.58),
                     (-.45, -.63), (-.24, -.30)], .071, "ak_polymer")
+    gun.part = "magazine"
     gun.silhouette([(-.02, -.11), (.15, -.13), (.20, -.43),
                     (.28, -.72), (.48, -.75), (.50, -.91),
                     (.26, -.88), (.03, -.58)], .087, "ak_metal")
+    gun.part = "body"
     gun.box(-.092, .092, -.54, -.52, .16, .31, "ak_edge")
     gun.silhouette([(.42, .13), (.48, .17), (1.12, .12),
                     (1.17, -.04), (.51, -.06)], .109, "ak_polymer")
@@ -157,8 +166,10 @@ def m16():
     gun.cylinder_z(-.78, -.36, .048, .025, "m16_metal", 10)
     gun.silhouette([(-.31, -.12), (-.46, -.14), (-.61, -.57),
                     (-.44, -.60), (-.22, -.28)], .071, "m16_polymer")
+    gun.part = "magazine"
     gun.silhouette([(.04, -.12), (.19, -.13), (.20, -.73),
                     (.36, -.74), (.34, -.12)], .078, "m16_metal")
+    gun.part = "body"
     gun.box(-.090, .090, -.75, -.70, .17, .37, "m16_shadow")
     gun.silhouette([(.39, .14), (.48, .15), (1.20, .085),
                     (1.20, -.10), (.46, -.10)], .093, "m16_polymer")
@@ -188,8 +199,10 @@ def pistol(name):
     front = .91 if heavy else .72
     gun.box(-width, width, -.08, .16, -.40, front, body)
     gun.box(-width * 1.06, width * 1.06, .09, .25, -.42, front, slide)
+    gun.part = "magazine"
     gun.box(-.078, .078, -.68, -.05, -.20, .12, body)
     gun.box(-.084, .084, -.70, -.64, -.23, .15, detail)
+    gun.part = "body"
     gun.box(-.025, .025, -.37, -.15, .22, .25, detail)
     gun.box(-.077, .077, -.11, -.06, .13, .40, detail)
     gun.cylinder_z(front - .05, front + .17, .042 if heavy else .035,
@@ -210,8 +223,10 @@ def mp5():
     gun.box(-.075, .075, -.20, -.13, -1.12, -.43, "mp5_metal")
     gun.box(-.14, .14, -.37, -.15, -1.19, -1.08, "mp5_body")
     gun.box(-.08, .08, -.63, -.12, -.28, .02, "mp5_body")
+    gun.part = "magazine"
     gun.box(-.06, .06, -.67, -.21, .24, .41, "mp5_detail")
     gun.box(-.10, .10, -.72, -.65, .22, .43, "mp5_metal")
+    gun.part = "body"
     gun.cylinder_z(.56, 1.56, .048, .025, "mp5_metal", 10)
     gun.cylinder_z(1.47, 1.67, .065, .025, "mp5_detail", 8)
     gun.box(-.085, .085, .14, .19, -.29, .34, "mp5_detail")

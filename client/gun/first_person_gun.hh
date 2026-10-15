@@ -29,7 +29,8 @@ public:
                    VkDescriptorSetLayout descriptorSetLayout,
                    spear::physics::bullet::ObjectData&& object_data,
                    float model_scale = 0.50f,
-                   glm::vec3 model_center = glm::vec3(0.0f, -0.05f, 0.20f));
+                   glm::vec3 model_center = glm::vec3(0.0f, -0.05f, 0.20f),
+                   bool separated_magazine = false);
 
     void render(spear::Camera& camera) override;
 
@@ -66,6 +67,7 @@ private:
 
     // Animation state
     WeaponMotion m_motion;
+    std::unique_ptr<spear::rendering::vulkan::OBJModel> m_magazine;
 };
 
 } // namespace nx3d::client::gun

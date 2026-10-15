@@ -119,6 +119,18 @@ int main()
         require(nx3d::economy::decode(shooter.getChatSnapshot(777).back().message, purchase) &&
                         purchase.money == 100 && purchase.weapon == "deagle",
                 "Weapon purchase did not update equipment and money");
+        require(sendAsShooter(client::Packet::Room::Player3D::matchAction(
+                        shooter, nx3d::economy::kEquipSecondaryAction)) ==
+                        server::CommandResult::success,
+                "Server rejected the owned equipped weapon");
+        {
+            const auto events = victim.consumeAnimationEvents();
+            require(std::any_of(events.begin(), events.end(),
+                                [](const auto& event)
+                                { return event.client_id == 10 && event.state == "equipped" &&
+                                         event.weapon == "deagle"; }),
+                    "Server did not broadcast the equipped weapon");
+        }
         shopper->getObject3D().setPosition(Vector3f{0.0f, 0.0f, 0.0f});
         require(!room->onPlayerAction(10, 13), "Remote purchase was accepted");
         const auto originalPosition = shopper->getObject3D().getPosition();
@@ -137,6 +149,27 @@ int main()
                         server::CommandResult::success,
                 "Unowned weapon request was not handled");
         require(room->getPlayerHealth(20) == 100.0f, "Unowned weapon dealt damage");
+        require(sendAsShooter(client::Packet::Room::Player3D::fire(
+                        shooter, Vector3f{0.0f, 1.0f, 0.0f}, 2)) ==
+                        server::CommandResult::success,
+                "Owned weapon shot was rejected");
+        require(sendAsShooter(client::Packet::Room::Player3D::reload(shooter, 2)) ==
+                        server::CommandResult::success,
+                "Reload request was rejected");
+        {
+            const auto events = victim.consumeAnimationEvents();
+            require(std::any_of(events.begin(), events.end(),
+                                [](const auto& event)
+                                { return event.client_id == 10 && event.state == "reloading" &&
+                                         event.weapon == "deagle" && event.duration > 2.0f; }),
+                    "Server did not broadcast the accepted reload animation");
+            const auto ownEvents = shooter.consumeAnimationEvents();
+            require(std::any_of(ownEvents.begin(), ownEvents.end(),
+                                [](const auto& event)
+                                { return event.client_id == 10 && event.state == "reloading" &&
+                                         event.weapon == "deagle"; }),
+                    "Server did not confirm reload to the shooter");
+        }
 
         // Client-supplied displacement and delta time are ignored in this room.
         require(sendAsShooter(client::Packet::Room::Player3D::movement(
@@ -198,12 +231,22 @@ int main()
         require(shopper->getObject3D().getPosition().x - standingPosition.x <=
                         nx3d::kSilentWalkSpeed * 0.05f + 0.1f,
                 "Silent walk exceeded its server speed limit");
+        auto animationEvents = victim.consumeAnimationEvents();
+        require(std::any_of(animationEvents.begin(), animationEvents.end(),
+                            [](const auto& event)
+                            { return event.client_id == 10 && event.state == "sneaking"; }),
+                "Server did not broadcast the sneaking animation");
         const auto beforeCrouch = shopper->getObject3D().getPosition();
         require(sendAsShooter(client::Packet::Room::Player3D::movement(
                         shooter, Vector3f{0.0f, static_cast<float>(nx3d::kMoveCrouch), 0.0f},
                         0.0f, 0.0f)) == server::CommandResult::success,
                 "Crouch input was rejected");
         Registry::update(0.05f);
+        animationEvents = victim.consumeAnimationEvents();
+        require(std::any_of(animationEvents.begin(), animationEvents.end(),
+                            [](const auto& event)
+                            { return event.client_id == 10 && event.state == "crouching"; }),
+                "Server did not broadcast the crouching animation");
         require(shopper->getObject3D().getDimensions().y == nx3d::kCrouchingEyeHeight &&
                         shopper->getObject3D().getPosition().y < beforeCrouch.y - 20.0f,
                 "Server did not lower the crouched player");
@@ -220,6 +263,16 @@ int main()
         Registry::update(0.05f);
         require(shopper->getObject3D().getDimensions().y == nx3d::kStandingEyeHeight,
                 "Server did not restore standing height");
+        require(sendAsShooter(client::Packet::Room::Player3D::movement(
+                        shooter, Vector3f{1.0f, 0.0f, 0.0f}, 0.0f, 0.0f)) ==
+                        server::CommandResult::success,
+                "Running input was rejected");
+        Registry::update(0.05f);
+        animationEvents = victim.consumeAnimationEvents();
+        require(std::any_of(animationEvents.begin(), animationEvents.end(),
+                            [](const auto& event)
+                            { return event.client_id == 10 && event.state == "running"; }),
+                "Server did not broadcast the running animation");
 
         for (uint64_t kill = 1; kill <= 100; ++kill)
         {
@@ -232,6 +285,15 @@ int main()
                                 shooter, Vector3f{0.0f, 0.0f, -1.0f}, 3)) ==
                                 server::CommandResult::success,
                         "Shot rejected");
+            }
+            if (kill == 1)
+            {
+                animationEvents = victim.consumeAnimationEvents();
+                require(std::any_of(animationEvents.begin(), animationEvents.end(),
+                                    [](const auto& event)
+                                    { return event.client_id == 10 && event.state == "shooting" &&
+                                             event.weapon == "knife"; }),
+                        "Server did not broadcast the shooting animation");
             }
             require(room->getPlayerHealth(20) == 0.0f, "Victim did not stay dead");
             require(victim.consumeRespawnEvents().empty(), "Victim respawned too early");

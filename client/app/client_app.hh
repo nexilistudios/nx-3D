@@ -187,7 +187,17 @@ public:
     glm::vec3 default_size{1.0f};
 
     // --- Remote entities (network sync) --------------------------------------
-    std::unordered_map<uint64_t, std::shared_ptr<spear::rendering::vulkan::OBJModel>> remote_players;
+    struct RemotePlayerVisual
+    {
+        // The complete model becomes the physics ragdoll on death. Living
+        // players render separate parts so their arms and legs can move.
+        std::shared_ptr<spear::rendering::vulkan::OBJModel> ragdoll;
+        std::array<std::shared_ptr<spear::rendering::vulkan::OBJModel>, 5> parts;
+        std::shared_ptr<spear::rendering::vulkan::OBJModel> weapon;
+        std::shared_ptr<spear::rendering::vulkan::OBJModel> magazine;
+        std::string weaponType;
+    };
+    std::unordered_map<uint64_t, RemotePlayerVisual> remote_players;
     std::unordered_map<uint64_t, std::string> remote_player_teams;
     struct RemotePlayerAnimation
     {
@@ -196,6 +206,12 @@ public:
         float stride = 0.0f;
         float speed = 0.0f;
         float hitTime = 0.0f;
+        std::string locomotion = "idle";
+        std::string weapon;
+        std::string action;
+        float actionRemaining = 0.0f;
+        float actionDuration = 0.0f;
+        bool authoritative = false;
         bool initialized = false;
     };
     struct DeathAnimation
@@ -261,6 +277,9 @@ public:
     void animatePlayerHit(uint64_t playerId);
     void animatePlayerDeath(uint64_t playerId);
     void animatePlayerRespawn(uint64_t playerId);
+    void retireRemotePlayerParts(RemotePlayerVisual& visual);
+    void setRemotePlayerWeapon(RemotePlayerVisual& visual, const std::string& weapon,
+                               const glm::vec3& position);
     void applyAudioVolume();
     void changeVolume(float delta);
     void pauseGame();

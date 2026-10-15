@@ -118,6 +118,14 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
     room.setActionHandler([modePtr, authorityPtr, pickupMutex](nexilis::server::Room& r,
                                                                uint64_t playerId, uint8_t action)
                           {
+        if (action >= nx3d::economy::kEquipPrimaryAction &&
+            action <= nx3d::economy::kEquipSmokeAction)
+        {
+            const uint8_t slot = action - nx3d::economy::kEquipPrimaryAction + 1;
+            const std::string weapon = slot == 4 ? "grenade" : slot == 5 ? "smoke"
+                                       : modePtr->weaponForSlot(playerId, slot);
+            return !weapon.empty() && authorityPtr->equipWeapon(r, playerId, weapon);
+        }
         const uint8_t slot = action == nx3d::economy::kDropPrimaryAction ? 1 :
                              action == nx3d::economy::kDropSecondaryAction ? 2 : 0;
         const auto weapon = slot ? modePtr->weaponForSlot(playerId, slot) : std::string{};

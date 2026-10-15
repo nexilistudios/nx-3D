@@ -5,6 +5,7 @@
 #include <client/gamemode/bomb_mode.hh>
 #include <client/gamemode/deathmatch_mode.hh>
 #include <client/gamemode/weapon_profiles.hh>
+#include <client/gun/weapon_motion.hh>
 #include <client/project_root.hh>
 
 #include <nexilis/client/create_client_config.hh>
@@ -38,6 +39,15 @@ namespace
 constexpr std::array<spear::BaseWindow::Size, 4> kResolutions{{
         {820, 640}, {1280, 720}, {1600, 900}, {1920, 1080}}};
 constexpr std::array<int, 6> kFpsCaps{{0, 30, 60, 120, 144, 240}};
+constexpr std::array<const char*, 5> kPlayerParts{{
+        "torso", "left_arm", "right_arm", "left_leg", "right_leg"}};
+
+glm::mat4 rotateLimb(const glm::mat4& root, const glm::vec3& pivot, float angle)
+{
+    auto pose = glm::translate(root, pivot);
+    pose = glm::rotate(pose, angle, glm::vec3(1.0f, 0.0f, 0.0f));
+    return glm::translate(pose, -pivot);
+}
 
 std::string settingsPath()
 {
@@ -1406,6 +1416,65 @@ void ClientApp::animatePlayerHit(uint64_t playerId)
         remote_player_animations[playerId].hitTime = 0.22f;
 }
 
+void ClientApp::retireRemotePlayerParts(RemotePlayerVisual& visual)
+{
+    if (visual.magazine)
+    {
+        scene_manager.getCurrentScene()->removeObject(visual.magazine->getId());
+        pendingDestroy[(frameCount - 1) % 3].push_back(std::move(visual.magazine));
+    }
+    if (visual.weapon)
+    {
+        scene_manager.getCurrentScene()->removeObject(visual.weapon->getId());
+        pendingDestroy[(frameCount - 1) % 3].push_back(std::move(visual.weapon));
+    }
+    for (auto& part : visual.parts)
+    {
+        if (!part)
+            continue;
+        scene_manager.getCurrentScene()->removeObject(part->getId());
+        pendingDestroy[(frameCount - 1) % 3].push_back(std::move(part));
+    }
+}
+
+void ClientApp::setRemotePlayerWeapon(RemotePlayerVisual& visual,
+                                       const std::string& weapon,
+                                       const glm::vec3& position)
+{
+    // Keep the last firearm on the player's back while a knife or grenade is
+    // selected, so the gun does not disappear between equipment changes.
+    if (!gamemode::hasWeaponProfile(weapon))
+        return;
+    if (visual.weaponType == weapon)
+        return;
+    if (visual.weapon)
+    {
+        scene_manager.getCurrentScene()->removeObject(visual.weapon->getId());
+        pendingDestroy[(frameCount - 1) % 3].push_back(std::move(visual.weapon));
+    }
+    if (visual.magazine)
+    {
+        scene_manager.getCurrentScene()->removeObject(visual.magazine->getId());
+        pendingDestroy[(frameCount - 1) % 3].push_back(std::move(visual.magazine));
+    }
+    visual.weaponType = weapon;
+    const auto& profile = gamemode::getWeaponProfile(weapon);
+    const std::string modelBase = nx3d::projectAssetPath("weapons/" + weapon);
+    visual.weapon = std::make_shared<vk::OBJModel>(
+            renderer.getDevice(), renderer.getPhysicalDevice(),
+            renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            modelBase + "_body.obj", profile.mtl_path, descriptorPool, descriptorSetLayout,
+            blt::ObjectData({}, 0.0f, position, default_size));
+    scene_manager.getCurrentScene()->addObject(visual.weapon);
+    visual.magazine = std::make_shared<vk::OBJModel>(
+            renderer.getDevice(), renderer.getPhysicalDevice(),
+            renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            modelBase + "_magazine.obj", profile.mtl_path,
+            descriptorPool, descriptorSetLayout,
+            blt::ObjectData({}, 0.0f, position, default_size));
+    scene_manager.getCurrentScene()->addObject(visual.magazine);
+}
+
 void ClientApp::animatePlayerDeath(uint64_t playerId)
 {
     if (!remote_dead_players.insert(playerId).second)
@@ -1416,10 +1485,13 @@ void ClientApp::animatePlayerDeath(uint64_t playerId)
         return;
 
     const auto& motion = remote_player_animations[playerId];
-    if (auto* body = it->second->getRigidBody())
+    auto& visual = it->second;
+    retireRemotePlayerParts(visual);
+    scene_manager.getCurrentScene()->addObject(visual.ragdoll);
+    if (auto* body = visual.ragdoll->getRigidBody())
     {
         shared_world->removeRigidBody(body);
-        it->second->setCollisionSize(btVector3(18.0f, 38.0f, 14.0f));
+        visual.ragdoll->setCollisionSize(btVector3(18.0f, 38.0f, 14.0f));
         btVector3 inertia(0.0f, 0.0f, 0.0f);
         body->getCollisionShape()->calculateLocalInertia(65.0f, inertia);
         body->setMassProps(65.0f, inertia);
@@ -1440,7 +1512,7 @@ void ClientApp::animatePlayerDeath(uint64_t playerId)
         body->setAngularVelocity(btVector3(3.2f, 0.8f, 1.0f));
         body->activate();
     }
-    death_animations.push_back({std::move(it->second), motion.position, motion.facing, 0.0f});
+    death_animations.push_back({std::move(visual.ragdoll), motion.position, motion.facing, 0.0f});
     remote_players.erase(it);
     remote_player_animations.erase(playerId);
 }
@@ -1455,6 +1527,39 @@ void ClientApp::syncRemotePlayerTransforms(float deltaTime)
 {
     const float dt = std::clamp(deltaTime, 0.0f, 0.05f);
     player_animation_clock += dt;
+
+    for (const auto& event : client_api.consumeAnimationEvents())
+    {
+        if (event.room_id != client_api.clientRoomId())
+            continue;
+        if (event.client_id == client_api.getClientId())
+        {
+            if (game_mode)
+                game_mode->onAuthoritativeAnimation(*this, event.state, event.weapon,
+                                                    event.duration);
+            continue;
+        }
+        auto& motion = remote_player_animations[event.client_id];
+        if (!event.weapon.empty())
+            motion.weapon = event.weapon;
+        if (event.state == "shooting" || event.state == "reloading")
+        {
+            motion.action = event.state;
+            motion.actionDuration = std::max(0.01f, event.duration);
+            motion.actionRemaining = motion.actionDuration;
+        }
+        else if (event.state == "equipped")
+        {
+            motion.action.clear();
+            motion.actionRemaining = 0.0f;
+        }
+        else if (event.state == "idle" || event.state == "running" ||
+                 event.state == "crouching" || event.state == "sneaking")
+        {
+            motion.locomotion = event.state;
+            motion.authoritative = true;
+        }
+    }
 
     for (auto it = death_animations.begin(); it != death_animations.end();)
     {
@@ -1509,16 +1614,20 @@ void ClientApp::syncRemotePlayerTransforms(float deltaTime)
         auto existing = remote_players.find(player.id);
         if (existing != remote_players.end() && remote_player_teams[player.id] != team)
         {
-            scene_manager.getCurrentScene()->removeObject(existing->second->getId());
-            pendingDestroy[(frameCount - 1) % 3].push_back(std::move(existing->second));
+            retireRemotePlayerParts(existing->second);
+            pendingDestroy[(frameCount - 1) % 3].push_back(std::move(existing->second.ragdoll));
             remote_players.erase(existing);
             remote_player_animations.erase(player.id);
         }
         if (remote_players.find(player.id) == remote_players.end())
         {
+            auto& motion = remote_player_animations[player.id];
+            if (motion.weapon.empty())
+                motion.weapon = nx3d::economy::defaultWeapon(team);
             const char* model = team == "Terrorist" ? "terrorist" : "counter_terrorist";
             const std::string asset = std::string("players/") + model;
-            auto obj = std::make_shared<vk::OBJModel>(
+            RemotePlayerVisual visual;
+            visual.ragdoll = std::make_shared<vk::OBJModel>(
                     renderer.getDevice(), renderer.getPhysicalDevice(),
                     renderer.getCommandPool(), renderer.getGraphicsQueue(),
                     nx3d::projectAssetPath(asset + ".obj"),
@@ -1527,22 +1636,37 @@ void ClientApp::syncRemotePlayerTransforms(float deltaTime)
                     blt::ObjectData(shared_world, 0.0f,
                                     glm::vec3(player.x, player.y, player.z),
                                     default_size));
-            remote_players[player.id] = obj;
+            for (std::size_t i = 0; i < visual.parts.size(); ++i)
+            {
+                visual.parts[i] = std::make_shared<vk::OBJModel>(
+                        renderer.getDevice(), renderer.getPhysicalDevice(),
+                        renderer.getCommandPool(), renderer.getGraphicsQueue(),
+                        nx3d::projectAssetPath(asset + "_" + kPlayerParts[i] + ".obj"),
+                        nx3d::projectAssetPath(asset + ".mtl"),
+                        descriptorPool, descriptorSetLayout,
+                        blt::ObjectData({}, 0.0f,
+                                        glm::vec3(player.x, player.y, player.z),
+                                        default_size));
+            }
+            for (const auto& part : visual.parts)
+                scene_manager.getCurrentScene()->addObject(part);
+            setRemotePlayerWeapon(visual, motion.weapon,
+                                  glm::vec3(player.x, player.y, player.z));
+            remote_players[player.id] = std::move(visual);
             remote_player_teams[player.id] = team;
-            scene_manager.getCurrentScene()->addObject(obj);
         }
     }
 
     std::vector<uint64_t> to_remove;
-    for (auto& [id, obj] : remote_players)
+    for (auto& [id, visual] : remote_players)
     {
         auto it = std::find_if(players.begin(), players.end(),
                                [id](const auto& p)
                                { return p.id == id; });
         if (it == players.end())
         {
-            scene_manager.getCurrentScene()->removeObject(obj->getId());
-            pendingDestroy[(frameCount - 1) % 3].push_back(std::move(obj));
+            retireRemotePlayerParts(visual);
+            pendingDestroy[(frameCount - 1) % 3].push_back(std::move(visual.ragdoll));
             to_remove.push_back(id);
         }
     }
@@ -1564,6 +1688,7 @@ void ClientApp::syncRemotePlayerTransforms(float deltaTime)
         {
             const glm::vec3 position(player.x, player.y, player.z);
             auto& motion = remote_player_animations[player.id];
+            setRemotePlayerWeapon(it->second, motion.weapon, position);
             if (!motion.initialized)
             {
                 motion.position = position;
@@ -1575,24 +1700,107 @@ void ClientApp::syncRemotePlayerTransforms(float deltaTime)
             const float distance = glm::length(movement);
             const float speed = dt > 0.0f && distance < 40.0f ? distance / dt : 0.0f;
             motion.facing = player.yaw;
-            motion.speed += (std::clamp(speed / nx3d::kWalkSpeed, 0.0f, 1.0f) - motion.speed) *
-                            std::min(1.0f, dt * 10.0f);
+            const float measuredSpeed = std::clamp(speed / nx3d::kWalkSpeed, 0.0f, 1.0f);
+            const float pace = !motion.authoritative ? measuredSpeed
+                               : motion.locomotion == "running" ? 1.0f
+                               : motion.locomotion == "sneaking"
+                                       ? nx3d::kSilentWalkSpeed / nx3d::kWalkSpeed
+                               : motion.locomotion == "crouching" ? measuredSpeed * 0.35f
+                               : 0.0f;
+            motion.speed += (pace - motion.speed) * std::min(1.0f, dt * 10.0f);
             motion.stride += motion.speed * dt * 7.0f;
             motion.hitTime = std::max(0.0f, motion.hitTime - dt);
+            motion.actionRemaining = std::max(0.0f, motion.actionRemaining - dt);
             motion.position = position;
 
-            const float bob = std::sin(motion.stride * 2.0f) * 0.9f * motion.speed +
+            const float bobScale = motion.locomotion == "running" ||
+                                           motion.locomotion == "sneaking" ? 1.5f : 0.9f;
+            const float bob = std::sin(motion.stride * 2.0f) * bobScale * motion.speed +
                               std::sin(player_animation_clock * 2.5f) * 0.22f * (1.0f - motion.speed);
             glm::mat4 pose = glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, bob, 0.0f));
             pose = glm::rotate(pose, motion.facing, glm::vec3(0.0f, 1.0f, 0.0f));
-            pose = glm::rotate(pose, std::sin(motion.stride) * 0.045f * motion.speed,
+            const float actionProgress = motion.actionDuration > 0.0f
+                    ? 1.0f - motion.actionRemaining / motion.actionDuration : 1.0f;
+            const float actionPose = motion.actionRemaining > 0.0f
+                    ? std::sin(actionProgress * 3.14159265f) : 0.0f;
+            if (motion.action == "reloading")
+                pose = glm::translate(pose, glm::vec3(0.0f, -2.0f * actionPose, 0.0f));
+            else if (motion.action == "shooting")
+                pose = glm::translate(pose, glm::vec3(0.0f, 0.0f, 1.2f * actionPose));
+            pose = glm::rotate(pose, std::sin(motion.stride) * 0.045f * motion.speed +
+                               (motion.action == "shooting" ? -0.08f * actionPose : 0.0f),
                                glm::vec3(1.0f, 0.0f, 0.0f));
-            pose = glm::rotate(pose, std::sin(motion.stride) * 0.035f * motion.speed + std::sin(motion.hitTime / 0.22f * 3.14159f) * 0.14f,
+            pose = glm::rotate(pose, std::sin(motion.stride) * 0.035f * motion.speed +
+                               std::sin(motion.hitTime / 0.22f * 3.14159f) * 0.14f +
+                               (motion.action == "reloading" ? 0.1f * actionPose : 0.0f),
                                glm::vec3(0.0f, 0.0f, 1.0f));
             if (std::abs(player.h - nx3d::kCrouchingEyeHeight) < 1.0f)
                 pose = glm::scale(pose, glm::vec3(1.0f, nx3d::kCrouchingEyeHeight /
                                                         nx3d::kStandingEyeHeight, 1.0f));
-            it->second->setModel(pose);
+
+            const float gait = std::sin(motion.stride) * motion.speed;
+            const float legAmplitude = motion.locomotion == "running" ||
+                                               motion.locomotion == "sneaking" ? 0.62f : 0.20f;
+            const float armAmplitude = motion.locomotion == "running" ||
+                                               motion.locomotion == "sneaking" ? 0.42f : 0.16f;
+            const bool holdingGun = it->second.weapon != nullptr &&
+                                    gamemode::hasWeaponProfile(motion.weapon);
+            const float readyPose = holdingGun ? (motion.locomotion == "running" ||
+                                                   motion.locomotion == "sneaking" ? 0.48f : 0.78f)
+                                               : 0.0f;
+            float leftArm = readyPose - gait * armAmplitude;
+            float rightArm = readyPose + gait * armAmplitude;
+            if (motion.action == "shooting")
+            {
+                leftArm += (holdingGun ? 0.16f : 0.9f) * actionPose;
+                rightArm += (holdingGun ? 0.27f : 1.2f) * actionPose;
+            }
+            else if (motion.action == "reloading")
+            {
+                leftArm += 0.55f * actionPose;
+                rightArm -= 0.28f * actionPose;
+            }
+            auto& parts = it->second.parts;
+            parts[0]->setModel(pose);
+            parts[1]->setModel(rotateLimb(pose, {-11.4f, -12.4f, 0.0f}, leftArm));
+            parts[2]->setModel(rotateLimb(pose, {11.4f, -12.4f, 0.0f}, rightArm));
+            parts[3]->setModel(rotateLimb(pose, {-4.9f, -33.0f, 0.0f}, gait * legAmplitude));
+            parts[4]->setModel(rotateLimb(pose, {4.9f, -33.0f, 0.0f}, -gait * legAmplitude));
+            if (it->second.weapon)
+            {
+                const bool reloading = holdingGun && motion.action == "reloading";
+                glm::mat4 gunPose;
+                if (holdingGun)
+                {
+                    gunPose = glm::translate(
+                            pose, glm::vec3(5.0f + (reloading ? 3.5f * actionPose : 0.0f),
+                                            -22.0f - (reloading ? 8.0f * actionPose : 0.0f),
+                                            -11.0f + (reloading ? 3.0f * actionPose : 0.0f)));
+                    gunPose = glm::rotate(gunPose, reloading ? 0.65f * actionPose : 0.0f,
+                                          glm::vec3(0.0f, 0.0f, 1.0f));
+                    gunPose = glm::rotate(gunPose, 3.14159265f,
+                                          glm::vec3(0.0f, 1.0f, 0.0f));
+                }
+                else
+                {
+                    gunPose = glm::translate(pose, glm::vec3(0.0f, -20.0f, 9.0f));
+                    gunPose = glm::rotate(gunPose, 1.57079633f,
+                                          glm::vec3(1.0f, 0.0f, 0.0f));
+                }
+                gunPose = glm::scale(gunPose, glm::vec3(
+                        gamemode::getWeaponProfile(it->second.weaponType).ground_scale));
+                gunPose = glm::translate(gunPose, glm::vec3(0.0f, 0.3f, -0.3f));
+                it->second.weapon->setModel(gunPose);
+                if (it->second.magazine)
+                {
+                    glm::mat4 magazinePose = glm::translate(
+                            gunPose, glm::vec3(0.0f,
+                                    -0.75f * (reloading
+                                            ? gun::magazineTravel(actionProgress) : 0.0f),
+                                    0.0f));
+                    it->second.magazine->setModel(magazinePose);
+                }
+            }
 
             auto name = playerNames.find(player.id);
             if (name != playerNames.end() && !name->second.empty())

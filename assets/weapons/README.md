@@ -10,5 +10,9 @@ the OBJ, MTL, and PNG files. The models are used both in first person and as
 dropped pickups. Team assignment, scale, and placement are in
 `client/gamemode/weapon_profiles.hh`.
 
+The generator also writes `_body.obj` and `_magazine.obj` for each firearm.
+The two pieces render continuously while held; during reload the magazine
+slides out and returns. The unsplit OBJ remains available for ground pickups.
+
 `knife.obj` and `grenade.obj` are small hand-authored utility models. Their
 materials reuse the generated firearm swatches.
