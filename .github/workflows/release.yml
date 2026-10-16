@@ -82,7 +82,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libboost-json-dev libssl-dev libglm-dev patchelf
+          sudo apt-get install -y libboost-json-dev libssl-dev libglm-dev libbullet-dev patchelf
           python3 -m venv "$RUNNER_TEMP/cmake-venv"
           "$RUNNER_TEMP/cmake-venv/bin/pip" install 'cmake>=3.30,<5'
           echo "$RUNNER_TEMP/cmake-venv/bin" >> "$GITHUB_PATH"
