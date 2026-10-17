@@ -64,13 +64,37 @@ if(NOT TARGET Boost::json)
 endif()
 EOF
 
+# Build Bullet for the MinGW target. Static libraries avoid adding Bullet DLLs
+# to the server archive.
+bullet_prefix="$work_dir/bullet-prefix"
+git clone --quiet --depth 1 --branch 3.25 \
+    https://github.com/bulletphysics/bullet3.git "$work_dir/bullet-src"
+test "$(git -C "$work_dir/bullet-src" rev-parse HEAD)" = \
+    2c204c49e56ed15ec5fcfa71d199ab6d6570b3f5
+cmake -S "$work_dir/bullet-src" -B "$work_dir/bullet-build" \
+    -DCMAKE_TOOLCHAIN_FILE="$work_dir/toolchain.cmake" \
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+    -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$bullet_prefix" \
+    -DBUILD_SHARED_LIBS=OFF -DBUILD_BULLET3=OFF \
+    -DBUILD_BULLET2_DEMOS=OFF -DBUILD_CPU_DEMOS=OFF \
+    -DBUILD_EXTRAS=OFF -DBUILD_UNIT_TESTS=OFF \
+    -DUSE_GLUT=OFF -DUSE_GRAPHICAL_BENCHMARK=OFF \
+    -DINSTALL_LIBS=ON -DINSTALL_CMAKE_FILES=OFF
+cmake --build "$work_dir/bullet-build" --parallel "$jobs"
+cmake --install "$work_dir/bullet-build"
+
 CI=1 cmake -S "$repo_root" -B "$work_dir/build" \
     -DCMAKE_TOOLCHAIN_FILE="$work_dir/toolchain.cmake" \
     -DCMAKE_BUILD_TYPE=Release \
     -DNX3D_BUILD_CLIENT=OFF -DBUILD_TESTING=OFF \
     -DCMAKE_MODULE_PATH="$work_dir/cmake" \
     -DOPENSSL_ROOT_DIR="$openssl_prefix" \
-    -DOPENSSL_USE_STATIC_LIBS=TRUE
+    -DOPENSSL_USE_STATIC_LIBS=TRUE \
+    -DBULLET_INCLUDE_DIR="$bullet_prefix/include/bullet" \
+    -DBULLET_DYNAMICS_LIBRARY="$bullet_prefix/lib/libBulletDynamics.a" \
+    -DBULLET_COLLISION_LIBRARY="$bullet_prefix/lib/libBulletCollision.a" \
+    -DBULLET_MATH_LIBRARY="$bullet_prefix/lib/libLinearMath.a" \
+    -DBULLET_SOFTBODY_LIBRARY="$bullet_prefix/lib/libBulletSoftBody.a"
 cmake --build "$work_dir/build" --target nx-3D-server --parallel "$jobs"
 
 package_dir="$work_dir/package"
