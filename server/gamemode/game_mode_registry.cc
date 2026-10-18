@@ -82,16 +82,22 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
         if (dx * dx + dy * dy + dz * dz >= 10000.0f)
             return false;
         const auto type = std::string(nx3d::ammunition::pickupWeaponType(item->getType()));
-        const auto slot = static_cast<uint8_t>(nx3d::economy::isSecondary(type) ? 2 : 1);
-        if (type != "ak47" && type != "m16" && type != "mp5" &&
-            type != "glock" && type != "usp" && type != "deagle")
+        const auto* object = nx3d::findNXObject(type);
+        if (!object || (object->kind != nx3d::NXObjectKind::firearm &&
+                        object->kind != nx3d::NXObjectKind::bomb))
             return false;
+        const auto slot = object->slot;
         int magazine = 0, reserve = 0;
-        if (!nx3d::ammunition::decodePickup(item->getType(), magazine, reserve) ||
-            magazine > 30 || reserve > 90 ||
+        if ((object->kind == nx3d::NXObjectKind::firearm &&
+             (!nx3d::ammunition::decodePickup(item->getType(), magazine, reserve) ||
+              magazine > object->combat.magazineSize ||
+              reserve > object->combat.magazineSize * object->combat.reserveMagazines)) ||
             !modePtr->pickupWeapon(r, id, slot, type))
             return false;
-        authorityPtr->pickupWeapon(id, slot, {type, magazine, reserve});
+        if (object->kind == nx3d::NXObjectKind::bomb)
+            authorityPtr->equipWeapon(r, id, type);
+        else
+            authorityPtr->pickupWeapon(id, slot, {type, magazine, reserve});
         r.deleteGameItem(itemId);
         return true; });
     room.setSpawnHandler([authorityPtr](nexilis::server::Room& r, uint64_t id)
@@ -119,11 +125,10 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
                                                                uint64_t playerId, uint8_t action)
                           {
         if (action >= nx3d::economy::kEquipPrimaryAction &&
-            action <= nx3d::economy::kEquipSmokeAction)
+            action <= nx3d::economy::kEquipDefuseKitAction)
         {
             const uint8_t slot = action - nx3d::economy::kEquipPrimaryAction + 1;
-            const std::string weapon = slot == 4 ? "grenade" : slot == 5 ? "smoke"
-                                       : modePtr->weaponForSlot(playerId, slot);
+            const std::string weapon = modePtr->weaponForSlot(playerId, slot);
             return !weapon.empty() && authorityPtr->equipWeapon(r, playerId, weapon);
         }
         const uint8_t slot = action == nx3d::economy::kDropPrimaryAction ? 1 :
@@ -134,6 +139,12 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
         if (const auto* item = nx3d::economy::itemForAction(action);
             item && item->kind == nx3d::economy::ItemKind::ammo)
             authorityPtr->refill(playerId);
+        if (action == nx3d::economy::kDropBombAction)
+        {
+            auto selected = modePtr->weaponForSlot(playerId, 1);
+            if (selected.empty()) selected = modePtr->weaponForSlot(playerId, 2);
+            if (!selected.empty()) authorityPtr->equipWeapon(r, playerId, selected);
+        }
         if (!slot)
             return true;
         auto* user = nexilis::server::ClientStorage::getClientById(playerId);

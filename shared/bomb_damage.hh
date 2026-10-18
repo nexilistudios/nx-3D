@@ -1,13 +1,15 @@
 #ifndef NX3D_SHARED_BOMB_DAMAGE_HH
 #define NX3D_SHARED_BOMB_DAMAGE_HH
 
+#include <shared/nx_objects.hh>
+
 #include <algorithm>
 #include <cmath>
 
 namespace nx3d
 {
-inline constexpr float kBombBlastRadius = 800.0f;
-inline constexpr float kBombMaxDamage = 200.0f;
+inline constexpr float kBombBlastRadius = findNXObject("bomb")->effect.radius;
+inline constexpr float kBombMaxDamage = findNXObject("bomb")->effect.maxDamage;
 
 inline float bombBlastDamage(float distance)
 {

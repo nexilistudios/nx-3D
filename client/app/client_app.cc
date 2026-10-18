@@ -717,7 +717,7 @@ void ClientApp::updateChatMessages()
                 {
                     economyState = std::move(state);
                     ui->moneyText.setString("$" + std::to_string(economyState.money) + "  |  B: Buy" +
-                                           (economyState.hasDefuseKit ? "  |  KIT" : ""));
+                                           (economyState.objects.count("defuse_kit") > 0 ? "  |  KIT" : ""));
                     if (game_mode)
                         game_mode->onEconomySnapshot(*this, economyState);
                     buyNotice = economyState.notice;
@@ -1418,6 +1418,11 @@ void ClientApp::animatePlayerHit(uint64_t playerId)
 
 void ClientApp::retireRemotePlayerParts(RemotePlayerVisual& visual)
 {
+    if (visual.heldItem)
+    {
+        scene_manager.getCurrentScene()->removeObject(visual.heldItem->getId());
+        pendingDestroy[(frameCount - 1) % 3].push_back(std::move(visual.heldItem));
+    }
     if (visual.magazine)
     {
         scene_manager.getCurrentScene()->removeObject(visual.magazine->getId());
@@ -1441,10 +1446,35 @@ void ClientApp::setRemotePlayerWeapon(RemotePlayerVisual& visual,
                                        const std::string& weapon,
                                        const glm::vec3& position)
 {
-    // Keep the last firearm on the player's back while a knife or grenade is
-    // selected, so the gun does not disappear between equipment changes.
-    if (!gamemode::hasWeaponProfile(weapon))
+    const auto* object = nx3d::findNXObject(weapon);
+    if (!object)
         return;
+    if (object->kind != nx3d::NXObjectKind::firearm)
+    {
+        if (visual.heldItemType == weapon)
+            return;
+        if (visual.heldItem)
+        {
+            scene_manager.getCurrentScene()->removeObject(visual.heldItem->getId());
+            pendingDestroy[(frameCount - 1) % 3].push_back(std::move(visual.heldItem));
+        }
+        visual.heldItemType = weapon;
+        visual.heldItem = std::make_shared<vk::OBJModel>(
+                renderer.getDevice(), renderer.getPhysicalDevice(),
+                renderer.getCommandPool(), renderer.getGraphicsQueue(),
+                nx3d::projectAssetPath(std::string(object->visual.worldModel)),
+                nx3d::projectAssetPath(std::string(object->visual.worldMaterial)),
+                descriptorPool, descriptorSetLayout,
+                blt::ObjectData({}, 0.0f, position, default_size));
+        scene_manager.getCurrentScene()->addObject(visual.heldItem);
+        return;
+    }
+    if (visual.heldItem)
+    {
+        scene_manager.getCurrentScene()->removeObject(visual.heldItem->getId());
+        pendingDestroy[(frameCount - 1) % 3].push_back(std::move(visual.heldItem));
+        visual.heldItemType.clear();
+    }
     if (visual.weaponType == weapon)
         return;
     if (visual.weapon)
@@ -1745,7 +1775,8 @@ void ClientApp::syncRemotePlayerTransforms(float deltaTime)
                                                motion.locomotion == "sneaking" ? 0.42f : 0.16f;
             const bool holdingGun = it->second.weapon != nullptr &&
                                     gamemode::hasWeaponProfile(motion.weapon);
-            const float readyPose = holdingGun ? (motion.locomotion == "running" ||
+            const bool holdingItem = it->second.heldItem != nullptr;
+            const float readyPose = (holdingGun || holdingItem) ? (motion.locomotion == "running" ||
                                                    motion.locomotion == "sneaking" ? 0.48f : 0.78f)
                                                : 0.0f;
             float leftArm = readyPose - gait * armAmplitude;
@@ -1800,6 +1831,17 @@ void ClientApp::syncRemotePlayerTransforms(float deltaTime)
                                     0.0f));
                     it->second.magazine->setModel(magazinePose);
                 }
+            }
+            if (it->second.heldItem)
+            {
+                const auto* held = nx3d::findNXObject(it->second.heldItemType);
+                glm::mat4 itemPose = glm::translate(pose, glm::vec3(7.0f, -21.0f, -12.0f));
+                itemPose = glm::rotate(itemPose, 3.14159265f,
+                                       glm::vec3(0.0f, 1.0f, 0.0f));
+                const float scale = held->kind == nx3d::NXObjectKind::bomb ? .35f :
+                                    held->visual.worldScale;
+                itemPose = glm::scale(itemPose, glm::vec3(scale));
+                it->second.heldItem->setModel(itemPose);
             }
 
             auto name = playerNames.find(player.id);
@@ -1899,7 +1941,10 @@ void ClientApp::syncRemoteGameItems()
     for (auto& item : game_items)
     {
         const std::string weaponType(nx3d::ammunition::pickupWeaponType(item.item_type));
-        if (item.status == "on_ground" && gamemode::hasWeaponProfile(weaponType))
+        const auto* groundObject = nx3d::findNXObject(weaponType);
+        if (item.status == "on_ground" && groundObject &&
+            (groundObject->kind == nx3d::NXObjectKind::firearm ||
+             groundObject->kind == nx3d::NXObjectKind::bomb))
         {
             if (remote_game_items.find(item.id) == remote_game_items.end())
             {

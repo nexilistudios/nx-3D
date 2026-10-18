@@ -791,8 +791,8 @@ void Ui::showBuyMenu(BuyStyle style, const nx3d::economy::Snapshot& state,
         auto& text = *buyItemTexts[i];
         const bool available = (!*item.team || team == item.team) && state.money >= item.price &&
                                (item.kind != nx3d::economy::ItemKind::defuseKit || bombMatch) &&
-                               (item.action != 19 || state.grenades < nx3d::economy::kMaxGrenades) &&
-                               (item.action != 20 || state.smokes < nx3d::economy::kMaxSmokes);
+                               (item.action != 19 || state.objects.count("grenade") < nx3d::economy::kMaxGrenades) &&
+                               (item.action != 20 || state.objects.count("smoke") < nx3d::economy::kMaxSmokes);
         text.setColor(available ? SDL_Color{235, 245, 250, 255}
                                 : SDL_Color{125, 142, 150, 255});
         text.setString(std::string(item.name) + "  $" + std::to_string(item.price));

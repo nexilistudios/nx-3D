@@ -5,6 +5,7 @@
 #include <shared/bomb_sites.hh>
 #include <shared/player_rules.hh>
 #include <client/project_root.hh>
+#include <shared/nx_objects.hh>
 
 #include <nexilis/client/packet.hh>
 
@@ -98,11 +99,12 @@ void BombMode::update(ClientApp& app, float dt)
         {
             if (!m_bombModel)
             {
+                const auto& visual = nx3d::findNXObject("bomb")->visual;
                 m_bombModel = std::make_shared<spear::rendering::vulkan::OBJModel>(
                         app.renderer.getDevice(), app.renderer.getPhysicalDevice(),
                         app.renderer.getCommandPool(), app.renderer.getGraphicsQueue(),
-                        nx3d::projectAssetPath("bomb/c4.obj"),
-                        nx3d::projectAssetPath("bomb/c4.mtl"),
+                        nx3d::projectAssetPath(std::string(visual.worldModel)),
+                        nx3d::projectAssetPath(std::string(visual.worldMaterial)),
                         app.descriptorPool, app.descriptorSetLayout,
                         blt::ObjectData(app.shared_world, 0.0f,
                                         glm::vec3(event.bomb_x, event.bomb_y - 64.0f, event.bomb_z),
@@ -197,7 +199,7 @@ void BombMode::update(ClientApp& app, float dt)
         status = "Eliminated | Waiting for next round";
     else if (m_phase == "live" && m_alive)
         status = m_planted ? (m_team == "Counter Terrorist" ?
-                                      (app.economyState.hasDefuseKit ? "Hold E near bomb to defuse (kit: 2.5s)"
+                                      (app.economyState.objects.count("defuse_kit") > 0 ? "Hold E near bomb to defuse (kit: 2.5s)"
                                                                      : "Hold E near bomb to defuse (5s)")
                                       : "Defend the bomb")
                            : (m_team == "Terrorist" ?
@@ -222,11 +224,21 @@ void BombMode::handleMouseButtonDown(ClientApp& app, const SDL_Event& event)
 
 void BombMode::handleKeyDown(ClientApp& app, const SDL_Event& event)
 {
+    if (event.key.key == SDLK_G && !event.key.repeat && m_active && m_alive &&
+        m_phase == "live" && m_activeSlot == nx3d::findNXObject("bomb")->slot &&
+        m_objects.count("bomb") > 0)
+    {
+        app.tcp_client.sendMessage(nexilis::client::Packet::Room::Player3D::matchAction(
+                app.client_api, nx3d::economy::kDropBombAction));
+        m_objects.consume("bomb");
+        equipSlot(app, !m_primary.type.empty() ? 1 : 2);
+        return;
+    }
     if (event.key.key == SDLK_E && !event.key.repeat && m_active && m_alive && m_phase == "live")
     {
         const uint8_t action = m_planted ? 2 : 1;
         const auto pos = app.camera.getPosition();
-        if ((action == 1 && m_team == "Terrorist" &&
+        if ((action == 1 && m_team == "Terrorist" && m_objects.count("bomb") > 0 &&
              nx3d::bomb_sites::at(pos.x, standingEyeY(app), pos.z)) ||
             (action == 2 && m_team == "Counter Terrorist"))
         {
@@ -236,12 +248,15 @@ void BombMode::handleKeyDown(ClientApp& app, const SDL_Event& event)
             m_defuseSoundTimer = 0.0f;
             if (action == 1)
             {
+                equipSlot(app, 6);
                 if (app.planting_audio)
                     app.planting_audio->play();
                 app.tcp_client.sendMessage(nexilis::client::Packet::Room::Player3D::audioEvent(
                         app.client_api, audio::kSoundPlanting,
                         nexilis::Vector3f({pos.x, pos.y, pos.z})));
             }
+            else if (m_objects.count("defuse_kit") > 0)
+                equipSlot(app, 7);
         }
     }
     if (m_active && m_alive)

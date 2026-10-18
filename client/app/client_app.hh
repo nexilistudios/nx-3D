@@ -196,6 +196,8 @@ public:
         std::shared_ptr<spear::rendering::vulkan::OBJModel> weapon;
         std::shared_ptr<spear::rendering::vulkan::OBJModel> magazine;
         std::string weaponType;
+        std::shared_ptr<spear::rendering::vulkan::OBJModel> heldItem;
+        std::string heldItemType;
     };
     std::unordered_map<uint64_t, RemotePlayerVisual> remote_players;
     std::unordered_map<uint64_t, std::string> remote_player_teams;

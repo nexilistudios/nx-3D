@@ -1,60 +1,30 @@
 #include <server/gun/gun_manager.hh>
+#include <shared/nx_objects.hh>
 
 #include <algorithm>
+#include <array>
+#include <string_view>
+#include <utility>
 
 namespace nx3d::server::gun
 {
 
 GunManager::GunManager()
 {
-    m_defs = {
-        {
-            .name = "AK-47",
-            .type = GunType::AK47,
-            .damage = 35.0f,
-            .fire_rate = 10.0f,
-            .magazine_size = 30,
-            .reload_time = 2.5f,
-            .range = 100.0f,
-            .spread = 1.0f,
-            .model_path = "assets/weapons/ak47.obj",
-        },
-        {
-            .name = "M16",
-            .type = GunType::M16,
-            .damage = 35.0f,
-            .fire_rate = 13.33f,
-            .magazine_size = 30,
-            .reload_time = 2.5f,
-            .range = 100.0f,
-            .spread = 1.0f,
-            .model_path = "assets/weapons/m16.obj",
-        },
-        {
-            .name = "Glock", .type = GunType::Glock, .damage = 24.0f,
-            .fire_rate = 6.67f, .magazine_size = 20, .reload_time = 2.0f,
-            .range = 100.0f, .spread = 1.0f,
-            .model_path = "assets/weapons/glock.obj",
-        },
-        {
-            .name = "USP", .type = GunType::USP, .damage = 30.0f,
-            .fire_rate = 5.83f, .magazine_size = 12, .reload_time = 2.1f,
-            .range = 100.0f, .spread = 1.0f,
-            .model_path = "assets/weapons/usp.obj",
-        },
-        {
-            .name = "Desert Eagle", .type = GunType::Deagle, .damage = 35.0f,
-            .fire_rate = 4.33f, .magazine_size = 7, .reload_time = 2.2f,
-            .range = 100.0f, .spread = 1.0f,
-            .model_path = "assets/weapons/deagle.obj",
-        },
-        {
-            .name = "MP5", .type = GunType::MP5, .damage = 26.0f,
-            .fire_rate = 13.33f, .magazine_size = 30, .reload_time = 2.4f,
-            .range = 100.0f, .spread = 1.0f,
-            .model_path = "assets/weapons/mp5.obj",
-        },
-    };
+    constexpr std::array<std::pair<std::string_view, GunType>, 6> guns{{
+        {"ak47", GunType::AK47}, {"m16", GunType::M16},
+        {"glock", GunType::Glock}, {"usp", GunType::USP},
+        {"deagle", GunType::Deagle}, {"mp5", GunType::MP5},
+    }};
+    for (const auto& [id, type] : guns)
+    {
+        const auto& object = *nx3d::findNXObject(id);
+        m_defs.push_back({std::string(object.name), type, object.combat.damage,
+                          object.combat.roundsPerMinute / 60.0f,
+                          static_cast<uint32_t>(object.combat.magazineSize),
+                          object.combat.reloadSeconds, 100.0f, 1.0f,
+                          "assets/" + std::string(object.visual.worldModel)});
+    }
 }
 
 const GunDef* GunManager::getDef(uint32_t index) const

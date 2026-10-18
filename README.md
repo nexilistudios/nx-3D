@@ -106,27 +106,30 @@ services.nx3dServer = {
 
 ## Controls
 
-| Action                                     | Control                                                   |
-| ------------------------------------------ | --------------------------------------------------------- |
-| Move and look                              | WASD and mouse                                            |
-| Jump                                       | Space                                                     |
-| Crouch slowly without footsteps            | Hold Ctrl                                                 |
-| Walk slowly without footsteps              | Hold Shift                                                |
-| Fire                                       | Hold left mouse button                                    |
-| Reload                                     | R                                                         |
-| Equip primary, secondary, knife, HE, smoke | 1, 2, 3, 4, 5                                             |
-| Throw an equipped HE grenade               | Left mouse button in slot 4                               |
-| Throw an equipped smoke grenade            | Left mouse button in slot 5                               |
-| Plant or defuse bomb (bomb match)          | Hold E                                                    |
-| Throw held weapon onto the ground          | G                                                         |
-| Pick up a nearby weapon                    | F                                                         |
-| Open buy menu at your team spawn           | B; Tab changes between list, radial, and CS2 grid layouts |
-| Change team                                | Escape, then click CT or T                                |
-| Leaderboard                                | Hold Tab                                                  |
-| Chat                                       | Y, then Enter to send or Escape to cancel                 |
-| Pause or resume                            | Escape                                                    |
+| Action                               | Control                                                   |
+| ------------------------------------ | --------------------------------------------------------- |
+| Move and look                        | WASD and mouse                                            |
+| Jump                                 | Space                                                     |
+| Crouch slowly without footsteps      | Hold Ctrl                                                 |
+| Walk slowly without footsteps        | Hold Shift                                                |
+| Fire                                 | Hold left mouse button                                    |
+| Reload                               | R                                                         |
+| Equip primary, secondary, knife      | 1, 2, 3                                                   |
+| Cycle owned utility (HE, smoke, kit) | 4; 5 while carrying the bomb                              |
+| Equip carried bomb                   | 4                                                         |
+| Throw equipped HE or smoke           | Left mouse button                                         |
+| Drop equipped gun or bomb            | G                                                         |
+| Pick up nearby gun or bomb           | F                                                         |
+| Plant or defuse bomb (bomb match)    | Hold E                                                    |
+| Throw held weapon onto the ground    | G                                                         |
+| Pick up a nearby weapon              | F                                                         |
+| Open buy menu at your team spawn     | B; Tab changes between list, radial, and CS2 grid layouts |
+| Change team                          | Escape, then click CT or T                                |
+| Leaderboard                          | Hold Tab                                                  |
+| Chat                                 | Y, then Enter to send or Escape to cancel                 |
+| Pause or resume                      | Escape                                                    |
 
-The equipped gun appears beside the camera and follows the view. It has walk bob and recoil. The gun mesh is selected from the team's weapon profile or the weapon picked up from the ground. First-person placement and animation live in `client/gun/first_person_gun.cc`; per-weapon mesh paths, scale, and center are in `client/gamemode/weapon_profiles.hh`.
+Every game item is defined as an NXObject in `shared/nx_objects.hh`. An NXObject supplies its ID, kind, inventory slot, purchase price and team, separate world and first-person model paths, transforms, collision size, and combat data. The catalog includes all buy menu entries, the knife, both grenades, and the C4 bomb. `NXObjectInventory` holds owned grenade, smoke, bomb, and kit counts on the server and client; throw events carry the NXObject ID. Weapons, grenades, the bomb, and the defuse kit can be shown in the player's hands; ammo and health refills are applied immediately when bought. First-person placement and animation live in `client/gun/first_person_gun.cc`.
 
 The AK-47, M16, Glock, USP, Desert Eagle, MP5, knife, and HE grenade have low-poly models in `assets/weapons/`. Run
 `python3 assets/weapons/generate.py` to regenerate the firearm OBJ and MTL files; the knife and grenade meshes are hand-authored.
@@ -151,9 +154,9 @@ The Bomb Match room starts when at least one player has chosen each team. If eit
 
 The match uses MR12: twelve rounds per half, side swap after round 12, first to 13 rounds wins, and a 12–12 score after round 24 is a draw. A round lasts 115 seconds. The Terrorists win by eliminating all Counter Terrorists or by letting a planted bomb explode. Counter Terrorists win by eliminating all Terrorists before the bomb is planted, defusing it, or surviving until time expires before a plant. If all Terrorists die after planting, the bomb still needs to be defused. There are five seconds between rounds; a completed match restarts after ten seconds.
 
-The first version uses one shared bomb: any living Terrorist may hold E for three seconds to plant at their current position. A Counter Terrorist within 120 game units of the planted bomb may hold E for five seconds to defuse, or 2.5 seconds with a defuse kit. Releasing E cancels the action. The bomb explodes 40 seconds after planting. Its current placeholder is a red cube at the planted position, with a square bomb indicator in the HUD; there is no site restriction, dropped bomb, freeze time, or overtime yet. The server checks team, life state, phase, defuse range, player movement, weapon ownership, shot hits, and map occlusion.
+Each round assigns and equips the C4 NXObject to one Terrorist. The carrier can select it with 4 and drop it with G; a living Terrorist can pick it up with F. If the carrier dies before planting, the bomb drops at their position. Holding E at a bomb site equips the carried bomb and plants after three seconds. A Counter Terrorist within 120 game units of the planted bomb may hold E for five seconds to defuse, or 2.5 seconds with a defuse kit. Holding E equips an owned kit. Releasing E cancels the action. The planted bomb uses its world model and explodes 40 seconds after planting. The server checks ownership, team, life state, phase, defuse range, player movement, weapon ownership, shot hits, and map occlusion.
 
-Players start with $800 and can hold up to $16000. Each credited kill earns $300; bomb plants and defuses earn $800; round wins earn $3250 and losses earn $1400. Press B while alive in your team's spawn area to open the buy menu. Click an item to buy it, press Tab to cycle the list, radial, and CS2 grid layouts, and press B or Escape to close. The server checks purchases against balance, team, life state, and spawn position. The catalog includes the three pistols, MP5, the existing rifles, ammo refill, health refill, HE and smoke grenades, and a CT-only defuse kit for bomb matches. Press 1 for a bought primary, 2 for your pistol, 3 for the knife, 4 for HE, or 5 for smoke. Left click throws the selected grenade; all clients see its flight. HE deals blast damage after a two-second fuse. Smoke deploys an opaque cloud after two seconds and lasts twelve seconds without dealing damage. Grenades and defuse kits are lost on death or at the next round; weapons return to the team's default on respawn. Grenades currently use a simple arc without world collision; HE blast has no world occlusion.
+Players start with $800 and can hold up to $16000. Each credited kill earns $300; bomb plants and defuses earn $800; round wins earn $3250 and losses earn $1400. Press B while alive in your team's spawn area to open the buy menu. Click an item to buy it, press Tab to cycle the list, radial, and CS2 grid layouts, and press B or Escape to close. The server checks purchases against balance, team, life state, and spawn position. The catalog includes the three pistols, MP5, the existing rifles, ammo refill, health refill, HE and smoke grenades, and a CT-only defuse kit for bomb matches. Left click throws the selected grenade; all clients see its 3D model in flight. HE deals blast damage after a two-second fuse. Smoke deploys an opaque cloud after two seconds and lasts twelve seconds without dealing damage. Grenades and defuse kits are lost on death or at the next round; weapons return to the team's default on respawn. Grenades currently use a simple arc without world collision; HE blast has no world occlusion.
 
 ## Manual releases
 

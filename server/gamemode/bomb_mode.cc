@@ -7,6 +7,8 @@
 #include <nexilis/room_command_type.hh>
 #include <nexilis/server/client_storage.hh>
 #include <nexilis/server/command/command.hh>
+#include <nexilis/object/game_item.hh>
+#include <nexilis/util.hh>
 
 #include <algorithm>
 #include <cmath>
@@ -20,7 +22,7 @@ namespace
 constexpr const char* kT = "Terrorist";
 constexpr const char* kCT = "Counter Terrorist";
 constexpr float kRoundSeconds = 115.0f;
-constexpr float kBombSeconds = 40.0f;
+constexpr float kBombSeconds = nx3d::findNXObject("bomb")->effect.durationSeconds;
 constexpr float kPlantSeconds = 3.0f;
 constexpr float kDefuseSeconds = 5.0f;
 constexpr float kBetweenSeconds = 4.0f;
@@ -59,6 +61,31 @@ void BombMode::clearAction()
     m_actionPlayer = 0;
     m_action = 0;
     m_actionSeconds = 0.0f;
+}
+
+void BombMode::dropBomb(nexilis::server::Room& room, uint64_t playerId)
+{
+    auto* user = nexilis::server::ClientStorage::getClientById(playerId);
+    if (!user) return;
+    const auto playerPos = user->getObject3D().getPosition();
+    const float yaw = user->getObject3D().getYaw();
+    const nexilis::Vector3f pos{playerPos.x - std::sin(yaw) * 25.0f,
+                                playerPos.y - 10.0f,
+                                playerPos.z - std::cos(yaw) * 25.0f};
+    const nexilis::Vector3f dimensions{1.0f, 1.0f, 1.0f};
+    m_groundBombId = nexilis::Util::getRandomUint64();
+    room.addGameItem(nexilis::GameItem(m_groundBombId, "bomb", pos, dimensions, "on_ground"));
+    const nexilis::nx_data data{
+            static_cast<uint8_t>(nexilis::CommandType::room),
+            static_cast<uint8_t>(nexilis::RoomCommandType::Root::game_item),
+            static_cast<uint8_t>(nexilis::RoomCommandType::GameItemAction::create)};
+    room.broadcastToAll(nexilis::server::Command::createRoomCommand(
+            room.getId(), *user, data,
+            {{"id", m_groundBombId}, {"x", pos.x}, {"y", pos.y}, {"z", pos.z},
+             {"w", dimensions.x}, {"h", dimensions.y}, {"d", dimensions.z},
+             {"item_type", boost::json::value("bomb")},
+             {"status", boost::json::value("on_ground")},
+             {"filepath", boost::json::value("")}}, 0));
 }
 
 void BombMode::onTeamSelected(nexilis::server::Room& room, uint64_t playerId)
@@ -150,6 +177,16 @@ bool BombMode::onAction(nexilis::server::Room& room, uint64_t playerId, uint8_t 
                                      (m_phase == Phase::live || m_phase == Phase::post) &&
                                              m_alive.contains(playerId),
                                      action == nx3d::economy::kThrowSmokeAction);
+    if (action == nx3d::economy::kDropBombAction)
+    {
+        if (m_phase != Phase::live || m_planted || !m_alive.contains(playerId) ||
+            !m_economy.hasBomb(playerId))
+            return false;
+        m_economy.setBomb(room, playerId, false);
+        if (m_actionPlayer == playerId) clearAction();
+        dropBomb(room, playerId);
+        return true;
+    }
     if (action == nx3d::economy::kDropPrimaryAction ||
         action == nx3d::economy::kDropSecondaryAction)
     {
@@ -166,7 +203,8 @@ bool BombMode::onAction(nexilis::server::Room& room, uint64_t playerId, uint8_t 
     if (m_phase != Phase::live || !m_alive.contains(playerId))
         return false;
     const auto team = room.getPlayerTeam(playerId);
-    if ((action == 1 && !m_planted && team == kT && inBombSite(playerId)) ||
+    if ((action == 1 && !m_planted && team == kT &&
+         m_economy.hasBomb(playerId) && inBombSite(playerId)) ||
         (action == 2 && m_planted && team == kCT && closeToBomb(playerId)))
     {
         if (m_actionPlayer != playerId || m_action != action)
@@ -184,8 +222,16 @@ bool BombMode::pickupWeapon(nexilis::server::Room& room, uint64_t id, uint8_t sl
                             const std::string& weapon)
 {
     std::lock_guard lock(m_mutex);
-    return m_phase == Phase::live && m_alive.contains(id) &&
-           m_economy.pickupWeapon(room, id, slot, weapon);
+    if (m_phase != Phase::live || !m_alive.contains(id)) return false;
+    if (weapon == "bomb")
+    {
+        if (m_planted || slot != nx3d::findNXObject("bomb")->slot ||
+            !m_economy.pickupBomb(room, id))
+            return false;
+        m_groundBombId = 0;
+        return true;
+    }
+    return m_economy.pickupWeapon(room, id, slot, weapon);
 }
 
 void BombMode::onPlayerDeath(nexilis::server::Room& room, uint64_t killerId, uint64_t victimId)
@@ -206,10 +252,13 @@ void BombMode::onPlayerDeath(nexilis::server::Room& room, uint64_t killerId, uin
 
 void BombMode::recordDeath(nexilis::server::Room& room, uint64_t killerId, uint64_t victimId)
 {
+    const bool carriedBomb = m_economy.hasBomb(victimId);
     m_alive.erase(victimId);
     if (m_actionPlayer == victimId)
         clearAction();
     m_economy.died(room, killerId, victimId);
+    if (carriedBomb && !m_planted)
+        dropBomb(room, victimId);
     room.recordKill(killerId, victimId);
     auto* sender = nexilis::server::ClientStorage::getClientById(
             killerId == 0 ? victimId : killerId);
@@ -333,14 +382,33 @@ void BombMode::startRound(nexilis::server::Room& room)
     m_phase = Phase::live;
     m_seconds = kRoundSeconds;
     m_planted = false;
+    if (m_groundBombId)
+    {
+        const nexilis::nx_data data{
+                static_cast<uint8_t>(nexilis::CommandType::room),
+                static_cast<uint8_t>(nexilis::RoomCommandType::Root::game_item),
+                static_cast<uint8_t>(nexilis::RoomCommandType::GameItemAction::destroy)};
+        auto* sender = nexilis::server::ClientStorage::getClientById(*m_players.begin());
+        if (sender)
+            room.broadcastToAll(nexilis::server::Command::createRoomCommand(
+                    room.getId(), *sender, data, {{"id", m_groundBombId}}, 0));
+        room.deleteGameItem(m_groundBombId);
+        m_groundBombId = 0;
+    }
     m_notice = "Round live";
     clearAction();
     m_alive = m_players;
+    uint64_t bombCarrier = 0;
+    for (auto id : m_alive)
+        if (room.getPlayerTeam(id) == kT && (bombCarrier == 0 || id < bombCarrier))
+            bombCarrier = id;
     for (auto id : m_players)
     {
         room.resetPlayerHealth(id);
         room.spawnPlayer(id);
-        m_economy.respawned(room, id);
+        m_economy.respawned(room, id, id == bombCarrier);
+        if (id == bombCarrier)
+            room.onPlayerAction(id, nx3d::economy::kEquipBombAction);
         auto* user = nexilis::server::ClientStorage::getClientById(id);
         if (!user)
             continue;
@@ -377,6 +445,19 @@ void BombMode::update(nexilis::server::Room& room, float dt)
     m_economy.updateGrenades(room, dt);
     std::lock_guard lock(m_mutex);
     reconcile(room);
+    if (m_phase == Phase::live && !m_planted)
+    {
+        uint64_t nextCarrier = 0;
+        bool alreadyCarried = false;
+        for (auto id : m_alive)
+        {
+            if (room.getPlayerTeam(id) != kT) continue;
+            alreadyCarried |= m_economy.hasBomb(id);
+            if (nextCarrier == 0 || id < nextCarrier) nextCarrier = id;
+        }
+        if (!alreadyCarried && !m_groundBombId && nextCarrier)
+            m_economy.setBomb(room, nextCarrier, true);
+    }
     m_publishClock += dt;
     if (m_phase == Phase::waiting && m_publishClock >= 1.0f)
         startRound(room);
@@ -385,7 +466,8 @@ void BombMode::update(nexilis::server::Room& room, float dt)
         m_seconds -= dt;
         if (m_actionPlayer && m_alive.contains(m_actionPlayer))
         {
-            if ((m_action == 1 && !inBombSite(m_actionPlayer)) ||
+            if ((m_action == 1 &&
+                 (!m_economy.hasBomb(m_actionPlayer) || !inBombSite(m_actionPlayer))) ||
                 (m_action == 2 && !closeToBomb(m_actionPlayer)))
                 clearAction();
             else
@@ -401,6 +483,7 @@ void BombMode::update(nexilis::server::Room& room, float dt)
                         m_bombY = standingEyeY(pos.y, user->getObject3D().getDimensions().y);
                         m_bombZ = pos.z;
                         m_planted = true;
+                        m_economy.setBomb(room, m_actionPlayer, false);
                         m_seconds = kBombSeconds;
                         m_notice = "Bomb planted";
                         m_economy.reward(room, m_actionPlayer, nx3d::economy::kPlantReward,

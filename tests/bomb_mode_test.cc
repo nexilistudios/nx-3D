@@ -103,13 +103,23 @@ int main()
     check(room->canDamage(10, 20), "Round failed to start");
     auto first = t.consumeMatchEvents();
     check(bomb(first).round == 1 && bomb(first).alive, "Bad first round state");
+    nx3d::economy::Snapshot initialInventory;
+    check(nx3d::economy::decode(t.getChatSnapshot(777).back().message, initialInventory) &&
+                  initialInventory.objects.count("bomb") == 1 &&
+                  initialInventory.effect == "bomb_spawn",
+          "Terrorist was not issued the bomb NXObject");
+    const auto initialAnimations = ct.consumeAnimationEvents();
+    check(std::any_of(initialAnimations.begin(), initialAnimations.end(), [](const auto& event)
+                      { return event.client_id == 10 && event.state == "equipped" &&
+                               event.weapon == "bomb"; }),
+          "Bomb carrier did not start the round with the bomb equipped");
 
     auto* ctUser = server::ClientStorage::getClientById(20);
     ctUser->getObject3D().setPosition(Vector3f{355.0f, -48.0f, -2364.0f});
     check(room->onPlayerAction(20, 16), "CT could not buy a defuse kit at spawn");
     nx3d::economy::Snapshot kitState;
     check(nx3d::economy::decode(ct.getChatSnapshot(777).back().message, kitState) &&
-                  kitState.money == 400 && kitState.hasDefuseKit,
+                  kitState.money == 400 && kitState.objects.count("defuse_kit") == 1,
           "Defuse kit purchase did not debit money or grant equipment");
     ctUser->getObject3D().setPosition(Vector3f{0.0f, 0.0f, 0.0f});
     check(!room->onPlayerAction(20, 12), "Purchase outside spawn was accepted");
@@ -117,11 +127,21 @@ int main()
     tUser->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
     check(!room->onPlayerAction(10, 16), "Terrorist bought a defuse kit");
     check(room->onPlayerAction(10, 20), "Terrorist could not buy smoke");
+    check(room->onPlayerAction(10, 19), "Terrorist could not buy an HE grenade");
+    nx3d::economy::Snapshot throwableInventory;
+    check(nx3d::economy::decode(t.getChatSnapshot(777).back().message,
+                                throwableInventory) &&
+                  throwableInventory.objects.count("smoke") == 1 &&
+                  throwableInventory.objects.count("grenade") == 1,
+          "Bought throwables were not stored as NXObjects");
+    check(room->onPlayerAction(10, nx3d::economy::kEquipGrenadeAction) &&
+                  room->onPlayerAction(10, nx3d::economy::kEquipSmokeAction),
+          "Owned throwable NXObjects could not be equipped");
     check(room->onPlayerAction(10, nx3d::economy::kThrowSmokeAction),
           "Smoke throw was rejected");
     nx3d::economy::GrenadeThrow smoke;
     check(nx3d::economy::decodeGrenade(t.getChatSnapshot(777).back().message, smoke) &&
-                  smoke.smoke && smoke.owner == 10,
+                  smoke.objectId == "smoke" && smoke.owner == 10,
           "Smoke event was not broadcast with its type");
     check(!room->onPlayerAction(10, nx3d::economy::kThrowSmokeAction),
           "Smoke could be thrown after inventory ran out");
@@ -165,6 +185,10 @@ int main()
     auto planted = t.consumeMatchEvents();
     check(bomb(planted).bomb_planted && bomb(planted).bomb_x == 1152.0f,
           "Bomb did not plant at A");
+    nx3d::economy::Snapshot plantedInventory;
+    check(nx3d::economy::decode(t.getChatSnapshot(777).back().message, plantedInventory) &&
+                  plantedInventory.objects.count("bomb") == 0,
+          "Bomb remained in inventory after planting");
     ctUser->getObject3D().setPosition(Vector3f{1152.0f, 160.0f, -2416.0f});
     check(room->onPlayerAction(20, 2), "Defuse rejected");
     GameModeRegistry::update(2.6f);
@@ -176,6 +200,60 @@ int main()
     check(!room->canDamage(30, 20), "Next round began too early");
     GameModeRegistry::update(0.2f);
     check(room->canDamage(30, 20), "Queued player not admitted next round");
+    nx3d::economy::Snapshot firstTInventory, secondTInventory;
+    check(nx3d::economy::decode(t.getChatSnapshot(777).back().message, firstTInventory) &&
+                  nx3d::economy::decode(queued.getChatSnapshot(777).back().message,
+                                        secondTInventory) &&
+                  firstTInventory.objects.count("bomb") +
+                          secondTInventory.objects.count("bomb") == 1,
+          "Round start did not issue exactly one bomb to the Terrorist team");
+    check((firstTInventory.objects.count("bomb") > 0) ==
+                  (firstTInventory.effect == "bomb_spawn") &&
+                  (secondTInventory.objects.count("bomb") > 0) ==
+                  (secondTInventory.effect == "bomb_spawn"),
+          "Round start did not identify the bomb carrier for auto-equip");
+    check(room->onPlayerAction(10, nx3d::economy::kEquipBombAction) &&
+                  !room->onPlayerAction(30, nx3d::economy::kEquipBombAction),
+          "Bomb equip did not follow NXObject ownership");
+    check(room->onPlayerAction(10, nx3d::economy::kDropBombAction),
+          "Bomb carrier could not drop the bomb");
+    const auto droppedBomb = std::find_if(room->getGameItems().begin(), room->getGameItems().end(),
+                                          [](const auto& item)
+                                          { return item.getType() == "bomb" &&
+                                                   item.getStatus() == "on_ground"; });
+    check(droppedBomb != room->getGameItems().end(), "Dropped bomb was not a ground item");
+    const auto bombItemId = droppedBomb->getId();
+    const auto bombGroundPos = droppedBomb->getPosition();
+    check(!room->onPlayerAction(10, nx3d::economy::kEquipBombAction),
+          "Dropper could still equip the bomb");
+    GameModeRegistry::update(0.1f);
+    check(!room->onPlayerAction(10, nx3d::economy::kEquipBombAction),
+          "Ground bomb was reassigned automatically");
+    ctUser->getObject3D().setPosition(bombGroundPos);
+    check(!room->onGameItemPickup(20, bombItemId),
+          "Counter Terrorist picked up the bomb");
+    auto* secondTerrorist = server::ClientStorage::getClientById(30);
+    secondTerrorist->getObject3D().setPosition(bombGroundPos);
+    check(room->onGameItemPickup(30, bombItemId),
+          "Terrorist could not pick up the dropped bomb");
+    check(room->onPlayerAction(30, nx3d::economy::kEquipBombAction) &&
+                  !room->onPlayerAction(10, nx3d::economy::kEquipBombAction),
+          "Bomb ownership did not transfer on pickup");
+    nx3d::economy::Snapshot pickedBomb;
+    check(nx3d::economy::decode(queued.getChatSnapshot(777).back().message, pickedBomb) &&
+                  pickedBomb.objects.count("bomb") == 1 &&
+                  pickedBomb.effect == "bomb_pickup",
+          "Bomb pickup did not update the item inventory");
+    secondTerrorist->getObject3D().setPosition(Vector3f{1152.0f, 160.0f, -2416.0f});
+    tUser->getObject3D().setPosition(Vector3f{1152.0f, 160.0f, -2416.0f});
+    check(!room->onPlayerAction(10, 1),
+          "Terrorist without the bomb NXObject could plant");
+    check(room->damagePlayer(30, 100.0f), "Bomb carrier did not die");
+    room->onPlayerDied(20, 30);
+    check(std::any_of(room->getGameItems().begin(), room->getGameItems().end(),
+                      [](const auto& item)
+                      { return item.getType() == "bomb" && item.getStatus() == "on_ground"; }),
+          "Bomb carrier death did not drop the bomb item");
     check(room->damagePlayer(20, 100.0f), "Kill did not lower health");
     room->onPlayerDied(10, 20);
     auto eliminated = t.consumeMatchEvents();
@@ -187,6 +265,11 @@ int main()
     for (int round = 3; round <= 12; ++round)
     {
         GameModeRegistry::update(4.1f);
+        if (round == 3)
+            check(std::none_of(room->getGameItems().begin(), room->getGameItems().end(),
+                               [](const auto& item)
+                               { return item.getType() == "bomb"; }),
+                  "Old round bomb remained on the ground");
         check(room->damagePlayer(20, 100.0f), "Round victim was not revived");
         room->onPlayerDied(10, 20);
     }

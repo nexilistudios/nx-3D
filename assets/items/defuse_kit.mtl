@@ -1,0 +1,6 @@
+newmtl case
+map_Kd defuse_kit_case.png
+newmtl handle
+map_Kd defuse_kit_handle.png
+newmtl latch
+map_Kd defuse_kit_latch.png

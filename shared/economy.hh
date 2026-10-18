@@ -1,6 +1,8 @@
 #ifndef NX3D_SHARED_ECONOMY_HH
 #define NX3D_SHARED_ECONOMY_HH
 
+#include <shared/nx_objects.hh>
+
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -32,25 +34,35 @@ struct Item
     int price;
     ItemKind kind;
     const char* team; // Empty means both teams.
+    const NXObject* object;
 };
 
-inline constexpr std::array<Item, 11> kItems{{
-        {10, "Glock", "glock", 400, ItemKind::weapon, "Terrorist"},
-        {11, "USP", "usp", 500, ItemKind::weapon, "Counter Terrorist"},
-        {12, "Desert Eagle", "deagle", 700, ItemKind::weapon, ""},
-        {13, "MP5", "mp5", 1500, ItemKind::weapon, ""},
-        {14, "AK-47", "ak47", 2700, ItemKind::weapon, "Terrorist"},
-        {15, "M16", "m16", 2900, ItemKind::weapon, "Counter Terrorist"},
-        {16, "Defuse kit", "", 400, ItemKind::defuseKit, "Counter Terrorist"},
-        {17, "Ammo refill", "", 250, ItemKind::ammo, ""},
-        {18, "Health refill", "", 350, ItemKind::health, ""},
-        {19, "HE grenade", "", 300, ItemKind::grenade, ""},
-        {20, "Smoke grenade", "", 300, ItemKind::grenade, ""},
-}};
+constexpr ItemKind itemKind(const NXObject& object)
+{
+    if (object.kind == NXObjectKind::firearm) return ItemKind::weapon;
+    if (object.kind == NXObjectKind::throwable) return ItemKind::grenade;
+    if (object.id == "defuse_kit") return ItemKind::defuseKit;
+    if (object.id == "ammo_refill") return ItemKind::ammo;
+    return ItemKind::health;
+}
+
+inline constexpr auto kItems = []
+{
+    std::array<Item, 11> items{};
+    for (uint8_t action = 10; action <= 20; ++action)
+    {
+        const auto* object = findNXObjectForPurchase(action);
+        items[action - 10] = {action, object->name.data(),
+                              object->kind == NXObjectKind::firearm ? object->id.data() : "",
+                              object->price, itemKind(*object), object->team.data(), object};
+    }
+    return items;
+}();
 inline constexpr uint8_t kThrowGrenadeAction = 30;
 inline constexpr uint8_t kDropPrimaryAction = 31;
 inline constexpr uint8_t kDropSecondaryAction = 32;
 inline constexpr uint8_t kThrowSmokeAction = 33;
+inline constexpr uint8_t kDropBombAction = 34;
 // Client requests a visible slot change; the server resolves the weapon from
 // its inventory before broadcasting it to other players.
 inline constexpr uint8_t kEquipPrimaryAction = 40;
@@ -58,13 +70,15 @@ inline constexpr uint8_t kEquipSecondaryAction = 41;
 inline constexpr uint8_t kEquipKnifeAction = 42;
 inline constexpr uint8_t kEquipGrenadeAction = 43;
 inline constexpr uint8_t kEquipSmokeAction = 44;
-inline constexpr int kMaxGrenades = 2;
-inline constexpr int kMaxSmokes = 2;
-inline constexpr float kGrenadeFuseSeconds = 2.0f;
-inline constexpr float kSmokeDurationSeconds = 12.0f;
+inline constexpr uint8_t kEquipBombAction = 45;
+inline constexpr uint8_t kEquipDefuseKitAction = 46;
+inline constexpr int kMaxGrenades = findNXObject("grenade")->effect.maxStack;
+inline constexpr int kMaxSmokes = findNXObject("smoke")->effect.maxStack;
+inline constexpr float kGrenadeFuseSeconds = findNXObject("grenade")->effect.fuseSeconds;
+inline constexpr float kSmokeDurationSeconds = findNXObject("smoke")->effect.durationSeconds;
 inline constexpr float kGrenadeThrowDistance = 180.0f;
-inline constexpr float kGrenadeBlastRadius = 170.0f;
-inline constexpr float kGrenadeMaxDamage = 90.0f;
+inline constexpr float kGrenadeBlastRadius = findNXObject("grenade")->effect.radius;
+inline constexpr float kGrenadeMaxDamage = findNXObject("grenade")->effect.maxDamage;
 
 
 inline const Item* itemForAction(uint8_t action)
@@ -82,7 +96,8 @@ inline std::string_view defaultWeapon(std::string_view team)
 
 inline bool isSecondary(std::string_view weapon)
 {
-    return weapon == "glock" || weapon == "usp" || weapon == "deagle";
+    const auto* object = findNXObject(weapon);
+    return object && object->slot == 2;
 }
 
 struct SpawnPoint { float x, y, z; };
@@ -121,13 +136,11 @@ struct Snapshot
 {
     int money = kStartingMoney;
     std::string weapon;
-    bool hasDefuseKit = false;
+    NXObjectInventory objects;
     std::string effect = "none";
     std::string notice;
     std::string primary;
     std::string secondary;
-    int grenades = 0;
-    int smokes = 0;
 };
 
 inline constexpr std::string_view kMessagePrefix = "\x1eNX3D_ECONOMY ";
@@ -138,7 +151,7 @@ struct GrenadeThrow
     uint64_t owner = 0;
     float x = 0.0f, y = 0.0f, z = 0.0f;
     float endX = 0.0f, endZ = 0.0f;
-    bool smoke = false;
+    std::string objectId = "grenade";
 };
 
 inline std::string encodeGrenade(const GrenadeThrow& throwEvent)
@@ -146,7 +159,7 @@ inline std::string encodeGrenade(const GrenadeThrow& throwEvent)
     return std::string(kGrenadeMessagePrefix) + std::to_string(throwEvent.owner) + " " +
            std::to_string(throwEvent.x) + " " + std::to_string(throwEvent.y) + " " +
            std::to_string(throwEvent.z) + " " + std::to_string(throwEvent.endX) + " " +
-           std::to_string(throwEvent.endZ) + " " + (throwEvent.smoke ? "1" : "0");
+           std::to_string(throwEvent.endZ) + " " + throwEvent.objectId;
 }
 
 inline bool decodeGrenade(std::string_view message, GrenadeThrow& throwEvent)
@@ -155,13 +168,12 @@ inline bool decodeGrenade(std::string_view message, GrenadeThrow& throwEvent)
         return false;
     std::istringstream input{std::string(message.substr(kGrenadeMessagePrefix.size()))};
     GrenadeThrow next;
-    int smoke = 0;
-    if (!(input >> next.owner >> next.x >> next.y >> next.z >> next.endX >> next.endZ >> smoke) ||
-        (smoke != 0 && smoke != 1) ||
+    if (!(input >> next.owner >> next.x >> next.y >> next.z >> next.endX >> next.endZ >> next.objectId) ||
         next.owner == 0 || !std::isfinite(next.x) || !std::isfinite(next.y) ||
-        !std::isfinite(next.z) || !std::isfinite(next.endX) || !std::isfinite(next.endZ))
+        !std::isfinite(next.z) || !std::isfinite(next.endX) || !std::isfinite(next.endZ) ||
+        !findNXObject(next.objectId) ||
+        findNXObject(next.objectId)->kind != NXObjectKind::throwable)
         return false;
-    next.smoke = smoke != 0;
     throwEvent = next;
     return true;
 }
@@ -169,10 +181,12 @@ inline bool decodeGrenade(std::string_view message, GrenadeThrow& throwEvent)
 inline std::string encode(const Snapshot& state)
 {
     return std::string(kMessagePrefix) + std::to_string(state.money) + " " +
-           state.weapon + " " + (state.hasDefuseKit ? "1" : "0") + " " +
+           state.weapon + " " + std::to_string(state.objects.count("defuse_kit")) + " " +
            state.effect + " " + (state.primary.empty() ? "-" : state.primary) + " " +
            (state.secondary.empty() ? "-" : state.secondary) + " " +
-           std::to_string(state.grenades) + " " + std::to_string(state.smokes) + " " + state.notice;
+           std::to_string(state.objects.count("grenade")) + " " +
+           std::to_string(state.objects.count("smoke")) + " " +
+           std::to_string(state.objects.count("bomb")) + " " + state.notice;
 }
 
 inline bool decode(std::string_view message, Snapshot& state)
@@ -181,16 +195,18 @@ inline bool decode(std::string_view message, Snapshot& state)
         return false;
     std::istringstream input{std::string(message.substr(kMessagePrefix.size()))};
     Snapshot next;
-    int kit = 0;
+    int kit = 0, bomb = 0, grenades = 0, smokes = 0;
     if (!(input >> next.money >> next.weapon >> kit >> next.effect >>
-          next.primary >> next.secondary >> next.grenades >> next.smokes) ||
+          next.primary >> next.secondary >> grenades >> smokes >> bomb) ||
         next.money < 0 || next.money > kMaximumMoney || (kit != 0 && kit != 1) ||
-        next.grenades < 0 || next.grenades > kMaxGrenades ||
-        next.smokes < 0 || next.smokes > kMaxSmokes)
+        (bomb != 0 && bomb != 1) ||
+        !next.objects.set("defuse_kit", kit) ||
+        !next.objects.set("grenade", grenades) ||
+        !next.objects.set("smoke", smokes) ||
+        !next.objects.set("bomb", bomb))
         return false;
     if (next.primary == "-") next.primary.clear();
     if (next.secondary == "-") next.secondary.clear();
-    next.hasDefuseKit = kit == 1;
     std::getline(input >> std::ws, next.notice);
     state = std::move(next);
     return true;

@@ -1,0 +1,6 @@
+newmtl case
+map_Kd health_refill_case.png
+newmtl cross
+map_Kd health_refill_cross.png
+newmtl handle
+map_Kd health_refill_handle.png

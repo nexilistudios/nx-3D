@@ -53,6 +53,7 @@ private:
     bool closeToBomb(uint64_t playerId) const;
     bool inBombSite(uint64_t playerId) const;
     void clearAction();
+    void dropBomb(nexilis::server::Room& room, uint64_t playerId);
 
     mutable std::mutex m_mutex;
     std::deque<uint64_t> m_queue;
@@ -68,6 +69,7 @@ private:
     uint8_t m_action = 0;
     float m_actionSeconds = 0.0f;
     bool m_planted = false;
+    uint64_t m_groundBombId = 0;
     std::atomic<bool> m_swapping{false};
     float m_bombX = 0.0f, m_bombY = 0.0f, m_bombZ = 0.0f;
     std::string m_notice = "Waiting for both teams";

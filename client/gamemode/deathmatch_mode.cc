@@ -6,8 +6,10 @@
 #include <nexilis/client/packet.hh>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
+#include <string_view>
 
 namespace nx3d::client::gamemode
 {
@@ -65,6 +67,7 @@ void DeathmatchMode::onEnter(ClientApp& app, const std::string& team)
     m_prevCamPos = app.camera.getPosition();
 
     m_weaponPickedUp = true;
+    m_objects = {};
     equipWeaponForTeam(app);
 }
 
@@ -288,7 +291,7 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
 void DeathmatchMode::handleMouseButtonDown(ClientApp& app, const SDL_Event& event)
 {
     if (event.button.button == SDL_BUTTON_LEFT && m_health > 0 &&
-        (m_activeSlot == 4 || m_activeSlot == 5))
+        (m_pickedUpItemType == "grenade" || m_pickedUpItemType == "smoke"))
     {
         throwGrenade(app);
         return;
@@ -387,8 +390,18 @@ void DeathmatchMode::handleKeyDown(ClientApp& app, const SDL_Event& event)
     if (event.key.repeat)
         return;
 
-    if (m_health > 0 && event.key.key >= SDLK_1 && event.key.key <= SDLK_5)
+    if (m_health > 0 && event.key.key >= SDLK_1 && event.key.key <= SDLK_3)
         equipSlot(app, static_cast<int>(event.key.key - SDLK_0));
+    else if (m_health > 0 && event.key.key == SDLK_4 && m_objects.count("bomb") > 0)
+        equipSlot(app, nx3d::findNXObject("bomb")->slot);
+    else if (m_health > 0 && event.key.key == SDLK_4 && utilityKey() == 4)
+    {
+        if (const int slot = nextUtilitySlot()) equipSlot(app, slot);
+    }
+    else if (m_health > 0 && event.key.key == SDLK_5 && utilityKey() == 5)
+    {
+        if (const int slot = nextUtilitySlot()) equipSlot(app, slot);
+    }
     else if (event.key.key == SDLK_R && m_health > 0 && m_weaponPickedUp && m_activeSlot <= 2)
         startReload(app);
     else if (event.key.key == SDLK_G && m_health > 0 && m_weaponPickedUp && m_activeSlot <= 2)
@@ -421,6 +434,7 @@ void DeathmatchMode::changeTeam(ClientApp& app, const std::string& team)
     // position and life state are retained; their next respawn uses the new
     // team's spawn points.
     m_weaponPickedUp = true;
+    m_objects = {};
     equipWeaponForTeam(app);
 }
 
@@ -441,9 +455,11 @@ void DeathmatchMode::onEconomySnapshot(ClientApp& app, const nx3d::economy::Snap
     };
     syncSlot(m_primary, state.primary);
     syncSlot(m_secondary, state.secondary);
-    m_grenades = state.grenades;
-    m_smokes = state.smokes;
-    if (state.effect == "weapon" && hasWeaponProfile(state.weapon))
+    m_objects = state.objects;
+    if ((state.effect == "bomb_spawn" || state.effect == "bomb_pickup") &&
+        m_objects.count("bomb") > 0)
+        equipSlot(app, nx3d::findNXObject("bomb")->slot);
+    else if (state.effect == "weapon" && hasWeaponProfile(state.weapon))
     {
         const int slot = nx3d::economy::isSecondary(state.weapon) ? 2 : 1;
         GunSlot& purchased = slot == 1 ? m_primary : m_secondary;
@@ -456,10 +472,15 @@ void DeathmatchMode::onEconomySnapshot(ClientApp& app, const nx3d::economy::Snap
     }
     else if ((m_activeSlot == 1 && m_primary.type.empty()) ||
              (m_activeSlot == 2 && m_secondary.type.empty()) ||
-             (m_activeSlot == 4 && m_grenades == 0) ||
-             (m_activeSlot == 5 && m_smokes == 0))
-        equipSlot(app, !m_primary.type.empty() ? 1 :
+             (m_activeSlot == 4 && m_objects.count("grenade") == 0) ||
+             (m_activeSlot == 5 && m_objects.count("smoke") == 0) ||
+             (m_activeSlot == 6 && m_objects.count("bomb") == 0) ||
+             (m_activeSlot == 7 && m_objects.count("defuse_kit") == 0))
+    {
+        const int utility = nextUtilitySlot();
+        equipSlot(app, utility ? utility : !m_primary.type.empty() ? 1 :
                       !m_secondary.type.empty() ? 2 : 3);
+    }
     if (state.effect == "ammo")
     {
         m_reloadRemaining = 0.0f;
@@ -501,7 +522,8 @@ void DeathmatchMode::onGrenadeThrown(ClientApp& app, const nx3d::economy::Grenad
         return;
     direction = glm::normalize(direction);
     showGrenade(app, start + direction * 18.0f,
-                glm::vec3(event.endX, event.y, event.endZ), event.smoke);
+                glm::vec3(event.endX, event.y, event.endZ),
+                event.objectId == "smoke");
 }
 
 void DeathmatchMode::handleKeyUp(ClientApp& app, const SDL_Event& event)
@@ -603,26 +625,51 @@ glm::vec3 DeathmatchMode::pickSpawnPoint()
 
 void DeathmatchMode::equipWeaponForTeam(ClientApp& app)
 {
+    // Keep the latest server-issued NXObjects. Bomb round snapshots can arrive
+    // before the round event that calls this function.
     m_primary = {};
     m_secondary = {};
     m_secondary.type = nx3d::economy::defaultWeapon(m_team);
-    m_grenades = 0;
-    m_smokes = 0;
     m_activeSlot = 0;
-    equipSlot(app, 2);
+    equipSlot(app, m_objects.count("bomb") > 0 ? nx3d::findNXObject("bomb")->slot : 2);
+}
+
+int DeathmatchMode::utilityKey() const
+{
+    return m_objects.count("bomb") > 0 ? 5 : 4;
+}
+
+int DeathmatchMode::nextUtilitySlot() const
+{
+    constexpr std::array<std::string_view, 3> utility{"grenade", "smoke", "defuse_kit"};
+    int start = 0;
+    for (int i = 0; i < static_cast<int>(utility.size()); ++i)
+        if (m_activeSlot == nx3d::findNXObject(utility[i])->slot)
+            start = i + 1;
+    for (int offset = 0; offset < static_cast<int>(utility.size()); ++offset)
+    {
+        const auto* object = nx3d::findNXObject(utility[(start + offset) % utility.size()]);
+        if (m_objects.count(object->id) > 0)
+            return object->slot;
+    }
+    return 0;
 }
 
 void DeathmatchMode::equipSlot(ClientApp& app, int slot, bool force)
 {
-    if (slot < 1 || slot > 5 || m_health <= 0)
+    if (slot < 1 || slot > 7 || m_health <= 0)
         return;
     GunSlot* selected = slot == 1 ? &m_primary : slot == 2 ? &m_secondary : nullptr;
-    if ((selected && selected->type.empty()) || (slot == 4 && m_grenades == 0) ||
-        (slot == 5 && m_smokes == 0))
+    if ((selected && selected->type.empty()) ||
+        (slot == 4 && m_objects.count("grenade") == 0) ||
+        (slot == 5 && m_objects.count("smoke") == 0) ||
+        (slot == 6 && m_objects.count("bomb") == 0) ||
+        (slot == 7 && m_objects.count("defuse_kit") == 0))
         return;
     if (!force && slot == m_activeSlot &&
         m_pickedUpItemType == (selected ? selected->type : slot == 3 ? "knife" :
-                              slot == 4 ? "grenade" : "smoke"))
+                              slot == 4 ? "grenade" : slot == 5 ? "smoke" :
+                              slot == 6 ? "bomb" : "defuse_kit"))
         return;
     GunSlot* previous = m_activeSlot == 1 ? &m_primary :
                         m_activeSlot == 2 ? &m_secondary : nullptr;
@@ -638,7 +685,8 @@ void DeathmatchMode::equipSlot(ClientApp& app, int slot, bool force)
     m_burstShots = 0;
     m_fireCooldown = 0.0f;
     m_pickedUpItemType = selected ? selected->type : slot == 3 ? "knife" :
-                         slot == 4 ? "grenade" : "smoke";
+                         slot == 4 ? "grenade" : slot == 5 ? "smoke" :
+                         slot == 6 ? "bomb" : "defuse_kit";
     if (app.ready && app.client_api.clientInRoom())
         app.tcp_client.sendMessage(nexilis::client::Packet::Room::Player3D::matchAction(
                 app.client_api, static_cast<uint8_t>(nx3d::economy::kEquipPrimaryAction + slot - 1)));
@@ -646,7 +694,7 @@ void DeathmatchMode::equipSlot(ClientApp& app, int slot, bool force)
     m_pickedUpItemId = selected ? selected->itemId : 0;
     m_pickedUpItemSize = selected ? selected->itemSize : glm::vec3(1.0f);
     const auto& profile = getWeaponProfile(m_pickedUpItemType);
-    equipGun(app, profile.name, profile.obj_path, profile.mtl_path,
+    equipGun(app, profile.name, profile.view_obj_path, profile.view_mtl_path,
              profile.fp_scale, profile.fp_center, profile.fp_offset, profile.fp_rotation);
     if (selected && selected->ammo >= 0)
         m_ammo = selected->ammo;
@@ -662,9 +710,10 @@ void DeathmatchMode::equipSlot(ClientApp& app, int slot, bool force)
 
 void DeathmatchMode::throwGrenade(ClientApp& app)
 {
-    const bool smoke = m_activeSlot == 5;
-    int& count = smoke ? m_smokes : m_grenades;
-    if (!app.ready || !app.client_api.clientInRoom() || count <= 0)
+    const bool smoke = m_pickedUpItemType == "smoke";
+    const auto objectId = smoke ? "smoke" : "grenade";
+    if (!app.ready || !app.client_api.clientInRoom() ||
+        m_objects.count(objectId) == 0)
         return;
     using packet = nexilis::client::Packet;
     const glm::vec3 origin = app.camera.getPosition();
@@ -676,24 +725,29 @@ void DeathmatchMode::throwGrenade(ClientApp& app)
     app.tcp_client.sendMessage(packet::Room::Player3D::matchAction(
             app.client_api, smoke ? nx3d::economy::kThrowSmokeAction :
                                     nx3d::economy::kThrowGrenadeAction));
-    --count;
+    m_objects.consume(objectId);
     showGrenade(app, origin + direction * 18.0f,
                 origin + direction * nx3d::economy::kGrenadeThrowDistance, smoke);
-    if (count == 0)
-        equipSlot(app, !m_primary.type.empty() ? 1 :
+    if (m_objects.count(objectId) == 0)
+    {
+        const int utility = nextUtilitySlot();
+        equipSlot(app, utility ? utility : !m_primary.type.empty() ? 1 :
                       !m_secondary.type.empty() ? 2 : 3);
+    }
     else
         refreshWeaponHud(app);
 }
 
 void DeathmatchMode::showGrenade(ClientApp& app, glm::vec3 start, glm::vec3 end, bool smoke)
 {
-    auto model = std::make_shared<spear::rendering::vulkan::TexturedCube>(
+    const auto profile = getWeaponProfile(smoke ? "smoke" : "grenade");
+    auto model = std::make_shared<spear::rendering::vulkan::OBJModel>(
             app.renderer.getDevice(), app.renderer.getPhysicalDevice(),
-            smoke ? app.smoke_texture : app.crosshair_texture,
+            app.renderer.getCommandPool(), app.renderer.getGraphicsQueue(),
+            profile.obj_path, profile.mtl_path,
             app.descriptorPool, app.descriptorSetLayout,
             blt::ObjectData(app.shared_world, 0.0f, start, app.default_size));
-    model->scale(glm::vec3(8.0f));
+    model->scale(glm::vec3(profile.ground_scale));
     app.scene_manager.getCurrentScene()->addObject(model);
     m_grenadeVisuals.push_back({model, start, end, 0.0f, smoke, {}});
 }
@@ -704,19 +758,31 @@ void DeathmatchMode::refreshWeaponHud(ClientApp& app)
         return;
     if (m_activeSlot == 3)
     {
-        app.ui->weaponHudText.setString("3 Knife  |  1 Primary  2 Secondary  4 HE  5 Smoke");
+        app.ui->weaponHudText.setString("3 Knife  |  1 Primary  2 Secondary  " +
+                                        std::to_string(utilityKey()) + " Utility" +
+                                        (m_objects.count("bomb") > 0 ? "  4 Bomb" : ""));
         return;
     }
     if (m_activeSlot == 4)
     {
-        app.ui->weaponHudText.setString("4 HE Grenade x" + std::to_string(m_grenades) +
+        app.ui->weaponHudText.setString(std::to_string(utilityKey()) + " HE Grenade x" + std::to_string(m_objects.count("grenade")) +
                                         "  |  Left click: Throw");
         return;
     }
     if (m_activeSlot == 5)
     {
-        app.ui->weaponHudText.setString("5 Smoke Grenade x" + std::to_string(m_smokes) +
+        app.ui->weaponHudText.setString(std::to_string(utilityKey()) + " Smoke Grenade x" + std::to_string(m_objects.count("smoke")) +
                                         "  |  Left click: Throw");
+        return;
+    }
+    if (m_activeSlot == 6)
+    {
+        app.ui->weaponHudText.setString("4 C4 Bomb  |  Hold E at a bomb site to plant  |  G: Drop");
+        return;
+    }
+    if (m_activeSlot == 7)
+    {
+        app.ui->weaponHudText.setString(std::to_string(utilityKey()) + " Defuse kit  |  Hold E near the bomb to defuse");
         return;
     }
     const std::string suffix = m_reloadRemaining > 0.0f ? "  RELOADING" :
@@ -795,15 +861,19 @@ void DeathmatchMode::pickupNearbyWeapon(ClientApp& app)
     for (const auto& item : gameItems)
     {
         const std::string weaponType(nx3d::ammunition::pickupWeaponType(item.item_type));
-        if (item.status != "on_ground" || !hasWeaponProfile(weaponType))
+        const bool bomb = weaponType == "bomb";
+        if (item.status != "on_ground" ||
+            (!hasWeaponProfile(weaponType) && !bomb) ||
+            (bomb && (m_team != "Terrorist" || m_objects.count("bomb") > 0)))
             continue;
         int magazine = 0, reserve = 0;
-        const bool hasAmmo = nx3d::ammunition::decodePickup(item.item_type, magazine, reserve);
-        if (item.item_type.find(':') != std::string::npos && !hasAmmo)
+        const bool hasAmmo = !bomb && nx3d::ammunition::decodePickup(item.item_type, magazine, reserve);
+        if (!bomb && item.item_type.find(':') != std::string::npos && !hasAmmo)
             continue;
-        const int slot = nx3d::economy::isSecondary(weaponType) ? 2 : 1;
-        GunSlot& inventory = slot == 1 ? m_primary : m_secondary;
-        if (!inventory.type.empty())
+        const int slot = bomb ? nx3d::findNXObject("bomb")->slot :
+                         nx3d::economy::isSecondary(weaponType) ? 2 : 1;
+        GunSlot* inventory = bomb ? nullptr : slot == 1 ? &m_primary : &m_secondary;
+        if (inventory && !inventory->type.empty())
             continue;
         glm::vec3 itemPos(item.x, item.y, item.z);
         auto localItem = app.remote_game_items.find(item.id);
@@ -815,18 +885,21 @@ void DeathmatchMode::pickupNearbyWeapon(ClientApp& app)
         if (glm::distance(camPos, itemPos) >= 100.0f)
             continue;
 
-        inventory.type = weaponType;
-        inventory.ammo = -1;
-        inventory.reserve = -1;
-        if (hasAmmo)
+        if (inventory)
         {
-            const auto& profile = getWeaponProfile(weaponType);
-            inventory.ammo = std::min(magazine, profile.magazine_size);
-            inventory.reserve = std::min(reserve,
-                                         profile.magazine_size * profile.reserve_magazines);
+            inventory->type = weaponType;
+            inventory->ammo = -1;
+            inventory->reserve = -1;
+            if (hasAmmo)
+            {
+                const auto& profile = getWeaponProfile(weaponType);
+                inventory->ammo = std::min(magazine, profile.magazine_size);
+                inventory->reserve = std::min(reserve,
+                                             profile.magazine_size * profile.reserve_magazines);
+            }
+            inventory->itemId = item.id;
+            inventory->itemSize = glm::vec3(item.w, item.h, item.d);
         }
-        inventory.itemId = item.id;
-        inventory.itemSize = glm::vec3(item.w, item.h, item.d);
         app.tcp_client.sendMessage(packet::Room::GameItem::update(app.client_api, item.id, "picked_up"));
 
         if (localItem != app.remote_game_items.end())
@@ -836,7 +909,8 @@ void DeathmatchMode::pickupNearbyWeapon(ClientApp& app)
             app.remote_game_items.erase(localItem);
         }
 
-        equipSlot(app, slot);
+        if (inventory)
+            equipSlot(app, slot);
         return;
     }
 }

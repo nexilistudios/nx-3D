@@ -1,0 +1,6 @@
+newmtl case
+map_Kd ammo_refill_case.png
+newmtl band
+map_Kd ammo_refill_band.png
+newmtl round
+map_Kd ammo_refill_round.png

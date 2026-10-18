@@ -359,21 +359,15 @@ struct WeaponRule
 
 std::optional<WeaponRule> weaponRule(const std::string& type)
 {
-    if (type == "ak47")
-        return WeaponRule{35, 600, 30, 3, 2.5f, 5000};
-    if (type == "m16")
-        return WeaponRule{35, 800, 30, 3, 2.5f, 5000};
-    if (type == "glock")
-        return WeaponRule{24, 400, 20, 3, 2.0f, 5000};
-    if (type == "usp")
-        return WeaponRule{30, 350, 12, 3, 2.1f, 5000};
-    if (type == "deagle")
-        return WeaponRule{35, 260, 7, 3, 2.2f, 5000};
-    if (type == "mp5")
-        return WeaponRule{26, 800, 30, 3, 2.4f, 5000};
-    if (type == "knife")
-        return WeaponRule{35, 100, 0, 0, 0, 100};
-    return std::nullopt;
+    const auto* object = nx3d::findNXObject(type);
+    if (!object || (object->kind != nx3d::NXObjectKind::firearm &&
+                    object->kind != nx3d::NXObjectKind::melee))
+        return std::nullopt;
+    const auto& combat = object->combat;
+    return WeaponRule{combat.damage, combat.roundsPerMinute,
+                      combat.magazineSize, combat.reserveMagazines,
+                      combat.reloadSeconds,
+                      object->kind == nx3d::NXObjectKind::melee ? 100.0f : 5000.0f};
 }
 } // namespace
 
@@ -542,7 +536,8 @@ bool Authority::equipWeapon(nexilis::server::Room& room, uint64_t playerId,
     auto* user = nexilis::server::ClientStorage::getClientById(playerId);
     if (!user || user->getRoomId() != room.getId() ||
         room.getPlayerHealth(playerId) <= 0.0f || room.getPlayerTeam(playerId).empty() ||
-        (!weaponRule(weapon) && weapon != "grenade" && weapon != "smoke"))
+        (!weaponRule(weapon) && weapon != "grenade" && weapon != "smoke" &&
+         weapon != "bomb" && weapon != "defuse_kit"))
         return false;
     {
         std::lock_guard lock(m_mutex);

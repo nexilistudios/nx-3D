@@ -1,4 +1,5 @@
 #include <spear/model/obj_loader.hh>
+#include <shared/nx_objects.hh>
 
 #include <algorithm>
 #include <filesystem>
@@ -83,6 +84,18 @@ int main()
             validateReloadParts(gun);
         validate("knife", 20, 16, 2, -0.8f, 0.7f);
         validate("grenade", 20, 16, 2, -0.15f, 0.15f);
+        for (const auto& object : nx3d::kNXObjects)
+        {
+            spear::OBJLoader loader;
+            const auto assets = std::filesystem::path(PROJECT_ROOT) / "assets";
+            require(loader.load((assets / object.visual.worldModel).string(),
+                                (assets / object.visual.worldMaterial).string(), false) &&
+                            !loader.getFaces().empty(),
+                    "NXObject world mesh did not load");
+            for (const auto& material : loader.getMaterials())
+                require(std::filesystem::exists(material.texturePath),
+                        "NXObject material texture is missing");
+        }
     }
     catch (const std::exception& error)
     {

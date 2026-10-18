@@ -35,15 +35,13 @@ public:
             wallet.weapon = nx3d::economy::defaultWeapon(room.getPlayerTeam(id));
             wallet.primary.clear();
             wallet.secondary = wallet.weapon;
-            wallet.grenades = 0;
-            wallet.smokes = 0;
-            wallet.hasDefuseKit = false;
+            wallet.objects = {};
             state = wallet;
         }
         send(room, id, state);
     }
 
-    void respawned(nexilis::server::Room& room, uint64_t id)
+    void respawned(nexilis::server::Room& room, uint64_t id, bool issueBomb = false)
     {
         nx3d::economy::Snapshot state;
         {
@@ -52,10 +50,13 @@ public:
             wallet.weapon = nx3d::economy::defaultWeapon(room.getPlayerTeam(id));
             wallet.primary.clear();
             wallet.secondary = wallet.weapon;
-            wallet.grenades = 0;
-            wallet.smokes = 0;
-            wallet.hasDefuseKit = false;
+            wallet.objects = {};
+            wallet.effect = "none";
+            if (issueBomb && room.getPlayerTeam(id) == "Terrorist")
+                wallet.objects.add("bomb");
             state = wallet;
+            if (issueBomb && room.getPlayerTeam(id) == "Terrorist")
+                state.effect = "bomb_spawn";
         }
         send(room, id, state);
     }
@@ -86,10 +87,11 @@ public:
             auto& victimWallet = m_wallets[victim];
             if (victimWallet.weapon.empty())
                 victimWallet.weapon = nx3d::economy::defaultWeapon(room.getPlayerTeam(victim));
-            lostKit = victimWallet.hasDefuseKit || victimWallet.grenades > 0 || victimWallet.smokes > 0;
-            victimWallet.hasDefuseKit = false;
-            victimWallet.grenades = 0;
-            victimWallet.smokes = 0;
+            lostKit = victimWallet.objects.count("defuse_kit") > 0 ||
+                      victimWallet.objects.count("grenade") > 0 ||
+                      victimWallet.objects.count("smoke") > 0 ||
+                      victimWallet.objects.count("bomb") > 0;
+            victimWallet.objects = {};
             victimState = victimWallet;
             if (killer != 0 && killer != victim)
             {
@@ -127,7 +129,46 @@ public:
     {
         std::lock_guard lock(m_mutex);
         const auto it = m_wallets.find(id);
-        return it != m_wallets.end() && it->second.hasDefuseKit;
+        return it != m_wallets.end() && it->second.objects.count("defuse_kit") > 0;
+    }
+
+    bool hasBomb(uint64_t id) const
+    {
+        std::lock_guard lock(m_mutex);
+        const auto it = m_wallets.find(id);
+        return it != m_wallets.end() && it->second.objects.count("bomb") > 0;
+    }
+
+    void setBomb(nexilis::server::Room& room, uint64_t id, bool owned)
+    {
+        if (owned && room.getPlayerTeam(id) != "Terrorist")
+            return;
+        nx3d::economy::Snapshot state;
+        {
+            std::lock_guard lock(m_mutex);
+            auto it = m_wallets.find(id);
+            if (it == m_wallets.end()) return;
+            it->second.objects.set("bomb", owned ? 1 : 0);
+            state = it->second;
+        }
+        send(room, id, state);
+    }
+
+    bool pickupBomb(nexilis::server::Room& room, uint64_t id)
+    {
+        if (room.getPlayerTeam(id) != "Terrorist" || room.getPlayerHealth(id) <= 0.0f)
+            return false;
+        nx3d::economy::Snapshot state;
+        {
+            std::lock_guard lock(m_mutex);
+            auto it = m_wallets.find(id);
+            if (it == m_wallets.end() || !it->second.objects.add("bomb"))
+                return false;
+            state = it->second;
+            state.effect = "bomb_pickup";
+        }
+        send(room, id, state);
+        return true;
     }
 
     std::string weaponForSlot(uint64_t id, uint8_t slot) const
@@ -142,6 +183,14 @@ public:
             return it->second.primary;
         if (slot == 2)
             return it->second.secondary;
+        if (slot == 4 && it->second.objects.count("grenade") > 0)
+            return "grenade";
+        if (slot == 5 && it->second.objects.count("smoke") > 0)
+            return "smoke";
+        if (slot == 6 && it->second.objects.count("bomb") > 0)
+            return "bomb";
+        if (slot == 7 && it->second.objects.count("defuse_kit") > 0)
+            return "defuse_kit";
         return {};
     }
 
@@ -196,11 +245,14 @@ public:
                 state.notice = "Defuse kits are for bomb matches";
             else if (wallet.money < item->price)
                 state.notice = "Not enough money";
-            else if (item->kind == nx3d::economy::ItemKind::defuseKit && wallet.hasDefuseKit)
+            else if (item->kind == nx3d::economy::ItemKind::defuseKit &&
+                     wallet.objects.count("defuse_kit") > 0)
                 state.notice = "Already have a defuse kit";
-            else if (item->action == 19 && wallet.grenades >= nx3d::economy::kMaxGrenades)
+            else if (item->object->id == "grenade" &&
+                     wallet.objects.count("grenade") >= item->object->effect.maxStack)
                 state.notice = "Grenade slots full";
-            else if (item->action == 20 && wallet.smokes >= nx3d::economy::kMaxSmokes)
+            else if (item->object->id == "smoke" &&
+                     wallet.objects.count("smoke") >= item->object->effect.maxStack)
                 state.notice = "Smoke slots full";
             else if (item->kind == nx3d::economy::ItemKind::health && room.getPlayerHealth(id) >= 100.0f)
                 state.notice = "Health already full";
@@ -216,12 +268,9 @@ public:
                         wallet.primary = item->weapon;
                 }
                 else if (item->kind == nx3d::economy::ItemKind::defuseKit)
-                    wallet.hasDefuseKit = true;
+                    wallet.objects.add("defuse_kit");
                 else if (item->kind == nx3d::economy::ItemKind::grenade)
-                {
-                    if (item->action == 20) ++wallet.smokes;
-                    else ++wallet.grenades;
-                }
+                    wallet.objects.add(item->object->id);
                 success = true;
                 state.notice = std::string("Bought ") + item->name;
                 state.effect = item->kind == nx3d::economy::ItemKind::weapon ? "weapon" :
@@ -230,11 +279,9 @@ public:
             }
             state.money = wallet.money;
             state.weapon = wallet.weapon;
-            state.hasDefuseKit = wallet.hasDefuseKit;
+            state.objects = wallet.objects;
             state.primary = wallet.primary;
             state.secondary = wallet.secondary;
-            state.grenades = wallet.grenades;
-            state.smokes = wallet.smokes;
         }
         if (success && item->kind == nx3d::economy::ItemKind::health)
             room.resetPlayerHealth(id);
@@ -252,10 +299,9 @@ public:
         {
             std::lock_guard lock(m_mutex);
             auto& wallet = m_wallets[id];
-            int& count = smoke ? wallet.smokes : wallet.grenades;
-            if (count == 0)
+            const auto type = smoke ? "smoke" : "grenade";
+            if (!wallet.objects.consume(type))
                 return false;
-            --count;
             state = wallet;
             state.effect = smoke ? "smoke_thrown" : "grenade_thrown";
             state.notice = smoke ? "Smoke thrown" : "Grenade thrown";
@@ -263,7 +309,7 @@ public:
             const float yaw = user->getObject3D().getYaw();
             throwEvent = {id, pos.x, pos.y, pos.z,
                           pos.x - std::sin(yaw) * nx3d::economy::kGrenadeThrowDistance,
-                          pos.z - std::cos(yaw) * nx3d::economy::kGrenadeThrowDistance, smoke};
+                          pos.z - std::cos(yaw) * nx3d::economy::kGrenadeThrowDistance, type};
             if (!smoke)
                 m_thrown.push_back({id, room.getPlayerTeam(id),
                                     throwEvent.endX, pos.y, throwEvent.endZ,

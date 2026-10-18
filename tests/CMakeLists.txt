@@ -37,6 +37,7 @@ add_test(NAME bomb_player_state COMMAND bomb_player_state_test)
 
 add_executable(economy_test economy_test.cc)
 target_include_directories(economy_test PRIVATE ..)
+target_compile_definitions(economy_test PRIVATE PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 add_test(NAME economy COMMAND economy_test)
 
 add_executable(ammunition_test ammunition_test.cc)
@@ -69,6 +70,7 @@ if(TARGET spear)
     add_test(NAME player_model COMMAND player_model_test)
 
     add_executable(weapon_model_test weapon_model_test.cc)
+    target_include_directories(weapon_model_test PRIVATE ..)
     target_compile_definitions(weapon_model_test PRIVATE PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
     target_link_libraries(weapon_model_test PRIVATE spear)
     add_test(NAME weapon_model COMMAND weapon_model_test)

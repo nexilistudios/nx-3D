@@ -5,6 +5,7 @@
 #include <client/gamemode/game_mode.hh>
 #include <client/gun/first_person_gun.hh>
 #include <client/ui/ui.hh>
+#include <shared/nx_objects.hh>
 
 #include <spear/rendering/vulkan/shapes/textured_cube.hh>
 
@@ -60,6 +61,8 @@ protected:
     void startReload(ClientApp& app);
     void refreshWeaponHud(ClientApp& app);
     void equipSlot(ClientApp& app, int slot, bool force = false);
+    int nextUtilitySlot() const;
+    int utilityKey() const;
     void throwGrenade(ClientApp& app);
     void showGrenade(ClientApp& app, glm::vec3 start, glm::vec3 end, bool smoke);
     void installOverlay(ClientApp& app);
@@ -95,11 +98,10 @@ protected:
     GunSlot m_primary;
     GunSlot m_secondary;
     int m_activeSlot = 2;
-    int m_grenades = 0;
-    int m_smokes = 0;
+    nx3d::NXObjectInventory m_objects;
     struct GrenadeVisual
     {
-        std::shared_ptr<spear::rendering::vulkan::TexturedCube> model;
+        std::shared_ptr<spear::rendering::vulkan::OBJModel> model;
         glm::vec3 start;
         glm::vec3 end;
         float age = 0.0f;
