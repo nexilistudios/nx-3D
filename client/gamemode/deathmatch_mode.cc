@@ -298,8 +298,15 @@ void DeathmatchMode::handleMouseButtonDown(ClientApp& app, const SDL_Event& even
     }
     if (m_health <= 0 || !m_weaponPickedUp || event.button.button != SDL_BUTTON_LEFT)
         return;
-    if (m_reloadRemaining > 0.0f || (m_ammo == 0 && m_activeSlot != 3) ||
-        m_fireCooldown > 0.0f)
+    if (m_reloadRemaining > 0.0f)
+        return;
+    if (m_activeSlot <= 2 && m_ammo == 0)
+    {
+        if (app.empty_trigger_audio)
+            app.empty_trigger_audio->play();
+        return;
+    }
+    if (m_fireCooldown > 0.0f)
         return;
 
     // Start a fresh burst: the first shot fires immediately, subsequent shots
@@ -338,6 +345,8 @@ void DeathmatchMode::fireWeapon(ClientApp& app)
 
     if (m_reloadRemaining > 0.0f || m_ammo == 0)
     {
+        if (m_ammo == 0 && app.empty_trigger_audio)
+            app.empty_trigger_audio->play();
         m_triggerHeld = false;
         return;
     }

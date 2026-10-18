@@ -132,6 +132,8 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
             audio_system, nx3d::projectAssetPath("sounds/hitmarker.wav"));
     reload_audio = std::make_unique<spear::audio::Sound>(
             audio_system, nx3d::projectAssetPath("sounds/reload.wav"));
+    empty_trigger_audio = std::make_unique<spear::audio::Sound>(
+            audio_system, nx3d::projectAssetPath("sounds/empty_trigger.wav"));
     planting_audio = std::make_unique<spear::audio::Sound>(
             audio_system, nx3d::projectAssetPath("sounds/planting.wav"));
     defusing_audio = std::make_unique<spear::audio::Sound>(
@@ -388,6 +390,8 @@ void ClientApp::applyAudioVolume()
         hitmarker_audio->setVolume(audioVolume);
     if (reload_audio)
         reload_audio->setVolume(audioVolume);
+    if (empty_trigger_audio)
+        empty_trigger_audio->setVolume(audioVolume);
     if (planting_audio)
         planting_audio->setVolume(audioVolume);
     if (defusing_audio)

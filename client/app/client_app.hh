@@ -102,6 +102,7 @@ public:
     spear::audio::Sound* gunshotSound(uint8_t sound);
     std::unique_ptr<spear::audio::Sound> hitmarker_audio;
     std::unique_ptr<spear::audio::Sound> reload_audio;
+    std::unique_ptr<spear::audio::Sound> empty_trigger_audio;
     std::unique_ptr<spear::audio::Sound> planting_audio;
     std::unique_ptr<spear::audio::Sound> defusing_audio;
     std::unique_ptr<spear::audio::Sound> bomb_beep_audio;

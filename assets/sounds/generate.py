@@ -125,6 +125,20 @@ def reload() -> list[float]:
     return result
 
 
+def empty_trigger() -> list[float]:
+    """A short mechanical hammer click with a softer spring return."""
+    rng = random.Random(611)
+    result = [0.0] * int(0.16 * RATE)
+    for start, strength, pitch in ((0.0, 1.0, 1850.0), (0.052, 0.48, 1150.0)):
+        base = int(start * RATE)
+        for offset in range(int(0.07 * RATE)):
+            t = offset / RATE
+            noise = rng.uniform(-1.0, 1.0) * math.exp(-t * 105.0)
+            ring = math.sin(2.0 * math.pi * pitch * t) * math.exp(-t * 68.0)
+            result[base + offset] += strength * (0.7 * noise + 0.3 * ring)
+    return result
+
+
 def gunshot(seed: int, duration: float, body_pitch: float, crack: float,
             thump: float, tail: float, slide: float, slide_delay: float) -> list[float]:
     """Make a punchy report from muzzle noise, a short bass body, and action clack.
@@ -187,6 +201,7 @@ if __name__ == "__main__":
     save("bomb_beep.wav", bomb_beep())
     save("explosion.wav", explosion())
     save("reload.wav", reload())
+    save("empty_trigger.wav", empty_trigger())
     save("smoke.wav", smoke())
     for name, settings in {
         # Rifle reports are longer and deeper; the M16 has a brighter snap.
