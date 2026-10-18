@@ -33,6 +33,7 @@ public:
                       const std::string& weapon) override;
     bool canDamage(uint64_t shooterId, uint64_t targetId) const override;
     bool canSelectTeam(uint64_t playerId) const override;
+    bool preserveEquipmentOnSpawn(uint64_t playerId) const override;
     void update(nexilis::server::Room& room, float dt) override;
 
 private:
@@ -56,9 +57,12 @@ private:
     void dropBomb(nexilis::server::Room& room, uint64_t playerId);
 
     mutable std::mutex m_mutex;
+    mutable std::mutex m_spawnPolicyMutex;
+    std::unordered_set<uint64_t> m_preserveSpawns;
     std::deque<uint64_t> m_queue;
     std::unordered_set<uint64_t> m_players;
     std::unordered_set<uint64_t> m_alive;
+    std::unordered_set<uint64_t> m_changedTeams;
     Phase m_phase = Phase::waiting;
     unsigned m_round = 0;
     unsigned m_tScore = 0;

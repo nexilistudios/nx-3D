@@ -97,6 +97,7 @@ void BombMode::onTeamSelected(nexilis::server::Room& room, uint64_t playerId)
     std::lock_guard lock(m_mutex);
     if (m_swapping)
         return;
+    m_changedTeams.insert(playerId);
     if (!m_players.contains(playerId) &&
         std::find(m_queue.begin(), m_queue.end(), playerId) == m_queue.end())
     {
@@ -133,6 +134,12 @@ bool BombMode::canSelectTeam(uint64_t playerId) const
 {
     (void)playerId;
     return true;
+}
+
+bool BombMode::preserveEquipmentOnSpawn(uint64_t playerId) const
+{
+    std::lock_guard lock(m_spawnPolicyMutex);
+    return m_preserveSpawns.contains(playerId);
 }
 
 bool BombMode::teamAlive(nexilis::server::Room& room, const std::string& team) const
@@ -378,6 +385,15 @@ void BombMode::startRound(nexilis::server::Room& room)
         return;
     }
 
+    {
+        std::lock_guard spawnLock(m_spawnPolicyMutex);
+        m_preserveSpawns.clear();
+        if (m_phase == Phase::post && m_round != 12)
+            m_preserveSpawns = m_alive;
+        for (auto id : m_changedTeams)
+            m_preserveSpawns.erase(id);
+        m_changedTeams.clear();
+    }
     ++m_round;
     m_phase = Phase::live;
     m_seconds = kRoundSeconds;
@@ -406,7 +422,8 @@ void BombMode::startRound(nexilis::server::Room& room)
     {
         room.resetPlayerHealth(id);
         room.spawnPlayer(id);
-        m_economy.respawned(room, id, id == bombCarrier);
+        m_economy.respawned(room, id, id == bombCarrier,
+                            preserveEquipmentOnSpawn(id));
         if (id == bombCarrier)
             room.onPlayerAction(id, nx3d::economy::kEquipBombAction);
         auto* user = nexilis::server::ClientStorage::getClientById(id);
@@ -418,6 +435,10 @@ void BombMode::startRound(nexilis::server::Room& room)
                 static_cast<uint8_t>(nexilis::RoomCommandType::PlayerType::respawn)};
         room.broadcastToAll(nexilis::server::Command::createRoomCommand(
                 room.getId(), *user, bytes, {{"target_id", id}}, 0));
+    }
+    {
+        std::lock_guard spawnLock(m_spawnPolicyMutex);
+        m_preserveSpawns.clear();
     }
     publish(room);
 }
@@ -435,6 +456,8 @@ void BombMode::reconcile(nexilis::server::Room& room)
     std::erase_if(m_players, [&](uint64_t id)
                   { return !present(id); });
     std::erase_if(m_alive, [&](uint64_t id)
+                  { return !present(id); });
+    std::erase_if(m_changedTeams, [&](uint64_t id)
                   { return !present(id); });
     if (!present(m_actionPlayer))
         clearAction();

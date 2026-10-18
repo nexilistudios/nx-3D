@@ -255,7 +255,8 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
                 app.reload_audio->stop();
             refreshWeaponHud(app);
 
-            equipWeaponForTeam(app);
+            if (!preserveEquipmentOnRespawn())
+                equipWeaponForTeam(app);
         }
         else
         {

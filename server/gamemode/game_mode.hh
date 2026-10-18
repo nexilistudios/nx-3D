@@ -46,6 +46,10 @@ public:
     {
         return {};
     }
+    virtual bool preserveEquipmentOnSpawn(uint64_t) const
+    {
+        return false;
+    }
     virtual bool pickupWeapon(nexilis::server::Room&, uint64_t, uint8_t,
                               const std::string&)
     {

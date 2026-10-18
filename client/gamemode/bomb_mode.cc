@@ -42,11 +42,18 @@ bool BombMode::isEliminated() const
                                   DeathmatchMode::isEliminated());
 }
 
+bool BombMode::preserveEquipmentOnRespawn() const
+{
+    return (m_round > 0 && m_round != 12 && m_phase == "post" && m_active && m_alive) ||
+           (m_phase == "live" && m_preservedRound == m_round);
+}
+
 void BombMode::onEnter(ClientApp& app, const std::string& team)
 {
     DeathmatchMode::onEnter(app, team);
     m_using = false;
     m_defusing = false;
+    m_preservedRound = 0;
     m_defuseSoundTimer = 0.0f;
     if (app.defusing_audio)
         app.defusing_audio->stop();
@@ -68,6 +75,8 @@ void BombMode::update(ClientApp& app, float dt)
             continue;
         const auto& event = static_cast<const nexilis::client::ClientAPI::BombMatchEvent&>(*matchEvent);
         const bool newRound = event.round != m_round;
+        const bool survivedPreviousRound = m_round > 0 && m_round != 12 &&
+                                           m_phase == "post" && m_active && m_alive;
         const bool bombExploded = m_phase == "live" && event.phase == "post" &&
                                   event.notice == "T win: Bomb exploded";
         if (bombExploded && app.explosion_audio)
@@ -128,6 +137,7 @@ void BombMode::update(ClientApp& app, float dt)
         }
         if (newRound && event.active && event.phase == "live")
         {
+            m_preservedRound = survivedPreviousRound && !teamChanged ? event.round : 0;
             if (app.movement_controller.isCrouched() && !teamChanged)
                 app.camera.setPosition(app.camera.getPosition() +
                                        glm::vec3(0.0f, nx3d::kStandingEyeHeight -
@@ -140,8 +150,11 @@ void BombMode::update(ClientApp& app, float dt)
                 app.movement_controller.resetVerticalMotion();
                 m_prevCamPos = app.camera.getPosition();
             }
-            m_weaponPickedUp = true;
-            equipWeaponForTeam(app);
+            if (!survivedPreviousRound || teamChanged)
+            {
+                m_weaponPickedUp = true;
+                equipWeaponForTeam(app);
+            }
         }
     }
 

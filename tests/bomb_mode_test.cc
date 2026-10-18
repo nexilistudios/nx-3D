@@ -212,6 +212,17 @@ int main()
                   (secondTInventory.objects.count("bomb") > 0) ==
                   (secondTInventory.effect == "bomb_spawn"),
           "Round start did not identify the bomb carrier for auto-equip");
+    nx3d::economy::Snapshot survivingCtInventory;
+    check(nx3d::economy::decode(ct.getChatSnapshot(777).back().message,
+                                survivingCtInventory) &&
+                  survivingCtInventory.objects.count("defuse_kit") == 1 &&
+                  firstTInventory.objects.count("grenade") == 1 &&
+                  firstTInventory.objects.count("smoke") == 0,
+          "Survivors did not keep unused utility across rounds");
+    check(room->onPlayerAction(10, 13) && room->onPlayerAction(10, 12),
+          "Surviving Terrorist could not buy primary and secondary guns");
+    room->resolveShot(10, Vector3f{0.0f, 1.0f, 0.0f}, 1, 0);
+    room->resolveShot(10, Vector3f{0.0f, 1.0f, 0.0f}, 2, 0);
     check(room->onPlayerAction(10, nx3d::economy::kEquipBombAction) &&
                   !room->onPlayerAction(30, nx3d::economy::kEquipBombAction),
           "Bomb equip did not follow NXObject ownership");
@@ -266,10 +277,41 @@ int main()
     {
         GameModeRegistry::update(4.1f);
         if (round == 3)
+        {
             check(std::none_of(room->getGameItems().begin(), room->getGameItems().end(),
                                [](const auto& item)
                                { return item.getType() == "bomb"; }),
                   "Old round bomb remained on the ground");
+            nx3d::economy::Snapshot survivor, respawnedCt, respawnedT;
+            check(nx3d::economy::decode(t.getChatSnapshot(777).back().message, survivor) &&
+                          nx3d::economy::decode(ct.getChatSnapshot(777).back().message, respawnedCt) &&
+                          nx3d::economy::decode(queued.getChatSnapshot(777).back().message,
+                                                respawnedT) &&
+                          survivor.primary == "mp5" && survivor.secondary == "deagle" &&
+                          survivor.objects.count("grenade") == 1 &&
+                          respawnedCt.primary.empty() &&
+                          respawnedCt.objects.count("defuse_kit") == 0 &&
+                          respawnedT.primary.empty(),
+                  "Survivor guns and utility were not retained or dead loadouts were not reset");
+            check(room->onPlayerAction(10, nx3d::economy::kDropPrimaryAction),
+                  "Surviving player could not drop the retained gun");
+            const auto retainedGun = std::find_if(room->getGameItems().begin(),
+                                                  room->getGameItems().end(),
+                                                  [](const auto& item)
+                                                  { return item.getType().starts_with("mp5:"); });
+            check(retainedGun != room->getGameItems().end() &&
+                          retainedGun->getType().starts_with("mp5:29:"),
+                  "Surviving gun did not retain its ammunition");
+            check(room->onPlayerAction(10, nx3d::economy::kDropSecondaryAction),
+                  "Surviving player could not drop the retained pistol");
+            const auto retainedPistol = std::find_if(room->getGameItems().begin(),
+                                                     room->getGameItems().end(),
+                                                     [](const auto& item)
+                                                     { return item.getType().starts_with("deagle:"); });
+            check(retainedPistol != room->getGameItems().end() &&
+                          retainedPistol->getType().starts_with("deagle:6:"),
+                  "Surviving pistol did not retain its ammunition");
+        }
         check(room->damagePlayer(20, 100.0f), "Round victim was not revived");
         room->onPlayerDied(10, 20);
     }
@@ -277,6 +319,12 @@ int main()
     check(room->getPlayerTeam(10) == "Counter Terrorist" &&
                   room->getPlayerTeam(20) == "Terrorist",
           "Halftime did not swap sides");
+    nx3d::economy::Snapshot swappedInventory;
+    check(nx3d::economy::decode(t.getChatSnapshot(777).back().message,
+                                swappedInventory) &&
+                  swappedInventory.primary.empty() && swappedInventory.secondary == "usp" &&
+                  swappedInventory.objects.count("grenade") == 0,
+          "Halftime did not reset survivor equipment");
     auto secondHalf = ct.consumeMatchEvents();
     check(bomb(secondHalf).round == 13 &&
                   bomb(secondHalf).counter_terrorist_score == 11,

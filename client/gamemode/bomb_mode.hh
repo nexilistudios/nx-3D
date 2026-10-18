@@ -21,6 +21,9 @@ public:
     void handleKeyDown(ClientApp& app, const SDL_Event& event) override;
     void handleKeyUp(ClientApp& app, const SDL_Event& event) override;
 
+protected:
+    bool preserveEquipmentOnRespawn() const override;
+
 private:
     bool m_active = false;
     bool m_alive = false;
@@ -32,6 +35,7 @@ private:
     glm::vec3 m_bombPosition{0.0f};
     float m_seconds = 0.0f;
     uint64_t m_round = 0;
+    uint64_t m_preservedRound = 0;
     uint64_t m_tScore = 0;
     uint64_t m_ctScore = 0;
     uint64_t m_queuePosition = 0;

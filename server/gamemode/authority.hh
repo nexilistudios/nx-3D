@@ -24,7 +24,7 @@ public:
         int reserve;
     };
     Authority();
-    void spawn(nexilis::server::Room& room, uint64_t playerId);
+    void spawn(nexilis::server::Room& room, uint64_t playerId, bool preserveEquipment = false);
     bool move(nexilis::server::Room& room, uint64_t playerId,
               const nexilis::Vector3f& input, float yaw);
     void update(nexilis::server::Room& room, float dt);

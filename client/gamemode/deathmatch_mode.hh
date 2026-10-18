@@ -50,6 +50,7 @@ public:
                                   const std::string& weapon, float duration) override;
 
 protected:
+    virtual bool preserveEquipmentOnRespawn() const { return false; }
     void equipGun(ClientApp& app, const std::string& weaponName,
                   const std::string& objPath, const std::string& mtlPath,
                   float fpScale, glm::vec3 fpCenter,

@@ -376,7 +376,7 @@ Authority::Authority()
     (void)mapPhysics();
 }
 
-void Authority::spawn(nexilis::server::Room& room, uint64_t playerId)
+void Authority::spawn(nexilis::server::Room& room, uint64_t playerId, bool preserveEquipment)
 {
     auto* user = nexilis::server::ClientStorage::getClientById(playerId);
     if (!user)
@@ -387,19 +387,29 @@ void Authority::spawn(nexilis::server::Room& room, uint64_t playerId)
     const auto& spawns = team == "Terrorist" ? nx3d::economy::kTSpawns
                                              : nx3d::economy::kCtSpawns;
     nx3d::economy::SpawnPoint point;
+    std::string equipped;
     {
         std::lock_guard lock(m_mutex);
         point = spawns[m_spawnCounter++ % spawns.size()];
         auto& state = m_players[playerId];
+        const auto primary = preserveEquipment ? state.primary : WeaponState{};
+        const auto secondary = preserveEquipment ? state.secondary : WeaponState{};
+        const auto previousWeapon = preserveEquipment ? state.activeWeapon : std::string{};
         state = PlayerState{};
         state.lastInput = std::chrono::steady_clock::now();
-        state.activeWeapon = nx3d::economy::defaultWeapon(team);
+        state.primary = primary;
+        state.secondary = secondary;
+        state.primary.reloadEnd = {};
+        state.secondary.reloadEnd = {};
+        state.activeWeapon = previousWeapon.empty() || previousWeapon == "bomb"
+                                     ? std::string(nx3d::economy::defaultWeapon(team))
+                                     : previousWeapon;
+        equipped = state.activeWeapon;
     }
     user->getObject3D().setPosition({point.x, point.y, point.z});
     publishStance(room, *user, false);
     publishPosition(room, *user);
-    publishAnimation(room, *user, "idle", 0.0f,
-                     std::string(nx3d::economy::defaultWeapon(team)));
+    publishAnimation(room, *user, "idle", 0.0f, equipped);
 }
 
 bool Authority::move(nexilis::server::Room& room, uint64_t playerId,

@@ -41,22 +41,30 @@ public:
         send(room, id, state);
     }
 
-    void respawned(nexilis::server::Room& room, uint64_t id, bool issueBomb = false)
+    void respawned(nexilis::server::Room& room, uint64_t id,
+                   bool issueBomb = false, bool preserveEquipment = false)
     {
         nx3d::economy::Snapshot state;
         {
             std::lock_guard lock(m_mutex);
             auto& wallet = m_wallets[id];
-            wallet.weapon = nx3d::economy::defaultWeapon(room.getPlayerTeam(id));
-            wallet.primary.clear();
-            wallet.secondary = wallet.weapon;
-            wallet.objects = {};
+            if (!preserveEquipment)
+            {
+                wallet.weapon = nx3d::economy::defaultWeapon(room.getPlayerTeam(id));
+                wallet.primary.clear();
+                wallet.secondary = wallet.weapon;
+                wallet.objects = {};
+            }
+            else
+                wallet.objects.set("bomb", 0);
             wallet.effect = "none";
             if (issueBomb && room.getPlayerTeam(id) == "Terrorist")
                 wallet.objects.add("bomb");
             state = wallet;
             if (issueBomb && room.getPlayerTeam(id) == "Terrorist")
                 state.effect = "bomb_spawn";
+            else if (preserveEquipment)
+                state.effect = "survivor_spawn";
         }
         send(room, id, state);
     }
