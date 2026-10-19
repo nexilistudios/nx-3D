@@ -323,6 +323,11 @@ void ClientApp::setupScenes()
 
     auto game_objects = spear::Scene::Container{
             dust2_model};
+    sunCube = std::make_shared<vk::Cube>(
+            renderer.getDevice(), renderer.getPhysicalDevice(),
+            blt::ObjectData({}, 0.0f, glm::vec3(0.0f), default_size));
+    sunCube->setEmissive(true);
+    game_objects.push_back(sunCube);
     auto game_function = [](spear::Scene::Container&) {};
     game_scene_id = spear::createScene(game_objects, game_function, scene_manager);
     scene_manager.getSceneById(game_scene_id)->setName("game");
@@ -1339,6 +1344,22 @@ void ClientApp::run()
                 }
             }
         }
+
+        // Advance the daylight orbit only while a match is running.
+        if (currentState == State::Game || currentState == State::Buy)
+            sunElapsedSeconds += delta_time;
+        renderer.setSunTime(sunElapsedSeconds);
+        if (sunCube)
+        {
+            const glm::vec3 center(-320.0f, 100.0f, -1120.0f);
+            const glm::vec3 position = center + renderer.getSunDirection() * 6000.0f;
+            sunCube->setModel(glm::scale(glm::translate(glm::mat4(1.0f), position),
+                                          glm::vec3(90.0f)));
+        }
+        if (scene_manager.getCurrentScene()->getId() == game_scene_id)
+            renderer.setBackgroundColor(0.46f, 0.65f, 0.86f, 1.0f);
+        else
+            renderer.setBackgroundColor(0.1f, 0.1f, 0.2f, 1.0f);
 
         // --- Render ---
         renderer.render();

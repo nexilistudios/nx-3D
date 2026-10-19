@@ -125,6 +125,8 @@ public:
     // --- Scenes -------------------------------------------------------------
     uint64_t lobby_scene_id = 0;
     uint64_t game_scene_id = 0;
+    std::shared_ptr<spear::rendering::vulkan::Cube> sunCube;
+    float sunElapsedSeconds = 0.0f;
 
     // --- Networking ---------------------------------------------------------
     std::string serverAddress;

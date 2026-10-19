@@ -103,6 +103,7 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
                             blt::ObjectData(app.shared_world, 0.0f, it->end,
                                             app.default_size));
                     cloud->scale(glm::vec3(27.0f, 32.0f, 27.0f));
+                    cloud->setCastsShadow(false);
                     cloud->setPosition(it->end +
                                        glm::vec3(std::cos(angle) * radius, height,
                                                  std::sin(angle) * radius));

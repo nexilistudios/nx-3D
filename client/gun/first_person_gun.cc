@@ -1,4 +1,5 @@
 #include <client/gun/first_person_gun.hh>
+#include <spear/rendering/vulkan/frame_context.hh>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -54,6 +55,8 @@ FirstPersonGun::FirstPersonGun(VkDevice device,
 
 void FirstPersonGun::render(spear::Camera& camera)
 {
+    if (spear::rendering::vulkan::g_frameContext.shadowPass)
+        return;
     // Draw directly in camera space. Moving the mesh into world coordinates
     // and back loses precision at the map's large coordinates and makes a
     // nearby weapon visibly tremble as the player moves or turns.
@@ -81,6 +84,7 @@ void FirstPersonGun::render(spear::Camera& camera)
     model = glm::translate(model, -m_modelCenter);
 
     setModel(model);
+    spear::rendering::vulkan::g_frameContext.viewModel = true;
     // Match the player's field of view without inheriting world translation
     // or aim punch. Camera movement is already implicit in this local frame.
     const float fov = glm::degrees(2.0f * std::atan(1.0f / camera.getProjectionMatrix()[1][1]));
@@ -95,6 +99,7 @@ void FirstPersonGun::render(spear::Camera& camera)
         m_magazine->setModel(magazineModel);
         m_magazine->render(viewCamera);
     }
+    spear::rendering::vulkan::g_frameContext.viewModel = false;
 }
 
 // ---------------------------------------------------------------------------
