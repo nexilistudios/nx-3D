@@ -147,6 +147,7 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
     bomb_beep_audio->setSpatialRange(900.0f, 2500.0f);
     explosion_audio = std::make_unique<spear::audio::Sound>(
             audio_system, nx3d::projectAssetPath("sounds/explosion.wav"));
+    explosion_audio->setSpatialRange(1200.0f, 3000.0f);
     for (std::size_t pack = 0; pack < audio::kVoicePacks.size(); ++pack)
         for (std::size_t cue = 0; cue < audio::kVoiceCueFiles.size(); ++cue)
             voicePackSounds[pack][cue] = std::make_unique<spear::audio::Sound>(
@@ -155,6 +156,7 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
                             "/" + audio::kVoiceCueFiles[cue]));
     smoke_audio = std::make_unique<spear::audio::Sound>(
             audio_system, nx3d::projectAssetPath("sounds/smoke.wav"));
+    smoke_audio->setSpatialRange(900.0f, 2500.0f);
     walk_audio = std::make_unique<spear::audio::Sound>(
             audio_system, nx3d::projectAssetPath("sounds/walk.mp3"));
     step_audio = std::make_unique<spear::audio::Sound>(
@@ -412,7 +414,7 @@ void ClientApp::applyAudioVolume()
         for (auto& sound : pack)
             if (sound) sound->setVolume(0.8f * std::sqrt(audioVolume));
     if (smoke_audio)
-        smoke_audio->setVolume(0.65f * audioVolume);
+        smoke_audio->setVolume(0.75f * std::sqrt(audioVolume));
     if (walk_audio)
         walk_audio->setVolume(audioVolume);
     if (step_audio)

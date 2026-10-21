@@ -109,6 +109,7 @@ protected:
         bool smoke = false;
         std::vector<int> puffSlots;
         std::vector<std::shared_ptr<spear::rendering::vulkan::TexturedCube>> puffs;
+        std::vector<std::shared_ptr<spear::rendering::vulkan::Cube>> sparks;
     };
     std::vector<GrenadeVisual> m_grenadeVisuals;
     int m_ammo = 0;

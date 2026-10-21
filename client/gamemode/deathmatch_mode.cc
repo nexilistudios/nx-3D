@@ -24,6 +24,9 @@ namespace
 constexpr float kRecoilStartMultiplier = 0.6f;
 constexpr float kRecoilStep = 0.15f;
 constexpr float kMaxRecoilMultiplier = 2.5f;
+constexpr float kSmokeCloudScale = 2.0f;
+constexpr float kExplosionVisualSeconds = 0.45f;
+constexpr int kExplosionSparks = 16;
 
 } // namespace
 
@@ -83,7 +86,7 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
         if (it->age >= nx3d::economy::kGrenadeFuseSeconds && it->model)
         {
             if (!it->smoke && app.explosion_audio)
-                app.explosion_audio->play();
+                app.explosion_audio->playAt(it->end);
             if (it->smoke && app.smoke_audio)
                 app.smoke_audio->playAt(it->end);
             app.scene_manager.getCurrentScene()->removeObject(it->model->getId());
@@ -95,14 +98,14 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
                     if (app.graphicsDetail == 0 && puff % 2 != 0) continue;
                     if (app.graphicsDetail == 1 && puff >= 8 && puff % 2 != 0) continue;
                     const float angle = static_cast<float>(puff % 8) * 0.78539816f;
-                    const float radius = puff < 8 ? 34.0f : 59.0f;
-                    const float height = puff < 8 ? -13.0f : 16.0f;
+                    const float radius = (puff < 8 ? 34.0f : 59.0f) * kSmokeCloudScale;
+                    const float height = (puff < 8 ? -13.0f : 16.0f) * kSmokeCloudScale;
                     auto cloud = std::make_shared<spear::rendering::vulkan::TexturedCube>(
                             app.renderer.getDevice(), app.renderer.getPhysicalDevice(),
                             app.smoke_texture, app.descriptorPool, app.descriptorSetLayout,
-                            blt::ObjectData(app.shared_world, 0.0f, it->end,
+                            blt::ObjectData(nullptr, 0.0f, it->end,
                                             app.default_size));
-                    cloud->scale(glm::vec3(27.0f, 32.0f, 27.0f));
+                    cloud->scale(glm::vec3(27.0f, 32.0f, 27.0f) * kSmokeCloudScale);
                     cloud->setCastsShadow(false);
                     cloud->setPosition(it->end +
                                        glm::vec3(std::cos(angle) * radius, height,
@@ -110,6 +113,20 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
                     app.scene_manager.getCurrentScene()->addObject(cloud);
                     it->puffs.push_back(std::move(cloud));
                     it->puffSlots.push_back(puff);
+                }
+            }
+            else
+            {
+                for (int spark = 0; spark < kExplosionSparks; ++spark)
+                {
+                    auto burst = std::make_shared<spear::rendering::vulkan::Cube>(
+                            app.renderer.getDevice(), app.renderer.getPhysicalDevice(),
+                            blt::ObjectData(nullptr, 0.0f, it->end, app.default_size));
+                    burst->scale(glm::vec3(5.0f + static_cast<float>(spark % 3) * 2.0f));
+                    burst->setEmissive(true);
+                    burst->setCastsShadow(false);
+                    app.scene_manager.getCurrentScene()->addObject(burst);
+                    it->sparks.push_back(std::move(burst));
                 }
             }
         }
@@ -127,21 +144,41 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
             {
                 const int slot = it->puffSlots[puff];
                 const float angle = static_cast<float>(slot % 8) * 0.78539816f;
-                const float radius = slot < 8 ? 34.0f : 59.0f;
-                const float height = slot < 8 ? -13.0f : 16.0f;
+                const float radius = (slot < 8 ? 34.0f : 59.0f) * kSmokeCloudScale;
+                const float height = (slot < 8 ? -13.0f : 16.0f) * kSmokeCloudScale;
                 it->puffs[puff]->setPosition(it->end + glm::vec3(
-                        std::cos(angle) * radius + std::sin(cloudAge * 0.65f + angle) * 5.0f,
-                        height + std::sin(cloudAge * 0.8f + angle) * 4.0f,
-                        std::sin(angle) * radius + std::cos(cloudAge * 0.55f + angle) * 5.0f));
+                        std::cos(angle) * radius + std::sin(cloudAge * 0.65f + angle) * 5.0f * kSmokeCloudScale,
+                        height + std::sin(cloudAge * 0.8f + angle) * 4.0f * kSmokeCloudScale,
+                        std::sin(angle) * radius + std::cos(cloudAge * 0.55f + angle) * 5.0f * kSmokeCloudScale));
             }
         }
-        if (!it->model && (!it->smoke || it->age >= nx3d::economy::kGrenadeFuseSeconds +
-                                                   nx3d::economy::kSmokeDurationSeconds))
+        else
+        {
+            const float burstAge = it->age - nx3d::economy::kGrenadeFuseSeconds;
+            const float progress = std::min(1.0f, burstAge / kExplosionVisualSeconds);
+            for (std::size_t spark = 0; spark < it->sparks.size(); ++spark)
+            {
+                const float angle = static_cast<float>(spark) * 6.2831853f / kExplosionSparks;
+                const float distance = (65.0f + static_cast<float>(spark % 4) * 10.0f) * progress;
+                const float height = std::sin(progress * 3.14159265f) *
+                                     (15.0f + static_cast<float>(spark % 5) * 9.0f);
+                it->sparks[spark]->setPosition(it->end + glm::vec3(
+                        std::cos(angle) * distance, height, std::sin(angle) * distance));
+            }
+        }
+        if (!it->model && it->age >= nx3d::economy::kGrenadeFuseSeconds +
+                                  (it->smoke ? nx3d::economy::kSmokeDurationSeconds :
+                                               kExplosionVisualSeconds))
         {
             for (auto& puff : it->puffs)
             {
                 app.scene_manager.getCurrentScene()->removeObject(puff->getId());
                 app.pendingDestroy[(app.frameCount - 1) % 3].push_back(std::move(puff));
+            }
+            for (auto& spark : it->sparks)
+            {
+                app.scene_manager.getCurrentScene()->removeObject(spark->getId());
+                app.pendingDestroy[(app.frameCount - 1) % 3].push_back(std::move(spark));
             }
             it = m_grenadeVisuals.erase(it);
             continue;

@@ -180,17 +180,19 @@ def gunshot(seed: int, duration: float, body_pitch: float, crack: float,
 
 
 def smoke() -> list[float]:
-    """A soft canister pop followed by a pressurized hiss."""
+    """A canister pop and a sustained hiss for the smoke cloud's lifetime."""
     rng = random.Random(407)
     filtered = 0.0
     result = []
-    for index in range(int(1.6 * RATE)):
+    duration = 12.0
+    for index in range(int(duration * RATE)):
         t = index / RATE
         noise = rng.uniform(-1.0, 1.0)
         filtered += 0.11 * (noise - filtered)
-        pop = 0.9 * noise * math.exp(-t * 95.0)
-        hiss = ((1.0 - math.exp(-t * 30.0)) * math.exp(-t * 1.65) *
-                (0.33 * noise + 0.9 * filtered))
+        pop = 0.4 * noise * math.exp(-t * 95.0)
+        fade_in = min(1.0, t / 0.25)
+        fade_out = min(1.0, (duration - t) / 0.8)
+        hiss = 0.65 * fade_in * fade_out * (0.32 * noise + 0.9 * filtered)
         result.append(pop + hiss)
     return result
 

@@ -76,7 +76,7 @@ inline constexpr int kMaxGrenades = findNXObject("grenade")->effect.maxStack;
 inline constexpr int kMaxSmokes = findNXObject("smoke")->effect.maxStack;
 inline constexpr float kGrenadeFuseSeconds = findNXObject("grenade")->effect.fuseSeconds;
 inline constexpr float kSmokeDurationSeconds = findNXObject("smoke")->effect.durationSeconds;
-inline constexpr float kGrenadeThrowDistance = 180.0f;
+inline constexpr float kGrenadeThrowDistance = 420.0f;
 inline constexpr float kGrenadeBlastRadius = findNXObject("grenade")->effect.radius;
 inline constexpr float kGrenadeMaxDamage = findNXObject("grenade")->effect.maxDamage;
 
