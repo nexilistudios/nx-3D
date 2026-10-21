@@ -3,17 +3,17 @@
     "nexilis": {
       "flake": false,
       "locked": {
-        "lastModified": 1792419683,
-        "narHash": "sha256-pFeqVmQfF/OTD3j7Hb6DLTm7teM6VPm8dbv822oBnuI=",
+        "lastModified": 1792569387,
+        "narHash": "sha256-eiCdX0eUnFTvTluFj2nRQG78Ec2NHZijowzG+h3Qo8E=",
         "owner": "Nexilislib",
         "repo": "nexilis",
-        "rev": "b98bb2b6be02e04113a6892a9672136c313f32cc",
+        "rev": "41306764706580d48cfac3339b6202b95c3fbac4",
         "type": "github"
       },
       "original": {
         "owner": "Nexilislib",
         "repo": "nexilis",
-        "rev": "b98bb2b6be02e04113a6892a9672136c313f32cc",
+        "rev": "41306764706580d48cfac3339b6202b95c3fbac4",
         "type": "github"
       }
     },

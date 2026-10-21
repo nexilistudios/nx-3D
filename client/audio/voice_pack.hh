@@ -11,11 +11,14 @@ enum class VoiceCue : std::size_t
     terroristsWin,
     counterTerroristsWin,
     hurt,
+    bombPlanted,
+    bombDefused,
     count
 };
 
 inline constexpr std::array<const char*, static_cast<std::size_t>(VoiceCue::count)> kVoiceCueFiles{{
-        "terrorists_win.wav", "counter_terrorists_win.wav", "hurt.wav"}};
+        "terrorists_win.wav", "counter_terrorists_win.wav", "hurt.wav",
+        "bomb_planted.wav", "bomb_defused.wav"}};
 
 struct VoicePackDefinition
 {

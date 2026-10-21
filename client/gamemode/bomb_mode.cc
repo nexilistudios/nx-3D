@@ -81,9 +81,13 @@ void BombMode::update(ClientApp& app, float dt)
                                   event.notice == "T win: Bomb exploded";
         if (bombExploded && app.explosion_audio)
             app.explosion_audio->play();
+        if (m_phase == "live" && event.phase == "live" && !m_planted && event.bomb_planted)
+            app.playVoiceCue(audio::VoiceCue::bombPlanted);
         if (m_phase == "live" && event.phase == "post")
         {
-            if (event.notice.starts_with("T win: "))
+            if (event.notice == "CT win: Bomb defused")
+                app.playVoiceCue(audio::VoiceCue::bombDefused);
+            else if (event.notice.starts_with("T win: "))
                 app.playVoiceCue(audio::VoiceCue::terroristsWin);
             else if (event.notice.starts_with("CT win: "))
                 app.playVoiceCue(audio::VoiceCue::counterTerroristsWin);
