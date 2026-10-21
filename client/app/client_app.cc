@@ -36,8 +36,11 @@ namespace vk = spear::rendering::vulkan;
 
 namespace
 {
-constexpr std::array<spear::BaseWindow::Size, 4> kResolutions{{
-        {820, 640}, {1280, 720}, {1600, 900}, {1920, 1080}}};
+// Keep the original entries in place: settings.txt stores the selected index.
+constexpr std::array<spear::BaseWindow::Size, 12> kResolutions{{
+        {820, 640}, {1280, 720}, {1600, 900}, {1920, 1080},
+        {1920, 1200}, {2048, 1080}, {2560, 1080}, {2560, 1440},
+        {2560, 1600}, {3440, 1440}, {3840, 1600}, {3840, 2160}}};
 constexpr std::array<int, 6> kFpsCaps{{0, 30, 60, 120, 144, 240}};
 constexpr std::array<const char*, 5> kPlayerParts{{
         "torso", "left_arm", "right_arm", "left_leg", "right_leg"}};
