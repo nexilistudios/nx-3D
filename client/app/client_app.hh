@@ -187,7 +187,6 @@ public:
     std::shared_ptr<spear::rendering::vulkan::STBTexture> wallnut_texture;
     std::shared_ptr<spear::rendering::vulkan::STBTexture> niilo_texture;
     std::shared_ptr<spear::rendering::vulkan::STBTexture> crosshair_texture;
-    std::shared_ptr<spear::rendering::vulkan::STBTexture> smoke_texture;
     glm::vec3 default_size{1.0f};
 
     // --- Remote entities (network sync) --------------------------------------

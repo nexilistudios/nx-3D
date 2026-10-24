@@ -24,9 +24,28 @@ namespace
 constexpr float kRecoilStartMultiplier = 0.6f;
 constexpr float kRecoilStep = 0.15f;
 constexpr float kMaxRecoilMultiplier = 2.5f;
-constexpr float kSmokeCloudScale = 2.0f;
+constexpr float kSmokeParticleLifetime = 2.8f;
+constexpr float kSmokeSizeScale = 3.0f;
 constexpr float kExplosionVisualSeconds = 0.45f;
 constexpr int kExplosionSparks = 16;
+
+spear::rendering::SmokeEmitter grenadeSmoke(glm::vec3 position, int detail)
+{
+    spear::rendering::SmokeEmitter emitter;
+    // Grenade destinations are sent at eye height. Keep the larger cloud near the floor.
+    emitter.position = position + glm::vec3(0.0f, 20.0f, 0.0f);
+    emitter.radius = 55.0f * kSmokeSizeScale;
+    emitter.velocity = glm::vec3(0.0f, 13.0f, 0.0f);
+    emitter.lifetime = kSmokeParticleLifetime;
+    emitter.color = glm::vec3(0.54f, 0.57f, 0.59f);
+    emitter.opacity = 0.65f;
+    emitter.startSize = 32.0f * kSmokeSizeScale;
+    emitter.endSize = 53.0f * kSmokeSizeScale;
+    emitter.rate = detail == 0 ? 90.0f : detail == 1 ? 140.0f
+                                                     : 175.0f;
+    emitter.turbulence = 5.0f;
+    return emitter;
+}
 
 } // namespace
 
@@ -93,26 +112,35 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
             app.pendingDestroy[(app.frameCount - 1) % 3].push_back(std::move(it->model));
             if (it->smoke)
             {
-                for (int puff = 0; puff < 16; ++puff)
+                auto& smoke = app.renderer.getSmoke();
+                auto emitter = grenadeSmoke(it->end, app.graphicsDetail);
+                spear::rendering::SmokeManager::Id id = 0;
+                for (const auto& [candidateId, existing] : smoke.getEmitters())
                 {
-                    if (app.graphicsDetail == 0 && puff % 2 != 0) continue;
-                    if (app.graphicsDetail == 1 && puff >= 8 && puff % 2 != 0) continue;
-                    const float angle = static_cast<float>(puff % 8) * 0.78539816f;
-                    const float radius = (puff < 8 ? 34.0f : 59.0f) * kSmokeCloudScale;
-                    const float height = (puff < 8 ? -13.0f : 16.0f) * kSmokeCloudScale;
-                    auto cloud = std::make_shared<spear::rendering::vulkan::TexturedCube>(
-                            app.renderer.getDevice(), app.renderer.getPhysicalDevice(),
-                            app.smoke_texture, app.descriptorPool, app.descriptorSetLayout,
-                            blt::ObjectData(nullptr, 0.0f, it->end,
-                                            app.default_size));
-                    cloud->scale(glm::vec3(27.0f, 32.0f, 27.0f) * kSmokeCloudScale);
-                    cloud->setCastsShadow(false);
-                    cloud->setPosition(it->end +
-                                       glm::vec3(std::cos(angle) * radius, height,
-                                                 std::sin(angle) * radius));
-                    app.scene_manager.getCurrentScene()->addObject(cloud);
-                    it->puffs.push_back(std::move(cloud));
-                    it->puffSlots.push_back(puff);
+                    if (!existing.enabled)
+                    {
+                        id = candidateId;
+                        break;
+                    }
+                }
+                if (id == 0 && smoke.getEmitters().size() < spear::rendering::SmokeManager::maxEmitters)
+                    id = smoke.addEmitter(emitter);
+                if (id == 0)
+                {
+                    // Spear has eight GPU emitter slots. Reuse the oldest active cloud.
+                    auto oldest = std::find_if(m_grenadeVisuals.begin(), m_grenadeVisuals.end(),
+                                               [](const GrenadeVisual& visual)
+                                               { return visual.smokeEmitterId != 0; });
+                    if (oldest != m_grenadeVisuals.end())
+                    {
+                        id = oldest->smokeEmitterId;
+                        oldest->smokeEmitterId = 0;
+                    }
+                }
+                if (id != 0)
+                {
+                    *smoke.getEmitter(id) = emitter;
+                    it->smokeEmitterId = id;
                 }
             }
             else
@@ -140,16 +168,16 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
         else if (it->smoke)
         {
             const float cloudAge = it->age - nx3d::economy::kGrenadeFuseSeconds;
-            for (std::size_t puff = 0; puff < it->puffs.size(); ++puff)
+            if (it->smokeEmitterId != 0 &&
+                cloudAge >= nx3d::economy::kSmokeDurationSeconds - kSmokeParticleLifetime)
             {
-                const int slot = it->puffSlots[puff];
-                const float angle = static_cast<float>(slot % 8) * 0.78539816f;
-                const float radius = (slot < 8 ? 34.0f : 59.0f) * kSmokeCloudScale;
-                const float height = (slot < 8 ? -13.0f : 16.0f) * kSmokeCloudScale;
-                it->puffs[puff]->setPosition(it->end + glm::vec3(
-                        std::cos(angle) * radius + std::sin(cloudAge * 0.65f + angle) * 5.0f * kSmokeCloudScale,
-                        height + std::sin(cloudAge * 0.8f + angle) * 4.0f * kSmokeCloudScale,
-                        std::sin(angle) * radius + std::cos(cloudAge * 0.55f + angle) * 5.0f * kSmokeCloudScale));
+                if (auto* emitter = app.renderer.getSmoke().getEmitter(it->smokeEmitterId))
+                {
+                    emitter->enabled = false;
+                    // Spear can still activate particles queued with a negative age.
+                    emitter->opacity = 0.0f;
+                }
+                it->smokeEmitterId = 0;
             }
         }
         else
@@ -170,11 +198,6 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
                                   (it->smoke ? nx3d::economy::kSmokeDurationSeconds :
                                                kExplosionVisualSeconds))
         {
-            for (auto& puff : it->puffs)
-            {
-                app.scene_manager.getCurrentScene()->removeObject(puff->getId());
-                app.pendingDestroy[(app.frameCount - 1) % 3].push_back(std::move(puff));
-            }
             for (auto& spark : it->sparks)
             {
                 app.scene_manager.getCurrentScene()->removeObject(spark->getId());
@@ -797,7 +820,7 @@ void DeathmatchMode::showGrenade(ClientApp& app, glm::vec3 start, glm::vec3 end,
             blt::ObjectData(app.shared_world, 0.0f, start, app.default_size));
     model->scale(glm::vec3(profile.ground_scale));
     app.scene_manager.getCurrentScene()->addObject(model);
-    m_grenadeVisuals.push_back({model, start, end, 0.0f, smoke, {}});
+    m_grenadeVisuals.push_back({model, start, end, 0.0f, smoke});
 }
 
 void DeathmatchMode::refreshWeaponHud(ClientApp& app)

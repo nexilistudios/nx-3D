@@ -7,7 +7,7 @@
 #include <client/ui/ui.hh>
 #include <shared/nx_objects.hh>
 
-#include <spear/rendering/vulkan/shapes/textured_cube.hh>
+#include <spear/rendering/smoke.hh>
 
 #include <glm/glm.hpp>
 
@@ -107,8 +107,7 @@ protected:
         glm::vec3 end;
         float age = 0.0f;
         bool smoke = false;
-        std::vector<int> puffSlots;
-        std::vector<std::shared_ptr<spear::rendering::vulkan::TexturedCube>> puffs;
+        spear::rendering::SmokeManager::Id smokeEmitterId = 0;
         std::vector<std::shared_ptr<spear::rendering::vulkan::Cube>> sparks;
     };
     std::vector<GrenadeVisual> m_grenadeVisuals;

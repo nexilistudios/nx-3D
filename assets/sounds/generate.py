@@ -180,11 +180,11 @@ def gunshot(seed: int, duration: float, body_pitch: float, crack: float,
 
 
 def smoke() -> list[float]:
-    """A canister pop and a sustained hiss for the smoke cloud's lifetime."""
+    """A canister pop and a short hiss as the smoke cloud starts spreading."""
     rng = random.Random(407)
     filtered = 0.0
     result = []
-    duration = 12.0
+    duration = 3.0
     for index in range(int(duration * RATE)):
         t = index / RATE
         noise = rng.uniform(-1.0, 1.0)

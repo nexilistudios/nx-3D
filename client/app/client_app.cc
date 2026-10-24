@@ -111,12 +111,6 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
             renderer.getCommandPool(), renderer.getGraphicsQueue());
     unsigned char whitePixel[4] = {255, 255, 255, 255};
     crosshair_texture->loadFromRGBA(whitePixel, 1, 1);
-    smoke_texture = std::make_shared<vk::STBTexture>(
-            renderer.getDevice(), renderer.getPhysicalDevice(),
-            renderer.getCommandPool(), renderer.getGraphicsQueue());
-    unsigned char smokePixel[4] = {137, 146, 150, 255};
-    smoke_texture->loadFromRGBA(smokePixel, 1, 1);
-
     // --- Scenes ---
     setupScenes();
     scene_manager.loadScene(lobby_scene_id);
