@@ -119,6 +119,7 @@ public:
     /// local walk loop.
     std::unique_ptr<spear::audio::Sound> step_audio;
     spear::Time time_interface;
+    spear::SDLInput input;
     spear::EventHandler eventHandler;
     std::unique_ptr<ui::Ui> ui;
 

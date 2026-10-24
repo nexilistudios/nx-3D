@@ -185,3 +185,7 @@ Before a public release, exercise multiplayer sessions on real Vulkan hardware, 
 | `spear/`, `nexilis/`              | Engine and networking submodules                                     |
 
 The server creates one bomb room and one deathmatch room. The client uses Nexilis for room and player synchronization, while `spear` supplies Vulkan rendering, physics, input, and audio. Client assets are resolved relative to the repository root compiled into `PROJECT_ROOT` by CMake, or to `NX3D_DATA_DIR` when that is set.
+
+### Sending input
+
+Spear's `Input` interface accepts the SDL events the client uses. `ClientApp::input` is an `SDLInput` instance; both gameplay and menu loops poll it, so injected input follows the same path as physical input. For example, `app.input.sendKey(SDLK_W, true)` starts moving forward and `app.input.sendKey(SDLK_W, false)` stops. `sendMouseMotion`, `sendMouseButton`, and `sendText` cover camera movement, clicks, and text fields. Use `sendEvent` for other SDL events, such as a mouse wheel or window event. Events are handled on the next client loop iteration.

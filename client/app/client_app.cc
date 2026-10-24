@@ -917,7 +917,7 @@ void ClientApp::run()
         if (currentState == State::ServerInput)
         {
             SDL_Event event;
-            while (SDL_PollEvent(&event))
+            while (input.pollEvent(event))
             {
                 if (event.type == SDL_EVENT_QUIT)
                 {
@@ -1004,7 +1004,7 @@ void ClientApp::run()
                  currentState == State::TeamSelect)
         {
             SDL_Event event;
-            while (SDL_PollEvent(&event))
+            while (input.pollEvent(event))
             {
                 if (event.type == SDL_EVENT_QUIT)
                 {
@@ -1076,7 +1076,7 @@ void ClientApp::run()
         else if (currentState == State::Paused)
         {
             SDL_Event event;
-            while (SDL_PollEvent(&event))
+            while (input.pollEvent(event))
             {
                 if (event.type == SDL_EVENT_QUIT)
                 {
@@ -1139,7 +1139,7 @@ void ClientApp::run()
         else if (currentState == State::Settings)
         {
             SDL_Event event;
-            while (SDL_PollEvent(&event))
+            while (input.pollEvent(event))
             {
                 if (event.type == SDL_EVENT_QUIT)
                     cleanQuit();
@@ -1195,7 +1195,7 @@ void ClientApp::run()
         else if (currentState == State::Buy)
         {
             SDL_Event event;
-            while (SDL_PollEvent(&event))
+            while (input.pollEvent(event))
             {
                 if (event.type == SDL_EVENT_QUIT)
                     cleanQuit();
@@ -1241,7 +1241,7 @@ void ClientApp::run()
             // (like the menu states) so they don't feed player movement,
             // weapon handling or the camera through `eventHandler`.
             SDL_Event event;
-            while (SDL_PollEvent(&event))
+            while (input.pollEvent(event))
             {
                 if (event.type == SDL_EVENT_QUIT)
                 {
@@ -1278,7 +1278,7 @@ void ClientApp::run()
         {
             const bool canMove = currentState != State::Game ||
                                  (game_mode && game_mode->canMove());
-            eventHandler.handleEvents(movement_controller, delta_time, canMove);
+            eventHandler.handleEvents(input, movement_controller, delta_time, canMove);
         }
 
         // Pausing stops player input, but an airborne player still needs

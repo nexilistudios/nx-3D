@@ -3,17 +3,17 @@
     "nexilis": {
       "flake": false,
       "locked": {
-        "lastModified": 1792569387,
-        "narHash": "sha256-eiCdX0eUnFTvTluFj2nRQG78Ec2NHZijowzG+h3Qo8E=",
+        "lastModified": 1792692528,
+        "narHash": "sha256-cPoTK3n7ewMboBRAEAvmE11dT7u6q7GVCCc8YLbKtw4=",
         "owner": "Nexilislib",
         "repo": "nexilis",
-        "rev": "41306764706580d48cfac3339b6202b95c3fbac4",
+        "rev": "93a114927feebf5007e37a1ecab0c6f006294c80",
         "type": "github"
       },
       "original": {
         "owner": "Nexilislib",
         "repo": "nexilis",
-        "rev": "41306764706580d48cfac3339b6202b95c3fbac4",
+        "rev": "93a114927feebf5007e37a1ecab0c6f006294c80",
         "type": "github"
       }
     },
@@ -43,17 +43,17 @@
     "spear": {
       "flake": false,
       "locked": {
-        "lastModified": 1792443790,
-        "narHash": "sha256-RrURHbBZnE/I6S8TpQq867OX/CvyQZsCq0IzxxnfKLA=",
+        "lastModified": 1792872091,
+        "narHash": "sha256-fsjfh0Nl4i/pGCQb14uyzvuk04IcRDDJhSrKdykXees=",
         "owner": "NeuronActivation",
         "repo": "spear",
-        "rev": "1bd16f7be3a1741f2a5e4150e981f4f6d82ea889",
+        "rev": "68951905f1fccb9b631697b73faca6615fb0f567",
         "type": "github"
       },
       "original": {
         "owner": "NeuronActivation",
         "repo": "spear",
-        "rev": "1bd16f7be3a1741f2a5e4150e981f4f6d82ea889",
+        "rev": "68951905f1fccb9b631697b73faca6615fb0f567",
         "type": "github"
       }
     }
