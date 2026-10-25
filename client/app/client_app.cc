@@ -2,6 +2,7 @@
 #include <shared/ammunition.hh>
 
 #include <client/chat/chat_text.hh>
+#include <client/map/brush_model.hh>
 #include <client/gamemode/bomb_mode.hh>
 #include <client/gamemode/deathmatch_mode.hh>
 #include <client/gamemode/weapon_profiles.hh>
@@ -16,6 +17,7 @@
 #include <nexilis/util.hh>
 
 #include <shared/fall_death.hh>
+#include <shared/brush_map.hh>
 #include <shared/gamemode.hh>
 #include <shared/player_rules.hh>
 
@@ -62,9 +64,12 @@ std::string settingsPath()
 }
 }
 
-ClientApp::ClientApp(const std::string& initialServerAddress, const std::string& initialUsername, bool connectOnStart)
+ClientApp::ClientApp(const std::string& initialServerAddress, const std::string& initialUsername,
+                     bool connectOnStart, bool previewMap)
     : window("nx_3D game", spear::BaseWindow::Size{820, 640}),
-      camera(glm::vec3(-1600.0f, 64.0f, -2600.0f), glm::vec3(0.f, 1.f, 0.f), 90.0f, 0.f, nx3d::kWalkSpeed),
+      camera(previewMap ? glm::vec3(-400.0f, 3200.0f, 1800.0f) : glm::vec3(-1600.0f, 64.0f, -2600.0f),
+             glm::vec3(0.f, 1.f, 0.f), previewMap ? -90.0f : 90.0f,
+             previewMap ? -55.0f : 0.0f, nx3d::kWalkSpeed),
       scene_manager(),
       bullet_world(),
       shared_world(std::make_shared<btDiscreteDynamicsWorld>(*bullet_world.getDynamicsWorld())),
@@ -87,6 +92,8 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
     renderer.init();
     renderer.setBackgroundColor(0.1f, 0.1f, 0.2f, 1.0f);
     renderer.setCamera(&camera);
+    // Dust II uses fixed daylight so its shadow map stays anchored while playing.
+    renderer.setSunTime(0.0f);
 
     descriptorPool = vk::Texture::createDescriptorPool(renderer.getDevice(), 512);
     descriptorSetLayout = vk::Texture::createDescriptorSetLayout(renderer.getDevice());
@@ -168,7 +175,16 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
 
     renderer.setUIRenderer(&ui->renderer());
 
-    if (connectOnStart)
+    if (previewMap)
+    {
+        currentState = State::MapPreview;
+        scene_manager.loadScene(game_scene_id);
+        ui->clear();
+        ui->matchStatusText.setString("DUST II PREVIEW | WASD: fly | Space/C: up/down | Shift: fast | Esc: quit");
+        ui->registerText(ui->matchStatusText);
+        SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
+    }
+    else if (connectOnStart)
     {
         currentState = State::Connecting;
         ui->showMenuTexts();
@@ -263,7 +279,10 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
     renderer.setScene(scene_manager.getCurrentScene());
 }
 
-ClientApp::~ClientApp() = default;
+ClientApp::~ClientApp()
+{
+    if (mapCollisionBody) shared_world->removeRigidBody(mapCollisionBody);
+}
 
 void ClientApp::setupScenes()
 {
@@ -272,56 +291,34 @@ void ClientApp::setupScenes()
     lobby_scene_id = spear::createScene(lobby_objects, lobby_function, scene_manager);
     scene_manager.getSceneById(lobby_scene_id)->setName("lobby");
 
-    // Game scene: de_dust2 map
-    auto dust2_model = std::make_shared<vk::OBJModel>(
-            renderer.getDevice(), renderer.getPhysicalDevice(),
-            renderer.getCommandPool(), renderer.getGraphicsQueue(),
-            nx3d::projectAssetPath("de_dust2/source/de_dust2.obj"), nx3d::projectAssetPath("de_dust2/source/de_dust2.mtl"),
-            descriptorPool, descriptorSetLayout,
-            blt::ObjectData(shared_world, 0.0f,
-                            glm::vec3(0.0f, 0.0f, 0.0f), default_size));
-    // Rotate the map: de_dust2 OBJ uses Z as vertical (CS:GO convention),
-    // but the engine uses Y as vertical (OpenGL convention).
-    dust2_model->rotate(glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-
-    // Build triangle mesh from OBJ for ground collision (leaked intentionally at exit).
-    auto& loader = dust2_model->getLoader();
-    const auto& vertices = loader.getVertices();
-    const auto& facesByMaterial = loader.getFacesByMaterial();
-    auto* triMesh = new btTriangleMesh();
-    for (const auto& faces : facesByMaterial)
+    // The generated brush file is the complete world, including ramps and detail.
+    const auto mapPath = nx3d::projectAssetPath(nx3d::kGeneratedMapPath);
+    std::ifstream mapFile(mapPath);
+    if (!mapFile) throw std::runtime_error("Cannot load generated map: " + mapPath);
+    const auto brushes = nx3d::readBrushMap(mapFile);
+    if (brushes.empty()) throw std::runtime_error("Generated map contains no geometry");
+    const auto mesh = nx3d::buildBrushMesh(brushes);
+    auto mapModel = std::make_shared<BrushModel>(
+            renderer.getDevice(), renderer.getPhysicalDevice(), renderer.getCommandPool(),
+            renderer.getGraphicsQueue(), descriptorPool, descriptorSetLayout, mesh);
+    mapTriangles = std::make_unique<btTriangleMesh>();
+    for (const auto& vertices : mesh)
     {
-        for (const auto& face : faces)
+        for (std::size_t i = 0; i < vertices.size(); i += 3)
         {
-            if (face.vertexIndices.size() >= 3)
-            {
-                auto& v0 = vertices[face.vertexIndices[0]];
-                auto& v1 = vertices[face.vertexIndices[1]];
-                auto& v2 = vertices[face.vertexIndices[2]];
-                btVector3 b0(v0.x, v0.z, -v0.y);
-                btVector3 b1(v1.x, v1.z, -v1.y);
-                btVector3 b2(v2.x, v2.z, -v2.y);
-                triMesh->addTriangle(b0, b1, b2);
-                if (face.vertexIndices.size() == 4)
-                {
-                    auto& v3 = vertices[face.vertexIndices[3]];
-                    btVector3 b3(v3.x, v3.z, -v3.y);
-                    triMesh->addTriangle(b0, b2, b3);
-                }
-            }
+            const auto& a = vertices[i].position;
+            const auto& b = vertices[i + 1].position;
+            const auto& c = vertices[i + 2].position;
+            mapTriangles->addTriangle({a.x, a.y, a.z}, {b.x, b.y, b.z}, {c.x, c.y, c.z});
         }
     }
-    auto* meshShape = new btBvhTriangleMeshShape(triMesh, true);
-    btTransform groundTransform;
-    groundTransform.setIdentity();
-    auto* meshMotionState = new btDefaultMotionState(groundTransform);
-    btRigidBody::btRigidBodyConstructionInfo meshRbInfo(0.0f, meshMotionState, meshShape);
-    auto* meshRigidBody = new btRigidBody(meshRbInfo);
-    shared_world->addRigidBody(meshRigidBody);
-    mapCollisionBody = meshRigidBody;
-
-    auto game_objects = spear::Scene::Container{
-            dust2_model};
+    mapShape = std::make_unique<btBvhTriangleMeshShape>(mapTriangles.get(), true);
+    mapMotion = std::make_unique<btDefaultMotionState>(btTransform::getIdentity());
+    btRigidBody::btRigidBodyConstructionInfo info(0.0f, mapMotion.get(), mapShape.get());
+    mapBody = std::make_unique<btRigidBody>(info);
+    shared_world->addRigidBody(mapBody.get());
+    mapCollisionBody = mapBody.get();
+    auto game_objects = spear::Scene::Container{mapModel};
     sunCube = std::make_shared<vk::Cube>(
             renderer.getDevice(), renderer.getPhysicalDevice(),
             blt::ObjectData({}, 0.0f, glm::vec3(0.0f), default_size));
@@ -908,7 +905,33 @@ void ClientApp::run()
             updateTeamSelectRoster();
 
         // --- Event handling ---
-        if (currentState == State::ServerInput)
+        if (currentState == State::MapPreview)
+        {
+            SDL_Event event;
+            while (input.pollEvent(event))
+            {
+                if (event.type == SDL_EVENT_QUIT ||
+                    (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE))
+                    cleanQuit();
+                else if (event.type == SDL_EVENT_MOUSE_MOTION)
+                    camera.rotate(event.motion.xrel, event.motion.yrel);
+                else if (event.type == SDL_EVENT_WINDOW_RESIZED)
+                {
+                    window.resize();
+                    const auto size = window.getSize();
+                    renderer.setViewPort(size.x, size.y);
+                }
+            }
+            const auto* keys = SDL_GetKeyboardState(nullptr);
+            const float dt = delta_time * (keys[SDL_SCANCODE_LSHIFT] ? 4.0f : 1.0f);
+            if (keys[SDL_SCANCODE_W]) camera.moveForward(dt);
+            if (keys[SDL_SCANCODE_S]) camera.moveBackward(dt);
+            if (keys[SDL_SCANCODE_A]) camera.moveLeft(dt);
+            if (keys[SDL_SCANCODE_D]) camera.moveRight(dt);
+            if (keys[SDL_SCANCODE_SPACE]) camera.moveUp(dt);
+            if (keys[SDL_SCANCODE_C]) camera.moveDown(dt);
+        }
+        else if (currentState == State::ServerInput)
         {
             SDL_Event event;
             while (input.pollEvent(event))
@@ -1344,10 +1367,6 @@ void ClientApp::run()
             }
         }
 
-        // Advance the daylight orbit only while a match is running.
-        if (currentState == State::Game || currentState == State::Buy)
-            sunElapsedSeconds += delta_time;
-        renderer.setSunTime(sunElapsedSeconds);
         if (sunCube)
         {
             const glm::vec3 center(-320.0f, 100.0f, -1120.0f);

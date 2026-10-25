@@ -1,0 +1,93 @@
+{
+  "name": "Generated Dust II (CS2 style)",
+  "generator": "tools/generate_dust2.py",
+  "reference": "https://csnades.gg/dust2/callouts",
+  "grid": 32,
+  "labels": [
+    {
+      "name": "T SPAWN",
+      "x": -736.0,
+      "z": 992.0
+    },
+    {
+      "name": "OUTSIDE TUNNELS",
+      "x": -1728.0,
+      "z": -192.0
+    },
+    {
+      "name": "UPPER TUNNELS",
+      "x": -1760.0,
+      "z": -1104.0
+    },
+    {
+      "name": "LOWER TUNNELS",
+      "x": -864.0,
+      "z": -1401.6000000000001
+    },
+    {
+      "name": "B",
+      "x": -1584.0,
+      "z": -2672.0
+    },
+    {
+      "name": "B DOORS",
+      "x": -1344.0,
+      "z": -2192.0
+    },
+    {
+      "name": "CT MID",
+      "x": -704.0,
+      "z": -2256.0
+    },
+    {
+      "name": "CT SPAWN",
+      "x": 208.0,
+      "z": -2384.0
+    },
+    {
+      "name": "MID",
+      "x": -368.0,
+      "z": -960.0
+    },
+    {
+      "name": "TOP MID",
+      "x": -32.0,
+      "z": -272.0
+    },
+    {
+      "name": "CATWALK",
+      "x": -118.4,
+      "z": -944.0
+    },
+    {
+      "name": "A SHORT",
+      "x": 224.0,
+      "z": -1392.0
+    },
+    {
+      "name": "A",
+      "x": 1232.0,
+      "z": -2512.0
+    },
+    {
+      "name": "GOOSE",
+      "x": 1360.0,
+      "z": -3008.0
+    },
+    {
+      "name": "LONG A",
+      "x": 1552.0,
+      "z": -1488.0
+    },
+    {
+      "name": "PIT",
+      "x": 1552.0,
+      "z": -368.0
+    },
+    {
+      "name": "LONG DOORS",
+      "x": 720.0,
+      "z": -384.0
+    }
+  ]
+}

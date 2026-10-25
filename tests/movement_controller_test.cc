@@ -1,6 +1,8 @@
 #include <spear/camera.hh>
 #include <spear/movement_controller.hh>
-#include <spear/model/obj_loader.hh>
+#include <shared/brush_mesh.hh>
+#include <shared/economy.hh>
+#include <fstream>
 
 #include <btBulletDynamicsCommon.h>
 
@@ -206,22 +208,20 @@ int main()
         return 1;
     }
 
-    spear::OBJLoader mapLoader;
-    if (!mapLoader.load(std::string(PROJECT_ROOT) + "/assets/de_dust2/source/de_dust2.obj", "", false))
-    {
-        std::cerr << "Could not load map collision geometry\n";
-        return 1;
-    }
+    std::ifstream mapFile(std::string(PROJECT_ROOT) + "/assets/" + nx3d::kGeneratedMapPath);
+    if (!mapFile) { std::cerr << "Cannot load generated map\n"; return 1; }
     btTriangleMesh mapMesh;
-    const auto& vertices = mapLoader.getVertices();
-    for (const auto& faces : mapLoader.getFacesByMaterial())
-        for (const auto& face : faces)
+    const auto mapGeometry = nx3d::buildBrushMesh(nx3d::readBrushMap(mapFile));
+    for (const auto& vertices : mapGeometry)
+    {
+        for (std::size_t i = 0; i < vertices.size(); i += 3)
         {
-            const auto& a = vertices[face.vertexIndices[0]];
-            const auto& b = vertices[face.vertexIndices[1]];
-            const auto& c = vertices[face.vertexIndices[2]];
-            mapMesh.addTriangle({a.x, a.z, -a.y}, {b.x, b.z, -b.y}, {c.x, c.z, -c.y});
+            const auto& a = vertices[i].position;
+            const auto& b = vertices[i+1].position;
+            const auto& c = vertices[i+2].position;
+            mapMesh.addTriangle({a.x,a.y,a.z},{b.x,b.y,b.z},{c.x,c.y,c.z});
         }
+    }
     btBvhTriangleMeshShape mapShape(&mapMesh, true);
     btRigidBody::btRigidBodyConstructionInfo mapInfo(0.0f, nullptr, &mapShape);
     btRigidBody mapBody(mapInfo);
@@ -245,6 +245,33 @@ int main()
         {
             std::cerr << "Spawn fell through map: x=" << spawn.x << " z=" << spawn.z
                       << " y=" << spawnCamera.getPosition().y << '\n';
+            return 1;
+        }
+    }
+
+    // A standing capsule must pass the generated gates and CT underpass.
+    const auto plan = [](float x, float z, float floor)
+    { return btVector3((x - 795.0f) * 3.2f, floor + 38.4f, (z - 1160.0f) * 3.2f); };
+    const std::array<std::array<btVector3, 2>, 8> passages{{
+            {{plan(672,620,-112), plan(672,680,-112)}},
+            {{plan(350,475,0), plan(365,475,0)}},
+            {{plan(365,475,0), plan(430,475,-112)}},
+            {{plan(1020,1120,128), plan(1020,1095,128)}},
+            {{plan(1020,1095,128), plan(1020,945,0)}},
+            {{plan(1020,945,0), plan(1020,920,0)}},
+            {{plan(160,585,0), plan(160,735,0)}},
+            {{plan(860,480,-112), plan(1100,480,-112)}}}};
+    btCapsuleShape standingCapsule(7.68f, 57.6f - 2.0f * 7.68f);
+    for (std::size_t i = 0; i < passages.size(); ++i)
+    {
+        btTransform from, to;
+        from.setIdentity(); to.setIdentity();
+        from.setOrigin(passages[i][0]); to.setOrigin(passages[i][1]);
+        btCollisionWorld::ClosestConvexResultCallback hit(from.getOrigin(), to.getOrigin());
+        mapWorld.convexSweepTest(&standingCapsule, from, to, hit);
+        if (hit.hasHit() && hit.m_closestHitFraction < .99f)
+        {
+            std::cerr << "Generated map passage " << i << " blocks a standing player\n";
             return 1;
         }
     }

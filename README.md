@@ -1,6 +1,6 @@
 # nx-3D
 
-nx-3D is a multiplayer first-person shooter with a dedicated server and a Vulkan client. The server offers a bomb match and team deathmatch on de_dust2. Players choose Counter Terrorist or Terrorist and spawn with a USP or Glock respectively. Weapons can be bought, dropped, and picked up from the map.
+nx-3D is a multiplayer first-person shooter with a dedicated server and a Vulkan client. The server offers a bomb match and team deathmatch on a generated CS2-style Dust II map. Players choose Counter Terrorist or Terrorist and spawn with a USP or Glock respectively. Weapons can be bought, dropped, and picked up from the map.
 
 ## Requirements
 
@@ -103,6 +103,34 @@ services.nx3dServer = {
   openFirewall = true;
 };
 ```
+
+## Cube map editor
+
+Dust II is generated entirely from editable cube geometry, including floors,
+ramps, walls, arches, tunnel ceilings, doors, buildings and cover. The plan follows
+[CS2 Dust II](https://csnades.gg/dust2/callouts), with Long A/Pit, Catwalk/Short,
+Mid doors, CT underpass and upper/lower B tunnels. This is a stylized procedural
+reconstruction; the old imported map and its textures are not loaded.
+
+```sh
+python3 tools/generate_dust2.py                 # regenerate the complete map
+python3 tools/map_editor.py                     # edit all generated geometry
+./build/client/nx_3D_client --map-preview        # inspect in 3D without a server
+```
+
+The editor requires Python's Tkinter GUI (`python3-tk` on some distributions).
+Select and drag to move blocks, use **Add brush** to draw one on the grid, and use
+the inspector to resize, change material, rotate or tilt its top into a ramp.
+Layer filters make floors, walls and cover easier to select. Mouse wheel zooms,
+middle drag pans, and Ctrl+Z/Y/S undo, redo and save. **3D preview** opens the
+built client after saving. Fly with WASD, Space/C and Shift; Escape quits.
+
+The complete map is `assets/maps/dust2_cs2/map.brush`. Both programs build collision
+from the same vertices; the client batches rendering by material. Restart clients
+and the server after edits and distribute the same file to every participant.
+Regeneration replaces edits in the default map; `--output /path/to/map.brush`
+generates another project. `python3 tools/map_editor.py --check` validates a map.
+See `assets/maps/dust2_cs2/README.md` and its `overview.svg` for the generated plan.
 
 ## Controls
 

@@ -6,6 +6,8 @@
 #include <shared/network_ports.hh>
 
 #include <iostream>
+#include <algorithm>
+#include <string_view>
 #include <string>
 
 int main(int argc, char* argv[])
@@ -27,7 +29,9 @@ int main(int argc, char* argv[])
     std::string serverAddress = cmdLine.getValue<std::string>("-server", "127.0.0.1");
     std::string username = cmdLine.getValue<std::string>("-username", "");
 
-    nx3d::client::ClientApp app(serverAddress, username, argc > 1);
+    const bool previewMap = std::any_of(argv + 1, argv + argc, [](const char* arg)
+                                        { return std::string_view(arg) == "--map-preview"; });
+    nx3d::client::ClientApp app(serverAddress, username, argc > 1 && !previewMap, previewMap);
     app.run();
 
     return 0;

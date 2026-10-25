@@ -47,8 +47,8 @@ def main() -> None:
         package.mkdir()
         shutil.copy2(executable, package / executable.name)
         shutil.copy2(nexilis, package / nexilis.name)
-        map_asset = ROOT / "assets" / "de_dust2" / "source" / "de_dust2.obj"
-        packaged_map = package / "assets" / "de_dust2" / "source"
+        map_asset = ROOT / "assets/maps/dust2_cs2/map.brush"
+        packaged_map = package / "assets/maps/dust2_cs2"
         packaged_map.mkdir(parents=True)
         shutil.copy2(map_asset, packaged_map / map_asset.name)
         for name, source in {**dependencies(executable), **dependencies(nexilis)}.items():

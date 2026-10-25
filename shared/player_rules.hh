@@ -5,7 +5,7 @@
 
 namespace nx3d
 {
-// de_dust2 spans about X [-2560, 1920], Z [-3776, 1536], and Y [-192, 416].
+// The generated Dust II spans about X [-2400, 2000], Z [-3300, 1400].
 // Leave room for the player capsule, jumps, and the fall-death plane at -256.
 inline constexpr float kWalkSpeed = 280.0f;
 inline constexpr float kSilentWalkSpeed = 140.0f;

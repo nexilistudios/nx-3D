@@ -1,6 +1,7 @@
 #include <server/gamemode/authority.hh>
 
 #include <shared/economy.hh>
+#include <shared/brush_mesh.hh>
 #include <shared/player_hit.hh>
 #include <shared/player_rules.hh>
 
@@ -64,44 +65,25 @@ public:
         : m_dispatcher(&m_configuration),
           m_world(&m_dispatcher, &m_broadphase, &m_solver, &m_configuration)
     {
-        const auto relative = std::filesystem::path("assets/de_dust2/source/de_dust2.obj");
+        const auto relative = std::filesystem::path("assets") / nx3d::kGeneratedMapPath;
         const char* assetRoot = std::getenv("NX3D_ASSET_ROOT");
         const auto configured = assetRoot ? std::filesystem::path(assetRoot) / relative
                                           : std::filesystem::path(PROJECT_ROOT) / relative;
         const auto path = std::filesystem::exists(configured) ? configured : relative;
         std::ifstream file(path);
-        if (!file)
-            throw std::runtime_error("Cannot load server map collision mesh");
-        std::vector<btVector3> vertices;
-        std::string line;
-        while (std::getline(file, line))
+        if (!file) throw std::runtime_error("Cannot load generated server map: " + path.string());
+        const auto mesh = nx3d::buildBrushMesh(nx3d::readBrushMap(file));
+        for (const auto& vertices : mesh)
         {
-            if (line.starts_with("v "))
+            for (std::size_t i = 0; i < vertices.size(); i += 3)
             {
-                std::istringstream stream(line.substr(2));
-                float x, y, z;
-                if (stream >> x >> y >> z)
-                    vertices.emplace_back(x, z, -y);
-            }
-            else if (line.starts_with("f "))
-            {
-                std::istringstream stream(line.substr(2));
-                std::vector<int> indices;
-                std::string token;
-                while (stream >> token)
-                {
-                    const int index = std::stoi(token);
-                    if (index <= 0 || static_cast<std::size_t>(index) > vertices.size())
-                        throw std::runtime_error("Invalid server map face");
-                    indices.push_back(index - 1);
-                }
-                for (std::size_t i = 2; i < indices.size(); ++i)
-                    m_mesh.addTriangle(vertices[indices[0]], vertices[indices[i - 1]],
-                                       vertices[indices[i]]);
+                m_mesh.addTriangle(asBullet(vertices[i].position),
+                                   asBullet(vertices[i + 1].position),
+                                   asBullet(vertices[i + 2].position));
             }
         }
         if (m_mesh.getNumTriangles() == 0)
-            throw std::runtime_error("Empty server map collision mesh");
+            throw std::runtime_error("Empty generated server map");
         m_shape = std::make_unique<btBvhTriangleMeshShape>(&m_mesh, true);
         btTransform transform;
         transform.setIdentity();

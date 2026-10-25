@@ -3,7 +3,7 @@
 
 namespace nx3d
 {
-// The lowest de_dust2 vertex is Y=-192. This plane leaves clearance beneath
+// Generated Dust II's lowest floor is Y=-112. This plane leaves clearance beneath
 // the map while ending an out-of-bounds fall promptly.
 inline constexpr float kFallDeathY = -256.0f;
 }

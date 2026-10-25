@@ -23,7 +23,7 @@ namespace nx3d::client::gamemode
 /// Classic team deathmatch.
 ///
 /// Players pick a team in the team select screen, spawn on that team's side of
-/// de_dust2, are issued a team weapon and respawn shortly after being killed.
+/// generated Dust II, are issued a team weapon and respawn shortly after being killed.
 class DeathmatchMode : public GameMode
 {
 public:

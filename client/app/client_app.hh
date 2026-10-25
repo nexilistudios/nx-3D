@@ -73,10 +73,12 @@ public:
         Game,
         Buy,
         Paused,
-        Settings
+        Settings,
+        MapPreview
     };
 
-    ClientApp(const std::string& initialServerAddress, const std::string& initialUsername, bool connectOnStart);
+    ClientApp(const std::string& initialServerAddress, const std::string& initialUsername,
+              bool connectOnStart, bool previewMap = false);
     ~ClientApp();
 
     ClientApp(const ClientApp&) = delete;
@@ -93,6 +95,10 @@ public:
     std::shared_ptr<btDiscreteDynamicsWorld> shared_world;
     /// Static triangle-mesh body used to test whether map geometry blocks a shot.
     btRigidBody* mapCollisionBody = nullptr;
+    std::unique_ptr<btTriangleMesh> mapTriangles;
+    std::unique_ptr<btBvhTriangleMeshShape> mapShape;
+    std::unique_ptr<btDefaultMotionState> mapMotion;
+    std::unique_ptr<btRigidBody> mapBody;
     spear::MovementController movement_controller;
     spear::rendering::vulkan::Renderer renderer;
     VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
@@ -127,7 +133,6 @@ public:
     uint64_t lobby_scene_id = 0;
     uint64_t game_scene_id = 0;
     std::shared_ptr<spear::rendering::vulkan::Cube> sunCube;
-    float sunElapsedSeconds = 0.0f;
 
     // --- Networking ---------------------------------------------------------
     std::string serverAddress;
