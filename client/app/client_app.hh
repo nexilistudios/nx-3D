@@ -3,6 +3,7 @@
 
 #include <client/gamemode/game_mode.hh>
 #include <client/audio/voice_pack.hh>
+#include <client/crosshair/crosshair.hh>
 #include <client/ui/ui.hh>
 
 #include <nexilis/client/client_api.hh>
@@ -175,6 +176,14 @@ public:
     bool tTeamHovered = false;
     bool settingsHovered = false;
     int settingsRow = 0;
+    bool crosshairEditor = false;
+    int crosshairRow = 0;
+    int crosshairPresetIndex = 0;
+    int crosshairBackground = 0;
+    int crosshairDraggingRow = -1;
+    float crosshairPreviewSpread = 0.0f;
+    CrosshairSettings crosshairSettings;
+    std::unique_ptr<Crosshair> crosshair;
     int resolutionIndex = 0;
     bool fullscreen = false;
     int fpsCapIndex = 2;
@@ -191,7 +200,6 @@ public:
     // --- Textures -------------------------------------------------------------
     std::shared_ptr<spear::rendering::vulkan::STBTexture> wallnut_texture;
     std::shared_ptr<spear::rendering::vulkan::STBTexture> niilo_texture;
-    std::shared_ptr<spear::rendering::vulkan::STBTexture> crosshair_texture;
     glm::vec3 default_size{1.0f};
 
     // --- Remote entities (network sync) --------------------------------------
@@ -298,6 +306,8 @@ public:
     void closeSettings();
     void changeSetting(int row, int direction);
     void refreshSettings();
+    void changeCrosshairSetting(int row, int direction);
+    void dragCrosshairSlider(int row, float x);
     void loadSettings();
     void saveSettings() const;
     void openBuyMenu();

@@ -41,7 +41,8 @@ struct PlayerNameplate
 class Ui
 {
 public:
-    static constexpr int kSettingsRowCount = 9;
+    static constexpr int kSettingsRowCount = 10;
+    static constexpr int kCrosshairRowCount = 15;
     enum class BuyStyle { List, Radial, Cs2 };
     explicit Ui(VkDevice device,
                 VkPhysicalDevice physDevice,
@@ -94,9 +95,13 @@ public:
                             bool ctHovered, bool tHovered, bool settingsHovered);
     void renderSettingsOverlay(spear::ui::RenderContext ctx, int selectedRow);
     void showSettings(const std::array<std::string, kSettingsRowCount>& values, int selectedRow);
+    void showCrosshairSettings(const std::array<std::string, kCrosshairRowCount>& values,
+                              const std::array<float, kCrosshairRowCount>& sliders,
+                              int selectedRow, int background);
     void hideSettings();
     int settingsRowAt(float x, float y) const;
     int settingsDirectionAt(float x) const;
+    bool crosshairSliderAt(int row, float x, float y) const;
     void renderDeathOverlay(spear::ui::RenderContext ctx);
 
     /// Show the Tab leaderboard with the given entries. Terrorists are shown
@@ -238,6 +243,14 @@ private:
     std::shared_ptr<spear::ui::vulkan::Quad2D> m_settingsPanel;
     std::shared_ptr<spear::ui::vulkan::Quad2D> m_settingsSelection;
     int m_settingsSelectedRow = -1;
+    bool m_crosshairEditor = false;
+    int m_crosshairBackground = 0;
+    void settingsLayout(bool crosshair);
+    void selectSettingsRow(int row);
+    std::array<std::shared_ptr<spear::ui::vulkan::Quad2D>, 3> m_crosshairPreviewPanels;
+    std::array<std::shared_ptr<spear::ui::vulkan::Quad2D>, kCrosshairRowCount> m_crosshairSliderTracks;
+    std::array<std::shared_ptr<spear::ui::vulkan::Quad2D>, kCrosshairRowCount> m_crosshairSliderFills;
+    std::vector<std::unique_ptr<spear::ui::vulkan::Text>> m_crosshairPreviewTexts;
 
     std::shared_ptr<spear::ui::vulkan::Quad2D> m_leaderboardBackdropQuad;
     std::shared_ptr<spear::ui::vulkan::Quad2D> m_leaderboardPanelQuad;

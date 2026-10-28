@@ -232,6 +232,9 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
     glm::vec3 cam_pos = app.camera.getPosition();
     glm::vec3 velocity = (cam_pos - m_prevCamPos) / std::max(delta_time, 0.001f);
     m_prevCamPos = cam_pos;
+    const float movementSpread = app.currentState == ClientApp::State::Game
+        ? std::min(4.0f, glm::length(glm::vec2(velocity.x, velocity.z)) / 75.0f) : 0.0f;
+    m_crosshairSpread = movementSpread + (m_crosshairSpread - movementSpread) * std::exp(-delta_time * 12.0f);
 
     // Start/stop the footstep loop based on how fast the player is actually
     // moving across the ground (horizontal only, so falling stays quiet).
@@ -412,6 +415,7 @@ void DeathmatchMode::fireWeapon(ClientApp& app)
         m_triggerHeld = false;
         return;
     }
+    m_crosshairSpread = std::min(12.0f, m_crosshairSpread + 3.0f);
     --m_ammo;
     refreshWeaponHud(app);
 
@@ -614,12 +618,6 @@ void DeathmatchMode::equipGun(ClientApp& app,
 {
     if (app.reload_audio)
         app.reload_audio->stop();
-    if (m_crosshair)
-    {
-        vkDeviceWaitIdle(app.renderer.getDevice());
-        m_crosshair.reset();
-        app.ui->renderer().setOverlayCallback(nullptr);
-    }
     if (m_firstPersonGun)
     {
         app.scene_manager.getCurrentScene()->removeObject(m_firstPersonGun->getId());
@@ -639,12 +637,6 @@ void DeathmatchMode::equipGun(ClientApp& app,
     m_firstPersonGun->setViewRotation(fpRotation);
     app.scene_manager.getCurrentScene()->addObject(m_firstPersonGun);
 
-    if (m_activeSlot <= 2)
-        m_crosshair = std::make_shared<nx3d::client::Crosshair>(
-                app.renderer.getDevice(), app.renderer.getPhysicalDevice(),
-                app.crosshair_texture, app.descriptorPool, app.descriptorSetLayout,
-                blt::ObjectData(app.shared_world, 0.0f,
-                                glm::vec3(0.0f, -1000.0f, 0.0f), app.default_size));
     installOverlay(app);
 
     m_weaponName = weaponName;
@@ -666,7 +658,7 @@ void DeathmatchMode::installOverlay(ClientApp& app)
                                        app.ctTeamHovered, app.tTeamHovered,
                                        app.settingsHovered);
         else if (app.currentState == ClientApp::State::Settings)
-            app.ui->renderSettingsOverlay(ctx, app.settingsRow);
+            app.ui->renderSettingsOverlay(ctx, app.crosshairEditor ? app.crosshairRow : app.settingsRow);
         else if (app.currentState == ClientApp::State::Buy)
             app.ui->renderBuyOverlay(ctx);
         else if (app.game_mode && app.game_mode->isEliminated())
@@ -677,8 +669,17 @@ void DeathmatchMode::installOverlay(ClientApp& app)
         if (app.currentState == ClientApp::State::Game ||
             app.currentState == ClientApp::State::Paused)
             app.ui->renderPlayerNameplates(ctx);
-        if (app.currentState == ClientApp::State::Game && m_crosshair && m_health > 0)
-            m_crosshair->render(app.camera); });
+        int width = 0, height = 0;
+        SDL_GetWindowSizeInPixels(app.window.getSDLWindow(), &width, &height);
+        if (app.currentState == ClientApp::State::Settings && app.crosshairEditor)
+        {
+            app.crosshair->render(width, height, 0.58f, 0.17f, app.crosshairPreviewSpread,
+                                  1.0f, 0, {0.26f, -0.20f, 0.90f, 0.52f});
+            app.crosshair->render(width, height, 0.58f, -0.49f, app.crosshairPreviewSpread,
+                                  3.0f, 1, {0.26f, -0.68f, 0.90f, -0.30f});
+        }
+        if (app.currentState == ClientApp::State::Game && m_activeSlot <= 2 && m_health > 0)
+            app.crosshair->render(width, height, 0, 0, m_crosshairSpread); });
 }
 
 glm::vec3 DeathmatchMode::pickSpawnPoint()

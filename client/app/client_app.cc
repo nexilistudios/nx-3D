@@ -28,6 +28,8 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <iomanip>
+#include <sstream>
 #include <thread>
 
 namespace nx3d::client
@@ -112,12 +114,10 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
             renderer.getCommandPool(), renderer.getGraphicsQueue());
     niilo_texture->loadFromFile(spear::getAssetPath("niilo.jpg"));
 
-    // White 1x1 texture for crosshair quads.
-    crosshair_texture = std::make_shared<vk::STBTexture>(
+    crosshair = std::make_unique<Crosshair>(
             renderer.getDevice(), renderer.getPhysicalDevice(),
-            renderer.getCommandPool(), renderer.getGraphicsQueue());
-    unsigned char whitePixel[4] = {255, 255, 255, 255};
-    crosshair_texture->loadFromRGBA(whitePixel, 1, 1);
+            renderer.getCommandPool(), renderer.getGraphicsQueue(),
+            descriptorPool, descriptorSetLayout);
     // --- Scenes ---
     setupScenes();
     scene_manager.loadScene(lobby_scene_id);
@@ -172,6 +172,7 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
             descriptorPool, descriptorSetLayout, fontPath);
 
     loadSettings();
+    crosshair->setSettings(crosshairSettings);
 
     renderer.setUIRenderer(&ui->renderer());
 
@@ -472,6 +473,8 @@ void ClientApp::openSettings()
 {
     if (currentState != State::Paused) return;
     currentState = State::Settings;
+    crosshairEditor = false;
+    crosshairDraggingRow = -1;
     ui->pauseTitle.setString("");
     ui->pauseTeamTitle.setString("");
     ui->pauseCTText.setString("");
@@ -485,6 +488,14 @@ void ClientApp::openSettings()
 void ClientApp::closeSettings()
 {
     if (currentState != State::Settings) return;
+    if (crosshairEditor)
+    {
+        crosshairEditor = false;
+        crosshairDraggingRow = -1;
+        ui->hideSettings();
+        refreshSettings();
+        return;
+    }
     ui->hideSettings();
     currentState = State::Paused;
     ui->pauseTitle.setString("PAUSED");
@@ -498,6 +509,43 @@ void ClientApp::closeSettings()
 
 void ClientApp::refreshSettings()
 {
+    if (crosshairEditor)
+    {
+        auto decimal = [](float value)
+        {
+            std::ostringstream text;
+            text << std::fixed << std::setprecision(1) << value;
+            return text.str();
+        };
+        std::string preset = "Custom";
+        for (int i = 0; i < static_cast<int>(kCrosshairPresets.size()); ++i)
+            if (crosshairSettings == crosshairPreset(i))
+            {
+                preset = kCrosshairPresets[i];
+                crosshairPresetIndex = i;
+            }
+        const auto& c = crosshairSettings;
+        std::array<float, ui::Ui::kCrosshairRowCount> sliders;
+        sliders.fill(-1.0f);
+        sliders[2] = c.length / 10.0f;
+        sliders[3] = (c.thickness - 0.1f) / 4.9f;
+        sliders[4] = (c.gap + 5.0f) / 25.0f;
+        sliders[8] = (c.outlineThickness - 0.1f) / 2.9f;
+        sliders[9] = c.red / 255.0f;
+        sliders[10] = c.green / 255.0f;
+        sliders[11] = c.blue / 255.0f;
+        sliders[12] = c.alpha / 255.0f;
+        ui->showCrosshairSettings({{
+            preset, c.dynamic ? "Classic dynamic" : "Classic static",
+            decimal(c.length), decimal(c.thickness), decimal(c.gap),
+            c.dot ? "Yes" : "No", c.tStyle ? "Yes" : "No", c.outline ? "Yes" : "No",
+            decimal(c.outlineThickness), std::to_string(c.red), std::to_string(c.green),
+            std::to_string(c.blue), std::to_string(c.alpha),
+            crosshairBackground == 0 ? "Dust" : crosshairBackground == 1 ? "Dark" : "Light",
+            "[ RESET ]"
+        }}, sliders, crosshairRow, crosshairBackground);
+        return;
+    }
     const auto& resolution = kResolutions[resolutionIndex];
     const int cap = kFpsCaps[fpsCapIndex];
     ui->showSettings({{
@@ -509,7 +557,8 @@ void ClientApp::refreshSettings()
             graphicsDetail == 0 ? "Low" : graphicsDetail == 1 ? "Medium" : "High",
             std::to_string(static_cast<int>(std::lround(camera.getMouseSensitivity() * 100.0f))) + "%",
             showFps ? "On" : "Off",
-            audio::kVoicePacks[voicePackIndex].name
+            audio::kVoicePacks[voicePackIndex].name,
+            "[ EDIT ]"
     }}, settingsRow);
 }
 
@@ -562,8 +611,74 @@ void ClientApp::changeSetting(int row, int direction)
         }
         break;
     }
+    case 9:
+        crosshairEditor = true;
+        crosshairDraggingRow = -1;
+        ui->hideSettings();
+        break;
     default: break;
     }
+    refreshSettings();
+    saveSettings();
+}
+
+void ClientApp::changeCrosshairSetting(int row, int direction)
+{
+    if (!direction) return;
+    auto& c = crosshairSettings;
+    switch (row)
+    {
+    case 0:
+        crosshairPresetIndex = (crosshairPresetIndex + direction + static_cast<int>(kCrosshairPresets.size()))
+                            % static_cast<int>(kCrosshairPresets.size());
+        c = crosshairPreset(crosshairPresetIndex);
+        break;
+    case 1: c.dynamic = !c.dynamic; break;
+    case 2: c.length += direction * 0.1f; break;
+    case 3: c.thickness += direction * 0.1f; break;
+    case 4: c.gap += direction * 0.1f; break;
+    case 5: c.dot = !c.dot; break;
+    case 6: c.tStyle = !c.tStyle; break;
+    case 7: c.outline = !c.outline; break;
+    case 8: c.outlineThickness += direction * 0.1f; break;
+    case 9: c.red += direction; break;
+    case 10: c.green += direction; break;
+    case 11: c.blue += direction; break;
+    case 12: c.alpha += direction; break;
+    case 13: crosshairBackground = (crosshairBackground + direction + 3) % 3; break;
+    case 14: c = CrosshairSettings{}; crosshairPresetIndex = 0; break;
+    default: return;
+    }
+    // Quantize floats to keep preset matching and displayed values stable.
+    c.length = std::round(c.length * 10) / 10;
+    c.thickness = std::round(c.thickness * 10) / 10;
+    c.gap = std::round(c.gap * 10) / 10;
+    c.outlineThickness = std::round(c.outlineThickness * 10) / 10;
+    c.sanitize();
+    crosshair->setSettings(c);
+    refreshSettings();
+    saveSettings();
+}
+
+void ClientApp::dragCrosshairSlider(int row, float x)
+{
+    const float amount = std::clamp((x + 0.27f) / 0.40f, 0.0f, 1.0f);
+    auto& c = crosshairSettings;
+    auto tenth = [](float value) { return std::round(value * 10) / 10; };
+    switch (row)
+    {
+    case 2: c.length = tenth(amount * 10); break;
+    case 3: c.thickness = tenth(0.1f + amount * 4.9f); break;
+    case 4: c.gap = tenth(-5 + amount * 25); break;
+    case 8: c.outlineThickness = tenth(0.1f + amount * 2.9f); break;
+    case 9: c.red = std::lround(amount * 255); break;
+    case 10: c.green = std::lround(amount * 255); break;
+    case 11: c.blue = std::lround(amount * 255); break;
+    case 12: c.alpha = std::lround(amount * 255); break;
+    default: return;
+    }
+    c.sanitize();
+    crosshair->setSettings(c);
     refreshSettings();
     saveSettings();
 }
@@ -590,6 +705,7 @@ void ClientApp::loadSettings()
         for (std::size_t i = 0; i < audio::kVoicePacks.size(); ++i)
             if (voicePackId == audio::kVoicePacks[i].id)
                 voicePackIndex = i;
+    readCrosshairSettings(file, crosshairSettings);
     const auto& size = kResolutions[resolutionIndex];
     SDL_SetWindowSize(window.getSDLWindow(), size.x, size.y);
     fullscreen = full != 0 && SDL_SetWindowFullscreen(window.getSDLWindow(), true);
@@ -606,6 +722,7 @@ void ClientApp::saveSettings() const
          << camera.getFov() << ' ' << audioVolume << ' ' << fpsCapIndex << ' '
          << graphicsDetail << ' ' << camera.getMouseSensitivity() << ' '
          << (showFps ? 1 : 0) << ' ' << audio::kVoicePacks[voicePackIndex].id << '\n';
+    writeCrosshairSettings(file, crosshairSettings);
 }
 
 void ClientApp::openBuyMenu()
@@ -833,6 +950,7 @@ void ClientApp::run()
 
         float delta_time = time_interface.getDeltaTime();
         time_interface.updateFromMain(delta_time);
+        crosshairPreviewSpread *= std::exp(-delta_time * 10.0f);
         if (showFps && (currentState == State::Game || currentState == State::Buy))
         {
             fpsDisplayTimer += delta_time;
@@ -1166,46 +1284,76 @@ void ClientApp::run()
                     auto size = window.getSize();
                     renderer.setViewPort(size.x, size.y);
                 }
-                else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
+                else if (event.type == SDL_EVENT_KEY_DOWN)
                 {
-                    if (event.key.key == SDLK_ESCAPE || event.key.key == SDLK_BACKSPACE)
+                    if ((event.key.key == SDLK_ESCAPE || event.key.key == SDLK_BACKSPACE) && !event.key.repeat)
                     {
                         closeSettings();
                         break;
                     }
-                    if (event.key.key == SDLK_UP)
-                        settingsRow = (settingsRow + ui::Ui::kSettingsRowCount - 1) % ui::Ui::kSettingsRowCount;
-                    else if (event.key.key == SDLK_DOWN)
-                        settingsRow = (settingsRow + 1) % ui::Ui::kSettingsRowCount;
-                    else if (event.key.key == SDLK_LEFT)
-                        changeSetting(settingsRow, -1);
-                    else if (event.key.key == SDLK_RIGHT || event.key.key == SDLK_RETURN)
-                        changeSetting(settingsRow, 1);
+                    if (event.key.key == SDLK_ESCAPE || event.key.key == SDLK_BACKSPACE) continue;
+                    int& row = crosshairEditor ? crosshairRow : settingsRow;
+                    const int count = crosshairEditor ? ui::Ui::kCrosshairRowCount : ui::Ui::kSettingsRowCount;
+                    if (event.key.key == SDLK_UP) row = (row + count - 1) % count;
+                    else if (event.key.key == SDLK_DOWN) row = (row + 1) % count;
+                    else if (crosshairEditor && event.key.key == SDLK_SPACE)
+                        crosshairPreviewSpread = 9.0f;
+                    else if (event.key.key == SDLK_LEFT || event.key.key == SDLK_RIGHT ||
+                             (event.key.key == SDLK_RETURN && !event.key.repeat))
+                    {
+                        const int direction = event.key.key == SDLK_LEFT ? -1 : 1;
+                        if (crosshairEditor) changeCrosshairSetting(row, direction);
+                        else if (!event.key.repeat) changeSetting(row, direction);
+                    }
                     refreshSettings();
                 }
+                else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP && event.button.button == SDL_BUTTON_LEFT)
+                    crosshairDraggingRow = -1;
                 else if (event.type == SDL_EVENT_MOUSE_MOTION ||
                          (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT))
                 {
                     int width = 0, height = 0;
                     SDL_GetWindowSize(window.getSDLWindow(), &width, &height);
-                    const float px = event.type == SDL_EVENT_MOUSE_MOTION ? event.motion.x : event.button.x;
-                    const float py = event.type == SDL_EVENT_MOUSE_MOTION ? event.motion.y : event.button.y;
+                    const bool click = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
+                    const float px = click ? event.button.x : event.motion.x;
+                    const float py = click ? event.button.y : event.motion.y;
                     const float x = px / static_cast<float>(width ? width : 1) * 2.0f - 1.0f;
                     const float y = 1.0f - py / static_cast<float>(height ? height : 1) * 2.0f;
+                    if (crosshairEditor && crosshairDraggingRow >= 0 && !click)
+                    {
+                        dragCrosshairSlider(crosshairDraggingRow, x);
+                        continue;
+                    }
                     const int row = ui->settingsRowAt(x, y);
                     if (row >= 0)
                     {
-                        settingsRow = row;
-                        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
-                            changeSetting(row, ui->settingsDirectionAt(x));
+                        if (crosshairEditor)
+                        {
+                            crosshairRow = row;
+                            if (click && ui->crosshairSliderAt(row, x, y))
+                            {
+                                crosshairDraggingRow = row;
+                                dragCrosshairSlider(row, x);
+                            }
+                            else if (click) changeCrosshairSetting(row, ui->settingsDirectionAt(x));
+                        }
+                        else
+                        {
+                            settingsRow = row;
+                            if (click) changeSetting(row, row == 9 ? 1 : ui->settingsDirectionAt(x));
+                        }
                         refreshSettings();
                     }
-                    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
-                        x >= -0.30f && x <= 0.30f && y >= -0.64f && y <= -0.52f)
+                    const bool back = crosshairEditor
+                        ? x >= -0.90f && x <= -0.30f && y >= -0.80f && y <= -0.72f
+                        : x >= -0.30f && x <= 0.30f && y >= -0.64f && y <= -0.52f;
+                    if (click && back)
                     {
                         closeSettings();
                         break;
                     }
+                    if (click && crosshairEditor && x >= 0.26f && x <= 0.90f && y >= -0.68f && y <= 0.52f)
+                        crosshairPreviewSpread = 9.0f;
                 }
             }
         }

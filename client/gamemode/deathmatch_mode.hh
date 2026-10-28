@@ -1,7 +1,6 @@
 #ifndef NX3D_CLIENT_GAMEMODE_DEATHMATCH_MODE_HH
 #define NX3D_CLIENT_GAMEMODE_DEATHMATCH_MODE_HH
 
-#include <client/crosshair/crosshair.hh>
 #include <client/gamemode/game_mode.hh>
 #include <client/gun/first_person_gun.hh>
 #include <client/ui/ui.hh>
@@ -79,7 +78,7 @@ protected:
 
     // Weapon state
     std::shared_ptr<nx3d::client::gun::FirstPersonGun> m_firstPersonGun;
-    std::shared_ptr<nx3d::client::Crosshair> m_crosshair;
+    float m_crosshairSpread = 0.0f;
     bool m_weaponPickedUp = false;
     uint64_t m_pickedUpItemId = 0;
     glm::vec3 m_pickedUpItemSize{1.0f};

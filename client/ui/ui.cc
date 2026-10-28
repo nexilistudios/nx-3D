@@ -278,7 +278,7 @@ Ui::Ui(VkDevice device,
     settingsBack.setString("");
     settingsBack.setColor(SDL_Color{255, 210, 130, 255});
     settingsBack.setPosition(glm::vec2(-0.17f, -0.59f));
-    for (int i = 0; i < kSettingsRowCount; ++i)
+    for (int i = 0; i < kCrosshairRowCount; ++i)
     {
         auto makeText = [&]
         {
@@ -286,7 +286,7 @@ Ui::Ui(VkDevice device,
                 device, physDevice, commandPool, graphicsQueue,
                 descriptorPool, descriptorSetLayout, fontPath, 19);
         };
-        const float y = 0.48f - i * 0.115f;
+        const float y = 0.48f - i * 0.10f;
         auto addText = [&](auto& texts, float x, SDL_Color color)
         {
             auto text = makeText();
@@ -299,6 +299,18 @@ Ui::Ui(VkDevice device,
         addText(settingsLeftArrows, -0.06f, SDL_Color{255, 210, 130, 255});
         addText(settingsRightArrows, 0.55f, SDL_Color{255, 210, 130, 255});
     }
+
+    for (int i = 0; i < 5; ++i)
+    {
+        auto text = std::make_unique<spear::ui::vulkan::Text>(
+            device, physDevice, commandPool, graphicsQueue,
+            descriptorPool, descriptorSetLayout, fontPath, 14);
+        text->setColor(SDL_Color{195, 205, 220, 255});
+        m_crosshairPreviewTexts.push_back(std::move(text));
+    }
+    constexpr std::array<float, 5> previewTextY{{0.64f, 0.53f, -0.28f, -0.74f, -0.83f}};
+    for (int i = 0; i < 5; ++i)
+        m_crosshairPreviewTexts[i]->setPosition(glm::vec2(0.29f, previewTextY[i]));
 
     buildPauseMenu();
     buildDeathOverlay();
@@ -420,6 +432,29 @@ void Ui::buildPauseMenu()
             m_device, m_physDevice, m_descriptorPool, m_descriptorSetLayout,
             makeSolidTexture(46, 73, 96, 255));
     m_settingsSelection->setSize(glm::vec2(1.30f, 0.108f));
+    auto makeQuad = [&](SDL_Color color, glm::vec2 position, glm::vec2 size)
+    {
+        auto quad = std::make_shared<spear::ui::vulkan::Quad2D>(
+            m_device, m_physDevice, m_descriptorPool, m_descriptorSetLayout,
+            makeSolidTexture(color.r, color.g, color.b, color.a));
+        quad->setPosition(position);
+        quad->setSize(size);
+        return quad;
+    };
+    constexpr std::array<SDL_Color, 3> backgrounds{{
+        {153, 130, 94, 255}, {20, 24, 30, 255}, {218, 222, 227, 255}}};
+    for (int i = 0; i < 3; ++i)
+        m_crosshairPreviewPanels[i] = makeQuad(backgrounds[i], {0.26f, -0.68f}, {0.64f, 1.20f});
+    for (int row : {2, 3, 4, 8, 9, 10, 11, 12})
+    {
+        const float y = 0.59f - row * 0.087f - 0.012f;
+        m_crosshairSliderTracks[row] = makeQuad({65, 79, 95, 255}, {-0.27f, y}, {0.40f, 0.009f});
+        const SDL_Color color = row == 9 ? SDL_Color{240, 100, 100, 255} :
+            row == 10 ? SDL_Color{100, 220, 130, 255} :
+            row == 11 ? SDL_Color{100, 165, 245, 255} : SDL_Color{255, 210, 130, 255};
+        m_crosshairSliderFills[row] = makeQuad(color, {-0.27f, y}, {0.20f, 0.009f});
+    }
+
 }
 
 void Ui::buildLeaderboard()
@@ -714,6 +749,8 @@ void Ui::showGameHudTexts()
     registerText(settingsTitle);
     registerText(settingsHint);
     registerText(settingsBack);
+    for (auto& text : m_crosshairPreviewTexts)
+        registerText(*text);
     for (auto& row : settingsRows)
         registerText(*row);
     for (auto& value : settingsValues)
@@ -923,42 +960,111 @@ void Ui::renderSettingsOverlay(spear::ui::RenderContext ctx, int selectedRow)
 {
     m_pauseBackdropQuad->render(ctx);
     m_settingsPanel->render(ctx);
-    if (selectedRow >= 0 && selectedRow < kSettingsRowCount)
-    {
-        m_settingsSelection->setPosition(glm::vec2(-0.65f, 0.45f - selectedRow * 0.115f));
+    const int count = m_crosshairEditor ? kCrosshairRowCount : kSettingsRowCount;
+    if (selectedRow >= 0 && selectedRow < count)
         m_settingsSelection->render(ctx);
+    if (m_crosshairEditor)
+    {
+        m_crosshairPreviewPanels[m_crosshairBackground]->render(ctx);
+        for (int row = 0; row < kCrosshairRowCount; ++row)
+            if (m_crosshairSliderTracks[row])
+            {
+                m_crosshairSliderTracks[row]->render(ctx);
+                m_crosshairSliderFills[row]->render(ctx);
+            }
     }
+}
+
+void Ui::settingsLayout(bool crosshair)
+{
+    m_crosshairEditor = crosshair;
+    settingsTitle.setPosition(crosshair ? glm::vec2(-0.87f, 0.74f) : glm::vec2(-0.23f, 0.64f));
+    settingsBack.setPosition(crosshair ? glm::vec2(-0.87f, -0.78f) : glm::vec2(-0.17f, -0.59f));
+    settingsHint.setPosition(crosshair ? glm::vec2(-0.87f, -0.85f) : glm::vec2(-0.62f, -0.71f));
+    m_settingsPanel->setPosition(crosshair ? glm::vec2(-0.95f, -0.92f) : glm::vec2(-0.72f, -0.80f));
+    m_settingsPanel->setSize(crosshair ? glm::vec2(1.90f, 1.84f) : glm::vec2(1.44f, 1.60f));
+    m_settingsSelection->setSize(crosshair ? glm::vec2(1.10f, 0.082f) : glm::vec2(1.30f, 0.096f));
+    const int count = crosshair ? kCrosshairRowCount : kSettingsRowCount;
+    for (int i = 0; i < count; ++i)
+    {
+        const float y = crosshair ? 0.59f - i * 0.087f : 0.48f - i * 0.10f;
+        settingsRows[i]->setPosition({crosshair ? -0.87f : -0.60f, y});
+        settingsValues[i]->setPosition({crosshair ? -0.26f : 0.13f, y});
+        settingsLeftArrows[i]->setPosition({crosshair ? -0.36f : -0.06f, y});
+        settingsRightArrows[i]->setPosition({crosshair ? 0.16f : 0.55f, y});
+    }
+}
+
+void Ui::selectSettingsRow(int row)
+{
+    if (row == m_settingsSelectedRow) return;
+    if (m_settingsSelectedRow >= 0)
+        settingsRows[m_settingsSelectedRow]->setColor({220, 230, 240, 255});
+    settingsRows[row]->setColor({255, 220, 150, 255});
+    m_settingsSelectedRow = row;
+    m_settingsSelection->setPosition(m_crosshairEditor
+        ? glm::vec2(-0.90f, 0.565f - row * 0.087f)
+        : glm::vec2(-0.65f, 0.455f - row * 0.10f));
 }
 
 void Ui::showSettings(const std::array<std::string, kSettingsRowCount>& values, int selectedRow)
 {
     static constexpr std::array<const char*, kSettingsRowCount> labels{{
             "Resolution", "Display mode", "Field of view", "Sound volume",
-            "FPS limit", "Smoke detail", "Mouse sensitivity", "Show FPS", "Voicepack"}};
+            "FPS limit", "Smoke detail", "Mouse sensitivity", "Show FPS", "Voicepack", "Crosshair"}};
     if (settingsTitle.getString() != "SETTINGS")
+    {
+        settingsLayout(false);
         settingsTitle.setString("SETTINGS");
+    }
     if (settingsHint.getString() != "UP/DOWN: Select   LEFT/RIGHT: Change   ESC: Back")
         settingsHint.setString("UP/DOWN: Select   LEFT/RIGHT: Change   ESC: Back");
-    if (settingsBack.getString() != "[ BACK ]")
-        settingsBack.setString("[ BACK ]");
+    if (settingsBack.getString() != "[ BACK ]") settingsBack.setString("[ BACK ]");
     for (int i = 0; i < kSettingsRowCount; ++i)
     {
-        if (settingsRows[i]->getString() != labels[i])
-            settingsRows[i]->setString(labels[i]);
-        if (settingsValues[i]->getString() != values[i])
-            settingsValues[i]->setString(values[i]);
-        if (settingsLeftArrows[i]->getString() != "<")
-            settingsLeftArrows[i]->setString("<");
-        if (settingsRightArrows[i]->getString() != ">")
-            settingsRightArrows[i]->setString(">");
+        if (settingsRows[i]->getString() != labels[i]) settingsRows[i]->setString(labels[i]);
+        if (settingsValues[i]->getString() != values[i]) settingsValues[i]->setString(values[i]);
+        if (settingsLeftArrows[i]->getString() != "<") settingsLeftArrows[i]->setString("<");
+        if (settingsRightArrows[i]->getString() != ">") settingsRightArrows[i]->setString(">");
     }
-    if (selectedRow != m_settingsSelectedRow)
+    selectSettingsRow(selectedRow);
+}
+
+void Ui::showCrosshairSettings(const std::array<std::string, kCrosshairRowCount>& values,
+                              const std::array<float, kCrosshairRowCount>& sliders,
+                              int selectedRow, int background)
+{
+    static constexpr std::array<const char*, kCrosshairRowCount> labels{{
+        "Preset", "Style", "Length", "Thickness", "Gap", "Center dot", "T-style",
+        "Draw outline", "Outline thickness", "Red", "Green", "Blue", "Opacity",
+        "Preview background", "Restore defaults"}};
+    if (settingsTitle.getString() != "CROSSHAIR")
     {
-        if (m_settingsSelectedRow >= 0)
-            settingsRows[m_settingsSelectedRow]->setColor(SDL_Color{220, 230, 240, 255});
-        settingsRows[selectedRow]->setColor(SDL_Color{255, 220, 150, 255});
-        m_settingsSelectedRow = selectedRow;
+        settingsLayout(true);
+        settingsTitle.setString("CROSSHAIR");
+        settingsHint.setString("Arrows: Adjust   Drag sliders   ESC: Back");
+        settingsBack.setString("[ BACK TO SETTINGS ]");
+        constexpr std::array<const char*, 5> previewLabels{{
+            "LIVE PREVIEW", "Actual size", "3x magnification", "SPACE: Test fire", "Changes saved automatically"}};
+        for (int i = 0; i < 5; ++i) m_crosshairPreviewTexts[i]->setString(previewLabels[i]);
     }
+    m_crosshairBackground = background;
+    for (int i = 0; i < kCrosshairRowCount; ++i)
+    {
+        if (settingsRows[i]->getString() != labels[i]) settingsRows[i]->setString(labels[i]);
+        if (settingsValues[i]->getString() != values[i]) settingsValues[i]->setString(values[i]);
+        const char* left = i == 14 ? "" : "<";
+        const char* right = i == 14 ? "" : ">";
+        if (settingsLeftArrows[i]->getString() != left) settingsLeftArrows[i]->setString(left);
+        if (settingsRightArrows[i]->getString() != right) settingsRightArrows[i]->setString(right);
+        if (sliders[i] >= 0 && m_crosshairSliderFills[i])
+        {
+            const float width = std::max(0.001f, sliders[i] * 0.40f);
+            if (std::abs(m_crosshairSliderFills[i]->getSize().x - width) > 0.0001f)
+                m_crosshairSliderFills[i]->setSize({width, 0.009f});
+        }
+    }
+    selectSettingsRow(selectedRow);
 }
 
 void Ui::hideSettings()
@@ -974,29 +1080,39 @@ void Ui::hideSettings()
         arrow->setString("");
     for (auto& arrow : settingsRightArrows)
         arrow->setString("");
+    for (auto& text : m_crosshairPreviewTexts) text->setString("");
+    if (m_settingsSelectedRow >= 0)
+        settingsRows[m_settingsSelectedRow]->setColor({220, 230, 240, 255});
     m_settingsSelectedRow = -1;
 }
 
 int Ui::settingsRowAt(float x, float y) const
 {
-    if (x < -0.65f || x > 0.65f)
+    if (x < (m_crosshairEditor ? -0.90f : -0.65f) || x > (m_crosshairEditor ? 0.20f : 0.65f))
         return -1;
-    for (int row = 0; row < kSettingsRowCount; ++row)
+    const int count = m_crosshairEditor ? kCrosshairRowCount : kSettingsRowCount;
+    for (int row = 0; row < count; ++row)
     {
-        const float center = 0.48f - row * 0.115f;
-        if (y >= center - 0.06f && y <= center + 0.055f)
-            return row;
+        const float bottom = m_crosshairEditor ? 0.565f - row * 0.087f : 0.455f - row * 0.10f;
+        if (y >= bottom && y < bottom + (m_crosshairEditor ? 0.087f : 0.10f)) return row;
     }
     return -1;
 }
 
 int Ui::settingsDirectionAt(float x) const
 {
-    if (x >= -0.12f && x <= 0.06f)
-        return -1;
-    if (x >= 0.10f && x <= 0.65f)
-        return 1;
+    if (m_crosshairEditor)
+        return x < -0.30f ? -1 : 1;
+    if (x >= -0.12f && x <= 0.06f) return -1;
+    if (x >= 0.10f && x <= 0.65f) return 1;
     return 0;
+}
+
+bool Ui::crosshairSliderAt(int row, float x, float y) const
+{
+    if (!m_crosshairEditor || row < 0 || row >= kCrosshairRowCount || !m_crosshairSliderTracks[row]) return false;
+    const float center = 0.59f - row * 0.087f - 0.008f;
+    return x >= -0.29f && x <= 0.15f && std::abs(y - center) <= 0.018f;
 }
 
 void Ui::showLeaderboard(const std::vector<LeaderboardEntry>& entries)

@@ -172,6 +172,15 @@ Reload and planting sounds play locally and are relayed to nearby players throug
 
 Each firearm has its own generated gunshot sound. The sound type travels with the positional audio event, so nearby players hear the correct weapon. Gunshots use a louder volume curve and a 2500-unit spatial range so distant firing remains audible across much of the map while fading with distance. The volume control still mutes all sounds at zero. Regenerate the six shot clips with `python3 assets/sounds/generate.py`.
 
+Open **Escape → Settings → Crosshair** to customize your crosshair. Choose Classic,
+Compact, Dot, T-style, or Dynamic presets, then adjust length, thickness, gap,
+center dot, outline, RGB color, and opacity using the arrows or draggable sliders.
+The live preview shows the actual size and a 3× view against Dust, Dark, or Light
+backgrounds. Press Space or click the preview to test firing feedback with the
+Dynamic style; that style also expands with movement and firing during play.
+Changes apply immediately and save automatically. Escape returns to Settings;
+Restore defaults resets only the crosshair.
+
 The pause menu Settings screen has a Voicepack option. DEFAULT uses the original victory announcements and damage grunt; ALTERNATIVE uses a different voice and wording. The choice is saved with the other client settings, and changing it plays a preview. Each pack has `terrorists_win.wav`, `counter_terrorists_win.wav`, `hurt.wav`, `bomb_planted.wav`, and `bomb_defused.wav` in `assets/sounds/voicepacks/<pack id>/`. To add a pack, create those five files and add its id and display name to `client/audio/voice_pack.hh`. New voice cues can be added to that file and played through `ClientApp::playVoiceCue`.
 
 Weapons render in camera space to avoid shaking from world-coordinate rounding. Their default pose sits toward the lower right at an angled FPS stance. `client/gun/weapon_motion.hh` controls the subtle walking cadence, time-based recoil recovery, and reload motion; vertical movement, small ground-contact jitter, and respawn teleports do not drive the bob animation. G drops the current weapon just ahead of the player. Press F near a dropped weapon to equip it; the server checks pickup distance and removes the item when equipped.

@@ -44,6 +44,10 @@ add_executable(ammunition_test ammunition_test.cc)
 target_include_directories(ammunition_test PRIVATE ..)
 add_test(NAME ammunition COMMAND ammunition_test)
 
+add_executable(crosshair_test crosshair_test.cc)
+target_include_directories(crosshair_test PRIVATE ..)
+add_test(NAME crosshair COMMAND crosshair_test)
+
 add_executable(weapon_motion_test weapon_motion_test.cc)
 target_include_directories(weapon_motion_test PRIVATE ..)
 target_link_libraries(weapon_motion_test PRIVATE glm::glm)
