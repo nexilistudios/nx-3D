@@ -28,6 +28,7 @@ struct MapBrush
     float slopeZ = 0.0f;
     float yaw = 0.0f;
     std::string group = "custom";
+    bool operator==(const MapBrush&) const = default;
 };
 
 struct MapVertex

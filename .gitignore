@@ -7,3 +7,7 @@ dist
 **__pycache__
 /result
 /result-*
+
+# Map editor recovery and staged writes
+*.brush.bak
+*.brush.saving

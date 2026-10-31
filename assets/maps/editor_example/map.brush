@@ -1,0 +1,7 @@
+nx3d-brush-map 2
+# Small 3D editing playground; the main Dust II map is separate.
+brush 0 -16 0 512 16 512 paving 0 0 0 custom/floor
+brush -128 32 -96 32 32 32 stone 0 0 0 custom/block
+brush 128 64 -96 64 64 64 plaster 0 0 0 custom/block
+brush 0 32 -224 64 32 64 blue 24 0 0 custom/ramp
+# nx3d-model-v1 "props/example_crate.obj" 0 32 64 32 32 32 15 1

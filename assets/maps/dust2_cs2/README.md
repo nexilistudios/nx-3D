@@ -30,3 +30,9 @@ preview. Preview has free flight with WASD, Space/C and Shift; Escape exits.
 Restart clients and the server after edits, and distribute the same map to all
 participants. Regenerating replaces edits in the default map; use `--output`
 to generate a separate project when needed.
+
+For editing directly in 3D, run `./build/client/nx_3D_client --map-editor` or click
+**Edit in 3D** in the top-down tool. B creates blocks, O places OBJ props, the
+mouse wheel pushes/pulls selected faces, and Ctrl+S saves. The independent
+`assets/maps/editor_example/map.brush` playground includes an example OBJ crate;
+see `assets/props/README.md` for adding more models.

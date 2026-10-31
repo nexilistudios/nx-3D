@@ -106,31 +106,57 @@ services.nx3dServer = {
 
 ## Cube map editor
 
-Dust II is generated entirely from editable cube geometry, including floors,
-ramps, walls, arches, tunnel ceilings, doors, buildings and cover. The plan follows
-[CS2 Dust II](https://csnades.gg/dust2/callouts), with Long A/Pit, Catwalk/Short,
-Mid doors, CT underpass and upper/lower B tunnels. This is a stylized procedural
-reconstruction; the old imported map and its textures are not loaded.
+Edit the map directly in the game’s 3D renderer, or use the top-down Tkinter tool:
 
 ```sh
-python3 tools/generate_dust2.py                 # regenerate the complete map
-python3 tools/map_editor.py                     # edit all generated geometry
-./build/client/nx_3D_client --map-preview        # inspect in 3D without a server
+./build/client/nx_3D_client --map-editor
+./build/client/nx_3D_client --map-editor --map assets/maps/editor_example/map.brush
+./build/client/nx_3D_client --map-editor --map /path/to/new-map.brush
+python3 tools/map_editor.py
 ```
 
-The editor requires Python's Tkinter GUI (`python3-tk` on some distributions).
-Select and drag to move blocks, use **Add brush** to draw one on the grid, and use
-the inspector to resize, change material, rotate or tilt its top into a ramp.
-Layer filters make floors, walls and cover easier to select. Mouse wheel zooms,
-middle drag pans, and Ctrl+Z/Y/S undo, redo and save. **3D preview** opens the
-built client after saving. Fly with WASD, Space/C and Shift; Escape quits.
+The 3D editor opens an existing map, or creates a floor for a new filename. Click
+**Edit in 3D** or **New 3D map** in the top-down editor to launch it there. The
+example map includes blocks, a ramp, and an original textured OBJ supply crate.
 
-The complete map is `assets/maps/dust2_cs2/map.brush`. Both programs build collision
-from the same vertices; the client batches rendering by material. Restart clients
-and the server after edits and distribute the same file to every participant.
-Regeneration replaces edits in the default map; `--output /path/to/map.brush`
-generates another project. `python3 tools/map_editor.py --check` validates a map.
-See `assets/maps/dust2_cs2/README.md` and its `overview.svg` for the generated plan.
+Click a block face or model to select it. Yellow edges outline the object; cyan
+edges mark the face affected by the mouse wheel. **B** creates a grid-sized
+block against the surface under the cursor; **O** places the model selected in
+the palette. Move objects by dragging, or hold Shift while dragging to move
+vertically. Arrow keys move X/Z, Page Up/Down move Y, and R rotates 15 degrees
+(Shift reverses). The wheel pushes or pulls one face. M cycles block materials
+and paints the selection. Minus/plus change the grid; brackets select OBJ models.
+Ctrl+D duplicates, Delete removes, and Ctrl+Z/Y undo/redo. F focuses the selection.
+
+The editor starts at ground level inside the map. Hold the right mouse button to
+look around and walk with WASD; Space jumps. Tab keeps mouse look active while
+you move. Press G for free flight (Space/C moves up/down, Shift speeds up) and G
+again to return to walking. Click an object while looking around to select it,
+then use the editing keys or mouse wheel without leaving that view. Escape releases mouse look, then closes the
+editor with a save/discard prompt. **Ctrl+S saves**; the previous map is retained
+as `.brush.bak`. Edits stay in memory until saved. The top-down editor reloads
+changes when the 3D editor closes.
+
+Put additional OBJ models, their MTL files, and referenced textures under
+`assets/props/` before opening the editor; its model palette discovers subfolders.
+OBJ models can be moved, resized, rotated, duplicated, and deleted like blocks.
+They fit the selection box, which also defines their collision on both client and
+server. C toggles model collision. See [the example asset](assets/props/README.md).
+
+The complete gameplay map is `assets/maps/dust2_cs2/map.brush`. Both programs load
+its brush geometry and OBJ placements; restart clients and the server after
+saving edits, and distribute the same map and model assets to every participant.
+Custom filenames are supported by the editor and `--map-preview --map <file>`.
+The example map is an editing playground; match spawn positions still belong to
+the Dust II game modes.
+
+Dust II is generated from editable cubes, including floors, ramps, arches,
+tunnels, doors, buildings, and cover. Run `python3 tools/generate_dust2.py` to
+regenerate it; regeneration replaces edits in the default map. Use `--output`
+for a separate project. The top-down tool requires Tkinter and provides exact
+numeric fields for dimensions, rotation, ramp tilt, and materials.
+`python3 tools/map_editor.py --check` validates the map, including OBJ records.
+See `assets/maps/dust2_cs2/README.md` for the generated plan.
 
 ## Controls
 

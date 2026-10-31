@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 import os
+import shlex
 from pathlib import Path
 import tempfile
 
@@ -89,7 +90,31 @@ def read_map(path: Path) -> list[Brush]:
     return result
 
 
-def write_map(path: Path, brushes: list[Brush]) -> None:
+def read_model_records(path: Path) -> list[str]:
+    records = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.split(maxsplit=2)[:2] != ["#", "nx3d-model-v1"]:
+            continue
+        parts = shlex.split(line, comments=False)
+        if parts[:2] != ["#", "nx3d-model-v1"]:
+            continue
+        if len(parts) != 11:
+            raise ValueError("Invalid OBJ model record")
+        model = Path(parts[2])
+        values = list(map(float, parts[3:10]))
+        if model.is_absolute() or ".." in model.parts or model.suffix != ".obj":
+            raise ValueError("Models must be OBJ paths relative to assets/")
+        if not all(math.isfinite(v) and abs(v) <= 100000 for v in values) or min(values[3:6]) <= 0:
+            raise ValueError("Invalid model position or dimensions")
+        if parts[10] not in ("0", "1"):
+            raise ValueError("Invalid model collision flag")
+        records.append(line)
+    if len(records) > 4096:
+        raise ValueError("Map exceeds 4096 models")
+    return records
+
+
+def write_map(path: Path, brushes: list[Brush], model_records: list[str] | tuple = ()) -> None:
     if len(brushes) > MAX_BRUSHES:
         raise ValueError(f"Map exceeds {MAX_BRUSHES} brushes")
     lines = [HEADER, "# Generated CS2-style Dust II. All world geometry is editable.",
@@ -98,6 +123,7 @@ def write_map(path: Path, brushes: list[Brush]) -> None:
         geometry = " ".join(f"{value:.9g}" for value in (b.x, b.y, b.z, b.hx, b.hy, b.hz))
         shape = " ".join(f"{value:.9g}" for value in (b.slope_x, b.slope_z, b.yaw))
         lines.append(f"brush {geometry} {b.material} {shape} {b.group}")
+    lines.extend(model_records)
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, name = tempfile.mkstemp(prefix=".brushes-", dir=path.parent)
     try:
@@ -114,6 +140,7 @@ class BrushMap:
     def __init__(self, path: Path):
         self.path = path
         self.brushes = read_map(path)
+        self.model_records = read_model_records(path)
         self.undo_stack: list[list[Brush]] = []
         self.redo_stack: list[list[Brush]] = []
 
@@ -137,4 +164,4 @@ class BrushMap:
             self.brushes = self.redo_stack.pop()
 
     def save(self) -> None:
-        write_map(self.path, self.brushes)
+        write_map(self.path, self.brushes, self.model_records)

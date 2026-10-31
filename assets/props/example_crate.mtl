@@ -1,0 +1,11 @@
+newmtl wood
+Kd 0.5569 0.3882 0.2118
+map_Kd crate_wood.png
+
+newmtl metal
+Kd 0.2157 0.2549 0.2824
+map_Kd crate_metal.png
+
+newmtl label
+Kd 0.8784 0.7059 0.2275
+map_Kd crate_label.png

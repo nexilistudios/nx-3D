@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 import subprocess
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 try:
     from .brush_map import Brush, BrushMap, DEFAULT_MAP, ROOT, MATERIALS, COLORS
@@ -65,6 +65,12 @@ class Editor:
         ttk.Entry(bar, textvariable=self.level, width=7).pack(side="left")
         ttk.Label(bar, text="Height").pack(side="left", padx=(10, 3))
         ttk.Entry(bar, textvariable=self.height, width=7).pack(side="left")
+
+        scene_bar = ttk.Frame(self.root, padding=(5, 0, 5, 5))
+        scene_bar.pack(fill="x")
+        ttk.Button(scene_bar, text="Edit in 3D", command=self.edit_3d).pack(side="left", padx=2)
+        ttk.Button(scene_bar, text="New 3D map", command=self.new_3d_map).pack(side="left", padx=2)
+        ttk.Label(scene_bar, text="3D editing: B adds blocks, O adds OBJ models, wheel resizes faces, Ctrl+S saves.").pack(side="left", padx=12)
 
         body = ttk.Frame(self.root)
         body.pack(fill="both", expand=True)
@@ -174,12 +180,61 @@ class Editor:
         if not executable.exists():
             messagebox.showerror("Preview unavailable","Build the client first: cmake --build build")
             return
-        if self.model.path.resolve()!=DEFAULT_MAP.resolve():
-            messagebox.showinfo("Preview", "3D preview loads assets/maps/dust2_cs2/map.brush. Save your map there first.")
-            return
         self.save()
         if self.model.brushes != self.saved_brushes: return
-        subprocess.Popen([str(executable),"--map-preview"],cwd=ROOT)
+        subprocess.Popen([str(executable), "--map-preview", "--map", str(self.model.path.resolve())], cwd=ROOT)
+
+    def edit_3d(self, path: Path | None = None) -> None:
+        executable = ROOT / "build/client/nx_3D_client"
+        if not executable.exists():
+            messagebox.showerror("3D editor unavailable", "Build the client first: cmake --build build")
+            return
+        if path is None:
+            self.save()
+            if self.model.brushes != self.saved_brushes:
+                return
+            path = self.model.path
+        try:
+            process = subprocess.Popen([str(executable), "--map-editor", "--map", str(path.resolve())], cwd=ROOT)
+        except OSError as error:
+            messagebox.showerror("Cannot open 3D editor", str(error))
+            return
+        self.root.withdraw()
+
+        def finished() -> None:
+            if process.poll() is None:
+                self.root.after(250, finished)
+                return
+            self.root.deiconify()
+            if process.returncode != 0:
+                messagebox.showerror("3D editor stopped", "The editor exited with an error. Check the terminal for details.")
+                return
+            if path.exists():
+                self.model = BrushMap(path)
+                self.saved_brushes = self.model.brushes.copy()
+                metadata = path.parent / "layout.json"
+                self.labels = json.loads(metadata.read_text()).get("labels", []) if metadata.exists() else []
+                self.root.title(f"nx-3D Cube Map Editor — {path.name}")
+                self.select(None)
+                self.status.set(f"Loaded {len(self.model.brushes)} brushes and {len(self.model.model_records)} OBJ models from 3D editing.")
+        self.root.after(250, finished)
+
+    def new_3d_map(self) -> None:
+        if self.model.brushes != self.saved_brushes:
+            choice = messagebox.askyesnocancel("Unsaved map", "Save the current map before creating a new one?")
+            if choice is None:
+                return
+            if choice:
+                self.save()
+                if self.model.brushes != self.saved_brushes:
+                    return
+        name = filedialog.asksaveasfilename(title="New 3D map", defaultextension=".brush",
+                                          filetypes=[("nx-3D map", "*.brush")], initialfile="untitled.brush")
+        if name:
+            path = Path(name)
+            if path.exists():
+                messagebox.showinfo("Existing map", "That map already exists and will open for editing. Choose an unused filename for a new map.")
+            self.edit_3d(path)
 
     def select(self, index: int | None) -> None:
         self.selected = index
@@ -337,7 +392,7 @@ def main() -> None:
     args = parser.parse_args()
     if args.check:
         model = BrushMap(args.map)
-        print(f"{args.map}: {len(model.brushes)} valid brushes")
+        print(f"{args.map}: {len(model.brushes)} valid brushes, {len(model.model_records)} OBJ models")
     else:
         Editor(args.map).run()
 

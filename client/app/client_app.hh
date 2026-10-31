@@ -5,6 +5,7 @@
 #include <client/audio/voice_pack.hh>
 #include <client/crosshair/crosshair.hh>
 #include <client/ui/ui.hh>
+#include <shared/map_document.hh>
 
 #include <nexilis/client/client_api.hh>
 #include <nexilis/protocol_manager.hh>
@@ -31,6 +32,8 @@
 
 namespace nx3d::client
 {
+class BrushModel;
+namespace editor { class MapEditor; }
 
 namespace audio
 {
@@ -79,7 +82,8 @@ public:
     };
 
     ClientApp(const std::string& initialServerAddress, const std::string& initialUsername,
-              bool connectOnStart, bool previewMap = false);
+              bool connectOnStart, bool previewMap = false,
+              bool editMap = false, const std::string& mapPath = "");
     ~ClientApp();
 
     ClientApp(const ClientApp&) = delete;
@@ -96,6 +100,14 @@ public:
     std::shared_ptr<btDiscreteDynamicsWorld> shared_world;
     /// Static triangle-mesh body used to test whether map geometry blocks a shot.
     btRigidBody* mapCollisionBody = nullptr;
+    std::string mapFilePath;
+    bool editingMap = false;
+    MapDocument mapDocument;
+    std::shared_ptr<BrushModel> mapModel;
+    std::vector<std::shared_ptr<spear::rendering::vulkan::OBJModel>> mapProps;
+    std::unique_ptr<editor::MapEditor> mapEditor;
+    void rebuildMapVisuals();
+    void rebuildMapCollision();
     std::unique_ptr<btTriangleMesh> mapTriangles;
     std::unique_ptr<btBvhTriangleMeshShape> mapShape;
     std::unique_ptr<btDefaultMotionState> mapMotion;

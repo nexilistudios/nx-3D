@@ -2,6 +2,7 @@
 
 #include <shared/economy.hh>
 #include <shared/brush_mesh.hh>
+#include <shared/map_document.hh>
 #include <shared/player_hit.hh>
 #include <shared/player_rules.hh>
 
@@ -72,7 +73,8 @@ public:
         const auto path = std::filesystem::exists(configured) ? configured : relative;
         std::ifstream file(path);
         if (!file) throw std::runtime_error("Cannot load generated server map: " + path.string());
-        const auto mesh = nx3d::buildBrushMesh(nx3d::readBrushMap(file));
+        const auto document = nx3d::readMapDocument(file);
+        const auto mesh = nx3d::buildBrushMesh(document.brushes);
         for (const auto& vertices : mesh)
         {
             for (std::size_t i = 0; i < vertices.size(); i += 3)
@@ -82,6 +84,14 @@ public:
                                    asBullet(vertices[i + 2].position));
             }
         }
+        for (const auto& prop : document.props)
+            if (prop.solid)
+            {
+                const auto vertices = nx3d::brushVertices(nx3d::propBounds(prop));
+                for (std::size_t i = 0; i < vertices.size(); i += 3)
+                    m_mesh.addTriangle(asBullet(vertices[i].position), asBullet(vertices[i+1].position),
+                                       asBullet(vertices[i+2].position));
+            }
         if (m_mesh.getNumTriangles() == 0)
             throw std::runtime_error("Empty generated server map");
         m_shape = std::make_unique<btBvhTriangleMeshShape>(&m_mesh, true);

@@ -3,6 +3,8 @@
 
 #include <client/chat/chat_text.hh>
 #include <client/map/brush_model.hh>
+#include <client/map/map_prop_model.hh>
+#include <client/editor/map_editor.hh>
 #include <client/gamemode/bomb_mode.hh>
 #include <client/gamemode/deathmatch_mode.hh>
 #include <client/gamemode/weapon_profiles.hh>
@@ -67,14 +69,16 @@ std::string settingsPath()
 }
 
 ClientApp::ClientApp(const std::string& initialServerAddress, const std::string& initialUsername,
-                     bool connectOnStart, bool previewMap)
+                     bool connectOnStart, bool previewMap, bool editMap, const std::string& mapPath)
     : window("nx_3D game", spear::BaseWindow::Size{820, 640}),
-      camera(previewMap ? glm::vec3(-400.0f, 3200.0f, 1800.0f) : glm::vec3(-1600.0f, 64.0f, -2600.0f),
-             glm::vec3(0.f, 1.f, 0.f), previewMap ? -90.0f : 90.0f,
+      camera((previewMap || editMap) ? glm::vec3(-400.0f, 3200.0f, 1800.0f) : glm::vec3(-1600.0f, 64.0f, -2600.0f),
+             glm::vec3(0.f, 1.f, 0.f), (previewMap || editMap) ? -90.0f : 90.0f,
              previewMap ? -55.0f : 0.0f, nx3d::kWalkSpeed),
       scene_manager(),
       bullet_world(),
       shared_world(std::make_shared<btDiscreteDynamicsWorld>(*bullet_world.getDynamicsWorld())),
+      mapFilePath(mapPath.empty() ? nx3d::projectAssetPath(nx3d::kGeneratedMapPath) : mapPath),
+      editingMap(editMap),
       movement_controller(camera, shared_world.get(), nx3d::kStandingEyeHeight),
       renderer(window),
       serverAddress(initialServerAddress),
@@ -176,14 +180,15 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
 
     renderer.setUIRenderer(&ui->renderer());
 
-    if (previewMap)
+    if (previewMap || editMap)
     {
         currentState = State::MapPreview;
         scene_manager.loadScene(game_scene_id);
         ui->clear();
         ui->matchStatusText.setString("DUST II PREVIEW | WASD: fly | Space/C: up/down | Shift: fast | Esc: quit");
         ui->registerText(ui->matchStatusText);
-        SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), true);
+        SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), !editMap);
+        if (editMap) mapEditor = std::make_unique<editor::MapEditor>(*this);
     }
     else if (connectOnStart)
     {
@@ -282,6 +287,7 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
 
 ClientApp::~ClientApp()
 {
+    mapEditor.reset();
     if (mapCollisionBody) shared_world->removeRigidBody(mapCollisionBody);
 }
 
@@ -292,18 +298,42 @@ void ClientApp::setupScenes()
     lobby_scene_id = spear::createScene(lobby_objects, lobby_function, scene_manager);
     scene_manager.getSceneById(lobby_scene_id)->setName("lobby");
 
-    // The generated brush file is the complete world, including ramps and detail.
-    const auto mapPath = nx3d::projectAssetPath(nx3d::kGeneratedMapPath);
-    std::ifstream mapFile(mapPath);
-    if (!mapFile) throw std::runtime_error("Cannot load generated map: " + mapPath);
-    const auto brushes = nx3d::readBrushMap(mapFile);
-    if (brushes.empty()) throw std::runtime_error("Generated map contains no geometry");
-    const auto mesh = nx3d::buildBrushMesh(brushes);
-    auto mapModel = std::make_shared<BrushModel>(
+    std::ifstream mapFile(mapFilePath);
+    if (mapFile) mapDocument = nx3d::readMapDocument(mapFile);
+    else if (editingMap && !std::filesystem::exists(mapFilePath))
+        mapDocument.brushes.push_back({{0, -16, 0}, {512, 16, 512}, "paving"});
+    else throw std::runtime_error("Cannot load map: " + mapFilePath);
+    const auto mesh = nx3d::buildBrushMesh(mapDocument.brushes);
+    mapModel = std::make_shared<BrushModel>(
             renderer.getDevice(), renderer.getPhysicalDevice(), renderer.getCommandPool(),
             renderer.getGraphicsQueue(), descriptorPool, descriptorSetLayout, mesh);
+    rebuildMapCollision();
+    auto game_objects = spear::Scene::Container{mapModel};
+    for (const auto& prop : mapDocument.props)
+    {
+        auto model = createMapPropModel(prop, renderer.getDevice(), renderer.getPhysicalDevice(),
+            renderer.getCommandPool(), renderer.getGraphicsQueue(), descriptorPool, descriptorSetLayout);
+        mapProps.push_back(model); game_objects.push_back(model);
+    }
+    sunCube = std::make_shared<vk::Cube>(
+            renderer.getDevice(), renderer.getPhysicalDevice(),
+            blt::ObjectData({}, 0.0f, glm::vec3(0.0f), default_size));
+    sunCube->setEmissive(true);
+    game_objects.push_back(sunCube);
+    auto game_function = [](spear::Scene::Container&) {};
+    game_scene_id = spear::createScene(game_objects, game_function, scene_manager);
+    scene_manager.getSceneById(game_scene_id)->setName("game");
+}
+
+void ClientApp::rebuildMapCollision()
+{
+    if (mapCollisionBody) shared_world->removeRigidBody(mapCollisionBody);
+    mapCollisionBody = nullptr;
+    mapBody.reset();
+    mapMotion.reset();
+    mapShape.reset();
     mapTriangles = std::make_unique<btTriangleMesh>();
-    for (const auto& vertices : mesh)
+    for (const auto& vertices : buildBrushMesh(mapDocument.brushes))
     {
         for (std::size_t i = 0; i < vertices.size(); i += 3)
         {
@@ -313,21 +343,44 @@ void ClientApp::setupScenes()
             mapTriangles->addTriangle({a.x, a.y, a.z}, {b.x, b.y, b.z}, {c.x, c.y, c.z});
         }
     }
-    mapShape = std::make_unique<btBvhTriangleMeshShape>(mapTriangles.get(), true);
-    mapMotion = std::make_unique<btDefaultMotionState>(btTransform::getIdentity());
-    btRigidBody::btRigidBodyConstructionInfo info(0.0f, mapMotion.get(), mapShape.get());
-    mapBody = std::make_unique<btRigidBody>(info);
-    shared_world->addRigidBody(mapBody.get());
-    mapCollisionBody = mapBody.get();
-    auto game_objects = spear::Scene::Container{mapModel};
-    sunCube = std::make_shared<vk::Cube>(
-            renderer.getDevice(), renderer.getPhysicalDevice(),
-            blt::ObjectData({}, 0.0f, glm::vec3(0.0f), default_size));
-    sunCube->setEmissive(true);
-    game_objects.push_back(sunCube);
-    auto game_function = [](spear::Scene::Container&) {};
-    game_scene_id = spear::createScene(game_objects, game_function, scene_manager);
-    scene_manager.getSceneById(game_scene_id)->setName("game");
+    for (const auto& prop : mapDocument.props)
+        if (prop.solid)
+        {
+            const auto vertices = nx3d::brushVertices(nx3d::propBounds(prop));
+            for (std::size_t i = 0; i < vertices.size(); i += 3)
+            {
+                const auto a = vertices[i].position, b = vertices[i+1].position, c = vertices[i+2].position;
+                mapTriangles->addTriangle({a.x, a.y, a.z}, {b.x, b.y, b.z}, {c.x, c.y, c.z});
+            }
+        }
+    if (mapTriangles->getNumTriangles() > 0)
+    {
+        mapShape = std::make_unique<btBvhTriangleMeshShape>(mapTriangles.get(), true);
+        mapMotion = std::make_unique<btDefaultMotionState>(btTransform::getIdentity());
+        btRigidBody::btRigidBodyConstructionInfo info(0.0f, mapMotion.get(), mapShape.get());
+        mapBody = std::make_unique<btRigidBody>(info);
+        shared_world->addRigidBody(mapBody.get());
+        mapCollisionBody = mapBody.get();
+    }
+}
+
+void ClientApp::rebuildMapVisuals()
+{
+    vkDeviceWaitIdle(renderer.getDevice());
+    auto nextMap = std::make_shared<BrushModel>(
+        renderer.getDevice(), renderer.getPhysicalDevice(), renderer.getCommandPool(),
+        renderer.getGraphicsQueue(), descriptorPool, descriptorSetLayout, buildBrushMesh(mapDocument.brushes));
+    std::vector<std::shared_ptr<vk::OBJModel>> nextProps;
+    for (const auto& prop : mapDocument.props)
+        nextProps.push_back(createMapPropModel(prop, renderer.getDevice(), renderer.getPhysicalDevice(),
+            renderer.getCommandPool(), renderer.getGraphicsQueue(), descriptorPool, descriptorSetLayout));
+    auto scene = scene_manager.getSceneById(game_scene_id);
+    scene->removeObject(mapModel->getId());
+    for (const auto& prop : mapProps) scene->removeObject(prop->getId());
+    mapModel = std::move(nextMap); mapProps = std::move(nextProps);
+    scene->addObject(mapModel);
+    for (const auto& prop : mapProps) scene->addObject(prop);
+    if (editingMap) rebuildMapCollision();
 }
 
 void ClientApp::connect(const std::string& address)
@@ -1023,7 +1076,14 @@ void ClientApp::run()
             updateTeamSelectRoster();
 
         // --- Event handling ---
-        if (currentState == State::MapPreview)
+        if (currentState == State::MapPreview && mapEditor)
+        {
+            SDL_Event event;
+            while (input.pollEvent(event))
+                if (mapEditor->handle(event)) cleanQuit();
+            mapEditor->update(delta_time);
+        }
+        else if (currentState == State::MapPreview)
         {
             SDL_Event event;
             while (input.pollEvent(event))
