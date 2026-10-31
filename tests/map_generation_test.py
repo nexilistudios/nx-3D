@@ -12,11 +12,16 @@ from tools.generate_dust2 import generate, LABELS
 with tempfile.TemporaryDirectory() as temporary:
     path = Path(temporary) / "map.brush"
     builder = generate(path)
-    if path.read_bytes() != DEFAULT_MAP.read_bytes():
-        raise RuntimeError("Generated map is stale: run tools/generate_dust2.py")
+    repeat = Path(temporary) / "repeat.brush"
+    generate(repeat)
+    if path.read_bytes() != repeat.read_bytes():
+        raise RuntimeError("Map generation is not deterministic")
     brushes = read_map(path)
     if len(brushes) < 1000 or not any(b.slope_x or b.slope_z for b in brushes):
         raise RuntimeError("Incomplete generated map")
+    edited_map = BrushMap(DEFAULT_MAP)
+    if len(edited_map.brushes) < 1000 or not any(b.slope_x or b.slope_z for b in edited_map.brushes):
+        raise RuntimeError("Incomplete editable Dust II map")
     model = BrushMap(path)
     original = model.brushes.copy()
     model.change([*original, Brush(0,32,0,16,32,16,"blue",0,0,45,"test")])
