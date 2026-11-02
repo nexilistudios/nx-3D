@@ -5281,3 +5281,10 @@ brush -144 32 -2576 16 32 336 stone 0 0 0 custom
 brush 240 32 -2464 144 32 32 stone 0 0 0 custom
 brush 320 32 -2352 32 32 112 stone 0 0 0 custom
 brush -1408 144 832 16 16 16 stone 0 0 0 custom/block
+brush -1760 144 784 528 16 32 stone 0 0 180 custom/block
+brush -2224 96 1072 96 16 288 stone 0 0 0 custom/block
+brush -880 112 800 384 32 16 stone 0 0 0 custom/block
+brush 608 -16 -2656 16 96 240 stone 0 0 0 custom/block
+brush 465 -16 -2592 160 96 16 stone 0 0 0 custom/block
+brush 431 -16 -1984 160 96 16 stone 0 0 0 custom/block
+# nx3d-model-v1 "props/editor_barrel.obj" -2272 128 1200 16 16 16 0 1

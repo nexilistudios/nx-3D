@@ -120,9 +120,13 @@ The 3D editor opens an existing map, or creates a floor for a new filename. Clic
 example map includes blocks, a ramp, and an original textured OBJ supply crate.
 
 Click a block face or model to select it. Yellow edges outline the object; cyan
-edges mark the face affected by the mouse wheel. **B** creates a grid-sized
-block against the surface under the cursor; **O** places the model selected in
-the palette. Move objects by dragging, or hold Shift while dragging to move
+edges mark the face affected by the mouse wheel. Press **P** or click **Object
+library** to open the separate object browser inside the editor. Choose the
+Shapes or Models tab, click an item, then click the map to place it. Shapes
+include cube, sphere, thin 2D wall, and door. The model tab includes a crate,
+barrel, barrier, pallet, pillar, and traffic cone; it also lists your own OBJ
+assets. **B** places the selected item again at the cursor; **O** places the
+selected OBJ model. Move objects by dragging, or hold Shift while dragging to move
 vertically. Arrow keys move X/Z, Page Up/Down move Y, and R rotates 15 degrees
 (Shift reverses). The wheel pushes or pulls one face. M cycles block materials
 and paints the selection. Minus/plus change the grid; brackets select OBJ models.
@@ -149,6 +153,12 @@ saving edits, and distribute the same map and model assets to every participant.
 Custom filenames are supported by the editor and `--map-preview --map <file>`.
 The example map is an editing playground; match spawn positions still belong to
 the Dust II game modes.
+
+The 1–4 keys also choose a cube, sphere, thin 2D wall, or wooden door panel;
+**V** cycles these shapes. Select an item and click its X, Y, Z, Width, Height,
+or Depth value on the right
+to type an exact number; Enter applies it. Dragging, face resizing, rotation,
+undo, and saving also work with the new shapes. Door panels are static geometry.
 
 Dust II is generated from editable cubes, including floors, ramps, arches,
 tunnels, doors, buildings, and cover. Run `python3 tools/generate_dust2.py` to
@@ -228,12 +238,6 @@ The match uses MR12: twelve rounds per half, side swap after round 12, first to 
 Each round assigns and equips the C4 NXObject to one Terrorist. The carrier can select it with 4 and drop it with G; a living Terrorist can pick it up with F. If the carrier dies before planting, the bomb drops at their position. Holding E at a bomb site equips the carried bomb and plants after three seconds. A Counter Terrorist within 120 game units of the planted bomb may hold E for five seconds to defuse, or 2.5 seconds with a defuse kit. Holding E equips an owned kit. Releasing E cancels the action. The planted bomb uses its world model and explodes 40 seconds after planting. The server checks ownership, team, life state, phase, defuse range, player movement, weapon ownership, shot hits, and map occlusion.
 
 Players start with $800 and can hold up to $16000. Each credited kill earns $300; bomb plants and defuses earn $800; round wins earn $3250 and losses earn $1400. Press B while alive in your team's spawn area to open the buy menu. Click an item to buy it, press Tab to cycle the list, radial, and CS2 grid layouts, and press B or Escape to close. The server checks purchases against balance, team, life state, and spawn position. The catalog includes the three pistols, MP5, the existing rifles, ammo refill, health refill, HE and smoke grenades, and a CT-only defuse kit for bomb matches. Left click throws the selected grenade; all clients see its 3D model in flight. HE deals blast damage after a two-second fuse. Smoke deploys Spear's soft particle cloud after two seconds, dissipates over its twelve-second effect, and deals no damage. Smoke detail controls the particle count. Bomb match survivors keep their primary, pistol, remaining ammunition, grenades, smoke, and defuse kit in the next round. Players who die, switch teams, or reach halftime receive a fresh loadout. Grenades currently use a simple arc without world collision; HE blast has no world occlusion.
-
-## Manual releases
-
-Commit and push the default branch, then run **Game release** from the GitHub Actions tab or use `gh workflow run release.yml`. Leave the version input blank to increment the patch version from `VERSION.txt`, or enter a newer version such as `0.2.0`. Watch the run with `gh run list --workflow release.yml`.
-
-After all builds succeed, the workflow updates `VERSION.txt` (the Nix packages read their version from it), tags the release, and publishes five GitHub release assets: Linux and Windows archives for both server and client, plus a source archive. The source archive contains this repository's tracked files and submodule references; clone the tagged repository with submodules to build from source. Linux clients run `run.sh` from the extracted archive; Windows clients run `run.bat`. The release workflow has no schedule.
 
 ## Verification and release status
 

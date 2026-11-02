@@ -346,7 +346,7 @@ void ClientApp::rebuildMapCollision()
     for (const auto& prop : mapDocument.props)
         if (prop.solid)
         {
-            const auto vertices = nx3d::brushVertices(nx3d::propBounds(prop));
+            const auto vertices = nx3d::propCollisionVertices(prop);
             for (std::size_t i = 0; i < vertices.size(); i += 3)
             {
                 const auto a = vertices[i].position, b = vertices[i+1].position, c = vertices[i+2].position;

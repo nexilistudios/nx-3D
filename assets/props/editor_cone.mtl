@@ -1,0 +1,23 @@
+newmtl steel
+Kd 0.1922 0.5059 0.7647
+map_Kd editor_steel.png
+
+newmtl dark
+Kd 0.2000 0.2549 0.2980
+map_Kd editor_dark.png
+
+newmtl concrete
+Kd 0.7255 0.7725 0.7804
+map_Kd editor_concrete.png
+
+newmtl wood
+Kd 0.7020 0.4745 0.2549
+map_Kd editor_wood.png
+
+newmtl orange
+Kd 0.9569 0.4863 0.1569
+map_Kd editor_orange.png
+
+newmtl white
+Kd 0.9490 0.9255 0.8392
+map_Kd editor_white.png

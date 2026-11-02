@@ -87,7 +87,7 @@ public:
         for (const auto& prop : document.props)
             if (prop.solid)
             {
-                const auto vertices = nx3d::brushVertices(nx3d::propBounds(prop));
+                const auto vertices = nx3d::propCollisionVertices(prop);
                 for (std::size_t i = 0; i < vertices.size(); i += 3)
                     m_mesh.addTriangle(asBullet(vertices[i].position), asBullet(vertices[i+1].position),
                                        asBullet(vertices[i+2].position));

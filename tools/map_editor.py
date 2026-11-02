@@ -75,7 +75,7 @@ class Editor:
         scene_bar.pack(fill="x")
         ttk.Button(scene_bar, text="Edit in 3D", command=self.edit_3d).pack(side="left", padx=2)
         ttk.Button(scene_bar, text="New 3D map", command=self.new_3d_map).pack(side="left", padx=2)
-        ttk.Label(scene_bar, text="3D editing: B adds blocks, O adds OBJ models, wheel resizes faces, Ctrl+S saves.").pack(side="left", padx=12)
+        ttk.Label(scene_bar, text="3D editing: 1-4 choose shapes, B places, click X/Y/Z or size to edit.").pack(side="left", padx=12)
 
         body = ttk.Frame(self.root)
         body.pack(fill="both", expand=True)

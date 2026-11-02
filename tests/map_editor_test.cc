@@ -81,6 +81,39 @@ int main()
         document.addProp("props/example_crate.obj", {320, 32, 64});
         require(document.selection->prop && document.data.props.back().center.z == 64, "Model placement failed");
 
+        document.addShape(Shape::wall, {0, 16, 256});
+        require(document.data.brushes.back().group == "custom/wall" &&
+                        document.data.brushes.back().halfSize.z == 4 &&
+                        document.data.brushes.back().center.y == 48,
+                "2D wall dimensions or floor placement are wrong");
+        require(document.setSelectedField(0, 96) && document.setSelectedField(4, 128) &&
+                        document.data.brushes.back().center.x == 96 &&
+                        document.data.brushes.back().halfSize.y == 64,
+                "Numeric X or height edit failed");
+        require(!document.setSelectedField(3, 0) &&
+                        document.data.brushes.back().halfSize.x == 64,
+                "Invalid width changed a wall");
+        document.addShape(Shape::door, {0, 16, 384});
+        require(document.data.brushes.back().group == "custom/door" &&
+                        document.data.brushes.back().halfSize.y == 64,
+                "Door primitive was not created");
+        document.addShape(Shape::sphere, {0, 16, 512});
+        require(document.selection->prop && isEditorSphere(document.data.props.back()) &&
+                        document.setSelectedField(2, 544),
+                "Sphere primitive or numeric Z edit failed");
+        const auto sphereVertices = propCollisionVertices(document.data.props.back());
+        const auto sphereNormal = glm::cross(sphereVertices[1].position - sphereVertices[0].position,
+                                              sphereVertices[2].position - sphereVertices[0].position);
+        require(sphereVertices.size() > 36 &&
+                        glm::dot(sphereNormal, sphereVertices[0].position -
+                                document.data.props.back().center) > 0 &&
+                        pick(document.data, {0, 16, 650}, {0, 0, -1})->prop,
+                "Sphere collision or picking was not generated");
+        std::stringstream shapes;
+        writeMapDocument(shapes, document.data);
+        require(readMapDocument(shapes) == document.data,
+                "Primitive shapes changed during map save");
+
         MapDocument cubeMap;
         cubeMap.brushes.push_back({{0, 0, 0}, {32, 32, 32}});
         Document placement(cubeMap);

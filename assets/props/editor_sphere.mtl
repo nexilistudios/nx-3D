@@ -1,0 +1,3 @@
+newmtl sphere
+Kd 0.36 0.72 0.94
+map_Kd editor_sphere.png

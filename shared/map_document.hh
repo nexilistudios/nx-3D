@@ -10,6 +10,7 @@
 
 namespace nx3d
 {
+inline constexpr const char* kEditorSphereModel = "props/editor_sphere.obj";
 struct MapProp
 {
     std::string model = "props/example_crate.obj";
@@ -46,6 +47,63 @@ inline void validateMapProp(const MapProp& prop)
 inline MapBrush propBounds(const MapProp& prop)
 {
     return {prop.center, prop.halfSize, "stone", 0, 0, prop.yaw, "prop/collision"};
+}
+
+inline bool isEditorSphere(const MapProp& prop)
+{
+    return prop.model == kEditorSphereModel;
+}
+
+inline std::vector<MapVertex> propCollisionVertices(const MapProp& prop)
+{
+    if (!isEditorSphere(prop))
+    {
+        const auto box = brushVertices(propBounds(prop));
+        return {box.begin(), box.end()};
+    }
+    constexpr int segments = 16;
+    constexpr int rings = 8;
+    constexpr float pi = 3.14159265358979323846f;
+    std::vector<glm::vec3> points;
+    points.reserve(2 + (rings - 1) * segments);
+    auto point = [&](float latitude, float longitude)
+    {
+        const float x = std::sin(latitude) * std::cos(longitude) * prop.halfSize.x;
+        const float y = std::cos(latitude) * prop.halfSize.y;
+        const float z = std::sin(latitude) * std::sin(longitude) * prop.halfSize.z;
+        const float yaw = prop.yaw * pi / 180.0f;
+        return prop.center + glm::vec3(std::cos(yaw) * x + std::sin(yaw) * z,
+                                       y, -std::sin(yaw) * x + std::cos(yaw) * z);
+    };
+    points.push_back(point(0, 0));
+    for (int latitude = 1; latitude < rings; ++latitude)
+        for (int longitude = 0; longitude < segments; ++longitude)
+            points.push_back(point(pi * latitude / rings, 2 * pi * longitude / segments));
+    points.push_back(point(pi, 0));
+    std::vector<MapVertex> triangles;
+    triangles.reserve(segments * (rings - 1) * 6);
+    auto face = [&](int a, int b, int c)
+    {
+        triangles.push_back({points[a], {0, 0}});
+        triangles.push_back({points[b], {0, 0}});
+        triangles.push_back({points[c], {0, 0}});
+    };
+    const int south = static_cast<int>(points.size()) - 1;
+    for (int longitude = 0; longitude < segments; ++longitude)
+    {
+        const int next = (longitude + 1) % segments;
+        face(0, 1 + next, 1 + longitude);
+        for (int latitude = 0; latitude < rings - 2; ++latitude)
+        {
+            const int a = 1 + latitude * segments + longitude;
+            const int b = 1 + latitude * segments + next;
+            face(a, b, a + segments);
+            face(b, b + segments, a + segments);
+        }
+        face(south, 1 + (rings - 2) * segments + longitude,
+             1 + (rings - 2) * segments + next);
+    }
+    return triangles;
 }
 
 // Model records are versioned comments, preserving the existing brush format

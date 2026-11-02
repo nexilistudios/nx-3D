@@ -6,6 +6,7 @@
 #include <spear/rendering/vulkan/frame_context.hh>
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <sstream>
 
@@ -31,12 +32,6 @@ void line(vk::Cube& cube, glm::vec3 a, glm::vec3 b, float width)
         transform = glm::rotate(transform, angle, glm::length(axis) > .00001f ? glm::normalize(axis) : glm::vec3(0, 1, 0));
     cube.setModel(glm::scale(transform, {width, width, length * 0.5f}));
 }
-std::string vectorText(glm::vec3 point)
-{
-    std::ostringstream text;
-    text << point.x << ", " << point.y << ", " << point.z;
-    return text.str();
-}
 } // namespace
 MapEditor::MapEditor(ClientApp& application) : document(application.mapDocument), app(application)
 {
@@ -48,7 +43,7 @@ MapEditor::MapEditor(ClientApp& application) : document(application.mapDocument)
     std::sort(models.begin(), models.end());
     app.ui->clear();
     const auto font = projectAssetPath("fonts/firacode/static/FiraCode-Retina.ttf");
-    for (int i = 0; i < 30; ++i)
+    for (int i = 0; i < 36; ++i)
     {
         auto text = std::make_unique<spear::ui::vulkan::Text>(
                 app.renderer.getDevice(), app.renderer.getPhysicalDevice(), app.renderer.getCommandPool(),
@@ -58,6 +53,16 @@ MapEditor::MapEditor(ClientApp& application) : document(application.mapDocument)
         text->setColor(i == 0 ? SDL_Color{255, 214, 140, 255} : SDL_Color{221, 232, 242, 255});
         app.ui->registerText(*text);
         texts.push_back(std::move(text));
+    }
+    for (int i = 0; i < 17; ++i)
+    {
+        auto text = std::make_unique<spear::ui::vulkan::Text>(
+                app.renderer.getDevice(), app.renderer.getPhysicalDevice(), app.renderer.getCommandPool(),
+                app.renderer.getGraphicsQueue(), app.descriptorPool, app.descriptorSetLayout, font, i == 0 ? 22 : 16);
+        text->setPosition({-.31f, .76f - i * .07f});
+        text->setColor(i == 0 ? SDL_Color{255, 214, 140, 255} : SDL_Color{221, 232, 242, 255});
+        app.ui->registerText(*text);
+        browserTexts.push_back(std::move(text));
     }
     auto panel = [&](glm::vec2 position, glm::vec2 size)
     {
@@ -72,7 +77,8 @@ MapEditor::MapEditor(ClientApp& application) : document(application.mapDocument)
         panels.push_back(quad);
     };
     panel({-1, -0.38f}, {0.64f, 1.38f});
-    panel({0.42f, 0.43f}, {0.58f, 0.57f});
+    panel({0.42f, -0.02f}, {0.58f, 0.95f});
+    panel({-0.35f, -0.45f}, {0.76f, 1.34f});
     auto scene = app.scene_manager.getSceneById(app.game_scene_id);
     for (int i = 0; i < 28; ++i)
     {
@@ -109,6 +115,7 @@ MapEditor::MapEditor(ClientApp& application) : document(application.mapDocument)
 }
 MapEditor::~MapEditor()
 {
+    stopFieldEdit();
     app.ui->renderer().setOverlayCallback(nullptr);
     auto scene = app.scene_manager.getSceneById(app.game_scene_id);
     for (const auto& edge : edges)
@@ -119,12 +126,45 @@ MapEditor::~MapEditor()
 }
 void MapEditor::fly(bool enabled)
 {
+    stopFieldEdit();
+    if (enabled)
+        browserOpen = false;
     flying = enabled;
     dragging = false;
     dragStarted = false;
     keys.clear();
     SDL_SetWindowRelativeMouseMode(app.window.getSDLWindow(), enabled);
     refresh();
+}
+void MapEditor::placeSelected(glm::vec3 direction)
+{
+    const auto placement = document.placement(app.camera.getPosition(), direction);
+    if (selectedModel)
+    {
+        if (models.empty())
+        {
+            notice = "No OBJ models found under assets/props/.";
+            return;
+        }
+        document.addProp(models[modelIndex], placement);
+        notice = "Model placed. Click X/Y/Z to set exact coordinates.";
+    }
+    else
+    {
+        document.addShape(shape, placement);
+        notice = std::string(shapeName(shape)) + " placed. Click X/Y/Z to set exact coordinates.";
+    }
+    placing = false;
+    changed = true;
+    selectionOutline();
+    refresh();
+}
+void MapEditor::stopFieldEdit()
+{
+    if (editingField >= 0)
+        SDL_StopTextInput(app.window.getSDLWindow());
+    editingField = -1;
+    editBuffer.clear();
 }
 glm::vec3 MapEditor::ray() const
 {
@@ -182,7 +222,6 @@ void MapEditor::action(int row, bool reverse)
     int width = 0, height = 0;
     SDL_GetWindowSize(app.window.getSDLWindow(), &width, &height);
     const auto direction = !flying && mouse.x < width * .32f ? app.camera.getFront() : ray();
-    const auto placement = document.placement(app.camera.getPosition(), direction);
     switch (row)
     {
         case 2:
@@ -195,19 +234,15 @@ void MapEditor::action(int row, bool reverse)
                                   "Walk mode: WASD moves through the map; Space jumps.";
             break;
         case 3:
-            document.addBlock(placement);
-            changed = true;
-            notice = "Block created. Drag to move; wheel pushes or pulls the selected face.";
+            if (flying)
+                fly(false);
+            browserOpen = !browserOpen;
+            placing = false;
+            dragging = false;
+            dragStarted = false;
             break;
         case 4:
-            if (models.empty())
-            {
-                notice = "Add OBJ + MTL + textures under assets/props/, then reopen the editor.";
-                break;
-            }
-            document.addProp(models[modelIndex], placement);
-            changed = true;
-            notice = "Model placed. C toggles its box collision.";
+            placeSelected(direction);
             break;
         case 5:
             document.duplicate();
@@ -234,6 +269,7 @@ void MapEditor::action(int row, bool reverse)
         case 11:
             if (!models.empty())
                 modelIndex = (modelIndex + (reverse ? models.size() - 1 : 1)) % models.size();
+            selectedModel = true;
             break;
         case 12:
             document.grid = std::clamp(document.grid * (reverse ? .5f : 2.0f), 1.0f, 256.0f);
@@ -250,6 +286,11 @@ void MapEditor::action(int row, bool reverse)
             if (const auto bounds = document.selectedBounds())
                 app.camera.setPosition(bounds->center - app.camera.getFront() * std::max(160.0f, glm::length(bounds->halfSize) * 4));
             break;
+        case 17:
+            shape = static_cast<Shape>((static_cast<int>(shape) + (reverse ? 3 : 1)) % 4);
+            selectedModel = false;
+            notice = std::string("Selected shape: ") + shapeName(shape);
+            break;
         default:
             break;
     }
@@ -260,6 +301,48 @@ bool MapEditor::handle(const SDL_Event& event)
 {
     try
     {
+        if (editingField >= 0)
+        {
+            if (event.type == SDL_EVENT_TEXT_INPUT)
+            {
+                for (const char* character = event.text.text; *character; ++character)
+                    if (editBuffer.size() < 24 &&
+                        ((*character >= '0' && *character <= '9') || *character == '-' ||
+                         *character == '+' || *character == '.' || *character == ','))
+                        editBuffer += *character == ',' ? '.' : *character;
+                refresh();
+                return false;
+            }
+            if (event.type == SDL_EVENT_KEY_DOWN)
+            {
+                if (event.key.key == SDLK_ESCAPE)
+                    stopFieldEdit();
+                else if (event.key.key == SDLK_BACKSPACE && !editBuffer.empty())
+                    editBuffer.pop_back();
+                else if (event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER)
+                {
+                    try
+                    {
+                        std::size_t used = 0;
+                        const float value = std::stof(editBuffer, &used);
+                        if (used != editBuffer.size() ||
+                            !document.setSelectedField(editingField, value))
+                            throw std::invalid_argument("Invalid position or size");
+                        changed = true;
+                        selectionOutline();
+                    }
+                    catch (const std::exception&)
+                    {
+                        notice = "Enter a finite number. Size must be positive and fit the map.";
+                    }
+                    stopFieldEdit();
+                }
+                refresh();
+                return false;
+            }
+            if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+                stopFieldEdit();
+        }
         if (event.type == SDL_EVENT_QUIT)
             return requestQuit();
         if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST)
@@ -272,6 +355,75 @@ bool MapEditor::handle(const SDL_Event& event)
             app.window.resize();
             const auto size = app.window.getSize();
             app.renderer.setViewPort(size.x, size.y);
+        }
+        if (browserOpen)
+        {
+            if (event.type == SDL_EVENT_KEY_DOWN)
+            {
+                if (event.key.key == SDLK_ESCAPE || event.key.key == SDLK_P)
+                {
+                    browserOpen = false;
+                    refresh();
+                }
+                return false;
+            }
+            if (event.type == SDL_EVENT_MOUSE_WHEEL)
+            {
+                const auto count = browserModels ? models.size() : std::size_t(4);
+                if (event.wheel.y < 0 && browserOffset + 10 < count)
+                    browserOffset = std::min(browserOffset + 10, count - 1);
+                else if (event.wheel.y > 0)
+                    browserOffset = browserOffset > 10 ? browserOffset - 10 : 0;
+                refreshBrowser();
+                return false;
+            }
+            if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+            {
+                mouse = {event.button.x, event.button.y};
+                if (event.button.button != SDL_BUTTON_LEFT)
+                    return false;
+                int w = 0, h = 0;
+                SDL_GetWindowSize(app.window.getSDLWindow(), &w, &h);
+                const float x = mouse.x * 2 / std::max(w, 1) - 1;
+                const float y = 1 - mouse.y * 2 / std::max(h, 1);
+                if (x < -.35f || x > .41f || y < -.45f || y > .89f)
+                    return false;
+                const int row = static_cast<int>(std::round((.76f - y) / .07f));
+                if (row == 1)
+                {
+                    browserModels = x > .02f;
+                    browserOffset = 0;
+                }
+                else if (row >= 3 && row <= 12)
+                {
+                    const auto index = browserOffset + static_cast<std::size_t>(row - 3);
+                    if (browserModels && index < models.size())
+                    {
+                        modelIndex = index;
+                        selectedModel = true;
+                        placing = true;
+                    }
+                    else if (!browserModels && index < 4)
+                    {
+                        shape = static_cast<Shape>(index);
+                        selectedModel = false;
+                        placing = true;
+                    }
+                    if (placing)
+                    {
+                        browserOpen = false;
+                        notice = "Click the map to place the selected item. Esc cancels.";
+                    }
+                }
+                else if (row == 14 && browserOffset > 0)
+                    browserOffset = browserOffset > 10 ? browserOffset - 10 : 0;
+                else if (row == 15 && browserOffset + 10 < (browserModels ? models.size() : std::size_t(4)))
+                    browserOffset += 10;
+                refresh();
+                return false;
+            }
+            if (event.type != SDL_EVENT_MOUSE_MOTION && event.type != SDL_EVENT_MOUSE_BUTTON_UP)
+                return false;
         }
         if (event.type == SDL_EVENT_MOUSE_MOTION)
         {
@@ -336,8 +488,23 @@ bool MapEditor::handle(const SDL_Event& event)
                     action(row);
                     return false;
                 }
-                if (!flying && x > .42f && y > .43f)
+                if (!flying && x > .42f && y > .12f && y < .93f)
+                {
+                    const int row = static_cast<int>(std::round((.90f - y) / .057f)) + 22;
+                    if (row >= 24 && row <= 29 && document.selection)
+                    {
+                        editingField = row - 24;
+                        editBuffer.clear();
+                        SDL_StartTextInput(app.window.getSDLWindow());
+                        refresh();
+                    }
                     return false;
+                }
+                if (placing && !flying)
+                {
+                    placeSelected(ray());
+                    return false;
+                }
                 document.selection = pick(document.data, app.camera.getPosition(), ray());
                 if (document.selection && !flying)
                 {
@@ -371,7 +538,13 @@ bool MapEditor::handle(const SDL_Event& event)
             const auto key = event.key.key;
             if (key == SDLK_ESCAPE && !event.key.repeat)
             {
-                if (flying)
+                if (placing)
+                {
+                    placing = false;
+                    notice = "Placement cancelled.";
+                    refresh();
+                }
+                else if (flying)
                 {
                     fly(false);
                     momentaryFly = false;
@@ -391,10 +564,23 @@ bool MapEditor::handle(const SDL_Event& event)
                 action(9);
             else if (control && key == SDLK_D && !event.key.repeat)
                 action(5);
-            else if (key == SDLK_B && !event.key.repeat)
+            else if (key == SDLK_P && !event.key.repeat)
                 action(3);
-            else if (key == SDLK_O && !event.key.repeat)
+            else if (key == SDLK_B && !event.key.repeat)
                 action(4);
+            else if (key == SDLK_V && !event.key.repeat)
+                action(17, shift);
+            else if (!event.key.repeat && key >= SDLK_1 && key <= SDLK_4)
+            {
+                shape = static_cast<Shape>(key - SDLK_1);
+                selectedModel = false;
+                refresh();
+            }
+            else if (key == SDLK_O && !event.key.repeat)
+            {
+                selectedModel = true;
+                action(4);
+            }
             else if (key == SDLK_DELETE || key == SDLK_BACKSPACE)
                 action(6);
             else if (key == SDLK_M)
@@ -519,12 +705,13 @@ void MapEditor::refresh()
 {
     if (texts.empty())
         return;
-    std::array<std::string, 30> labels{};
+    std::array<std::string, 36> labels{};
     labels[0] = "3D MAP EDITOR";
     labels[1] = std::string(document.dirty() ? "* " : "") + std::filesystem::path(app.mapFilePath).filename().string();
     labels[2] = flying ? "[ TAB: Release mouse ]" : "[ TAB: Look / walk ]";
-    labels[3] = "[ B: Add block ]";
-    labels[4] = "[ O: Add OBJ model ]";
+    labels[3] = "[ P: Object library ]";
+    labels[4] = std::string("[ B: Place ") + (selectedModel && !models.empty() ?
+            std::filesystem::path(models[modelIndex]).stem().string() : shapeName(shape)) + " ]";
     labels[5] = "[ Ctrl+D: Duplicate ]";
     labels[6] = "[ Delete: Remove ]";
     labels[7] = "[ Ctrl+S: Save map ]";
@@ -537,8 +724,8 @@ void MapEditor::refresh()
     labels[14] = "[ C: Model collision ]";
     labels[15] = "[ F: Focus selection ]";
     labels[16] = "Click a face; wheel: resize";
-    labels[17] = "Drag: move; Shift: vertical";
-    labels[18] = "Arrows: X/Z; PgUp/Dn: Y";
+    labels[17] = std::string("[ V: Shape ") + shapeName(shape) + " ]";
+    labels[18] = "Library: choose, then click map";
     labels[19] = "RMB + WASD: walk / look";
     labels[20] = freeFlight ? "G: walk; Space/C: up/down" : "G: free flight; Space: jump";
     labels[21] = "Esc: release mouse / close";
@@ -546,32 +733,85 @@ void MapEditor::refresh()
     if (document.selection)
     {
         const auto bounds = *document.selectedBounds();
-        labels[23] = document.selection->prop ? "OBJ model" : "Block / face " + std::to_string(document.selection->face + 1);
-        labels[24] = "Pos " + vectorText(bounds.center);
-        labels[25] = "Size " + vectorText(bounds.halfSize * 2.0f);
-        labels[26] = "Yaw " + std::to_string(static_cast<int>(bounds.yaw));
-        labels[27] = document.selection->prop ? (document.data.props[document.selection->index].solid ? "Collision: box" : "Collision: off") : bounds.material;
+        labels[23] = document.selection->prop ?
+                (isEditorSphere(document.data.props[document.selection->index]) ? "Sphere" : "OBJ model") :
+                bounds.group == "custom/door" ? "Door" :
+                bounds.group == "custom/wall" ? "2D wall" : "Cube / face " + std::to_string(document.selection->face + 1);
+        const std::array<const char*, 6> fieldNames{"X", "Y", "Z", "Width", "Height", "Depth"};
+        for (int i = 0; i < 6; ++i)
+        {
+            std::ostringstream value;
+            value << (i < 3 ? bounds.center[i] : bounds.halfSize[i - 3] * 2.0f);
+            labels[24 + i] = std::string(fieldNames[i]) + ": " +
+                             (editingField == i ? "[" + editBuffer + "_]" : value.str());
+        }
+        labels[30] = "Yaw " + std::to_string(static_cast<int>(bounds.yaw));
+        labels[31] = document.selection->prop ?
+                (document.data.props[document.selection->index].solid ?
+                         (isEditorSphere(document.data.props[document.selection->index]) ?
+                                  "Collision: sphere" : "Collision: box") : "Collision: off") :
+                bounds.material;
     }
     else
-        labels[23] = "Click a block or model";
-    labels[28] = std::to_string(document.data.brushes.size()) + " blocks, " + std::to_string(document.data.props.size()) + " models";
-    // A compact notice at the bottom avoids covering the editing viewport.
-    labels[29] = notice;
+        labels[23] = "Click a shape or model";
+    labels[32] = "Click X/Y/Z or size to edit";
+    labels[33] = "Enter: apply; Esc: cancel";
+    labels[34] = std::to_string(document.data.brushes.size()) + " blocks, " + std::to_string(document.data.props.size()) + " models";
+    labels[35] = notice;
     for (std::size_t i = 0; i < labels.size(); ++i)
     {
-        if (i != 29 && labels[i].size() > 31)
+        if (i != 35 && labels[i].size() > 31)
             labels[i] = labels[i].substr(0, 28) + "...";
-        if (i == 29 && labels[i].size() > 85)
+        if (i == 35 && labels[i].size() > 85)
             labels[i] = labels[i].substr(0, 82) + "...";
         if (texts[i]->getString() != labels[i])
             texts[i]->setString(labels[i]);
     }
+    refreshBrowser();
+}
+void MapEditor::refreshBrowser()
+{
+    std::array<std::string, 17> labels{};
+    if (browserOpen)
+    {
+        labels[0] = "OBJECT LIBRARY";
+        labels[1] = std::string(browserModels ? "  Shapes       [ Models ]" : "[ Shapes ]       Models");
+        labels[2] = browserModels ? "Choose a ready-made model" : "Choose a basic shape";
+        const auto count = browserModels ? models.size() : std::size_t(4);
+        for (std::size_t i = 0; i < 10 && browserOffset + i < count; ++i)
+        {
+            const auto index = browserOffset + i;
+            std::string name;
+            if (browserModels)
+            {
+                name = std::filesystem::path(models[index]).stem().string();
+                if (name.starts_with("editor_"))
+                    name.erase(0, 7);
+                std::replace(name.begin(), name.end(), '_', ' ');
+                if (!name.empty())
+                    name[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(name[0])));
+            }
+            else
+                name = shapeName(static_cast<Shape>(index));
+            labels[3 + i] = std::string("[ ") + name + " ]";
+        }
+        if (browserModels && models.empty())
+            labels[3] = "No OBJ models in assets/props";
+        labels[14] = browserOffset ? "[ Previous page ]" : "";
+        labels[15] = browserOffset + 10 < count ? "[ Next page ]" : "";
+        labels[16] = "Esc: close  |  wheel: browse";
+    }
+    for (std::size_t i = 0; i < labels.size(); ++i)
+        if (browserTexts[i]->getString() != labels[i])
+            browserTexts[i]->setString(labels[i]);
 }
 void MapEditor::renderHud()
 {
     const auto context = spear::ui::RenderContext{spear::rendering::vulkan::g_frameContext.commandBuffer};
-    for (const auto& panel : panels)
-        panel->render(context);
+    panels[0]->render(context);
+    panels[1]->render(context);
+    if (browserOpen)
+        panels[2]->render(context);
     if (flying)
     {
         int width = 0, height = 0;

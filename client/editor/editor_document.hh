@@ -8,6 +8,19 @@
 
 namespace nx3d::client::editor
 {
+enum class Shape { cube, sphere, wall, door };
+inline const char* shapeName(Shape shape)
+{
+    switch (shape)
+    {
+        case Shape::cube: return "Cube";
+        case Shape::sphere: return "Sphere";
+        case Shape::wall: return "2D wall";
+        case Shape::door: return "Door";
+    }
+    return "Cube";
+}
+
 struct Selection
 {
     bool prop = false;
@@ -19,10 +32,9 @@ struct Selection
 inline std::optional<Selection> pick(const MapDocument& document, glm::vec3 origin, glm::vec3 direction)
 {
     std::optional<Selection> result;
-    auto test = [&](const MapBrush& brush, bool prop, std::size_t index)
+    auto test = [&](const auto& vertices, bool prop, bool sphere, std::size_t index)
     {
-        const auto vertices = brushVertices(brush);
-        for (int i = 0; i < 36; i += 3)
+        for (std::size_t i = 0; i < vertices.size(); i += 3)
         {
             const auto a = vertices[i].position, b = vertices[i + 1].position, c = vertices[i + 2].position;
             const auto edge1 = b - a, edge2 = c - a;
@@ -42,14 +54,18 @@ inline std::optional<Selection> pick(const MapDocument& document, glm::vec3 orig
             const float distance = glm::dot(edge2, q) * inverse;
             if (distance < 0.01f || (result && distance >= result->distance))
                 continue;
-            result = Selection{prop, index, i / 6, distance, origin + direction * distance,
+            result = Selection{prop, index, sphere ? 0 : static_cast<int>(i / 6),
+                               distance, origin + direction * distance,
                                glm::normalize(glm::cross(edge1, edge2))};
         }
     };
     for (std::size_t i = 0; i < document.brushes.size(); ++i)
-        test(document.brushes[i], false, i);
+        test(brushVertices(document.brushes[i]), false, false, i);
     for (std::size_t i = 0; i < document.props.size(); ++i)
-        test(propBounds(document.props[i]), true, i);
+        if (isEditorSphere(document.props[i]))
+            test(propCollisionVertices(document.props[i]), true, true, i);
+        else
+            test(brushVertices(propBounds(document.props[i])), true, false, i);
     return result;
 }
 
@@ -129,6 +145,30 @@ public:
         data.brushes.push_back({center, glm::vec3(grid * 0.5f), kMapMaterials[material], 0, 0, 0, "custom/block"});
         selection = Selection{false, data.brushes.size() - 1};
     }
+    void addShape(Shape shape, glm::vec3 center)
+    {
+        if (shape == Shape::sphere)
+        {
+            addProp(kEditorSphereModel, center);
+            return;
+        }
+        if (shape == Shape::cube)
+        {
+            addBlock(center);
+            return;
+        }
+        if (data.brushes.size() >= 32768)
+            throw std::runtime_error("Brush limit reached");
+        const glm::vec3 size = shape == Shape::wall
+                                       ? glm::vec3(grid * 2.0f, grid * 1.5f, 4.0f)
+                                       : glm::vec3(grid, grid * 2.0f, 6.0f);
+        center.y += size.y - grid * 0.5f;
+        checkpoint();
+        data.brushes.push_back({center, size,
+                                shape == Shape::door ? "wood" : kMapMaterials[material], 0, 0, 0,
+                                shape == Shape::wall ? "custom/wall" : "custom/door"});
+        selection = Selection{false, data.brushes.size() - 1};
+    }
     void addProp(const std::string& path, glm::vec3 center)
     {
         if (data.props.size() >= 4096)
@@ -185,6 +225,39 @@ public:
             data.props[selection->index].center += delta;
         else
             data.brushes[selection->index].center += delta;
+    }
+    bool setSelectedField(int field, float value)
+    {
+        if (!selection || field < 0 || field > 5 || !std::isfinite(value))
+            return false;
+        auto bounds = *selectedBounds();
+        if (field < 3)
+            bounds.center[field] = value;
+        else
+            bounds.halfSize[field - 3] = value * .5f;
+        for (int axis = 0; axis < 3; ++axis)
+            if (std::abs(bounds.center[axis]) > 100000 || bounds.halfSize[axis] < .5f ||
+                bounds.halfSize[axis] > 100000)
+                return false;
+        if (std::abs(bounds.slopeX) + std::abs(bounds.slopeZ) >= 2 * bounds.halfSize.y)
+            return false;
+        if (selection->prop)
+        {
+            auto next = data.props[selection->index];
+            next.center = bounds.center;
+            next.halfSize = bounds.halfSize;
+            validateMapProp(next);
+            if (next == data.props[selection->index]) return true;
+            checkpoint();
+            data.props[selection->index] = next;
+        }
+        else
+        {
+            if (bounds == data.brushes[selection->index]) return true;
+            checkpoint();
+            data.brushes[selection->index] = bounds;
+        }
+        return true;
     }
     bool resizeFace(float amount)
     {
