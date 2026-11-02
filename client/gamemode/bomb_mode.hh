@@ -13,6 +13,7 @@ public:
         return nx3d::GameMode::bomb;
     }
     void onEnter(ClientApp& app, const std::string& team) override;
+    void changeTeam(ClientApp& app, const std::string& team) override;
     void update(ClientApp& app, float deltaTime) override;
     bool canMove() const override;
     bool canBuy() const override;
@@ -23,6 +24,7 @@ public:
 
 protected:
     bool preserveEquipmentOnRespawn() const override;
+    bool canRequestEquip() const override;
 
 private:
     bool m_active = false;

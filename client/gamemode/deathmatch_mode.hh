@@ -50,6 +50,7 @@ public:
 
 protected:
     virtual bool preserveEquipmentOnRespawn() const { return false; }
+    virtual bool canRequestEquip() const { return true; }
     void equipGun(ClientApp& app, const std::string& weaponName,
                   const std::string& objPath, const std::string& mtlPath,
                   float fpScale, glm::vec3 fpCenter,

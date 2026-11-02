@@ -759,7 +759,7 @@ void DeathmatchMode::equipSlot(ClientApp& app, int slot, bool force)
     m_pickedUpItemType = selected ? selected->type : slot == 3 ? "knife" :
                          slot == 4 ? "grenade" : slot == 5 ? "smoke" :
                          slot == 6 ? "bomb" : "defuse_kit";
-    if (app.ready && app.client_api.clientInRoom())
+    if (canRequestEquip() && app.ready && app.client_api.clientInRoom())
         app.tcp_client.sendMessage(nexilis::client::Packet::Room::Player3D::matchAction(
                 app.client_api, static_cast<uint8_t>(nx3d::economy::kEquipPrimaryAction + slot - 1)));
     m_weaponPickedUp = slot <= 3;

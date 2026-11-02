@@ -50,6 +50,8 @@ bool BombMode::preserveEquipmentOnRespawn() const
 
 void BombMode::onEnter(ClientApp& app, const std::string& team)
 {
+    m_active = false;
+    m_alive = false;
     DeathmatchMode::onEnter(app, team);
     m_using = false;
     m_defusing = false;
@@ -60,6 +62,22 @@ void BombMode::onEnter(ClientApp& app, const std::string& team)
     app.ui->roundText.setString("WAITING FOR MATCH");
     app.ui->matchStatusText.setString("Queued for next round");
     app.ui->bombText.setString("");
+}
+
+void BombMode::changeTeam(ClientApp& app, const std::string& team)
+{
+    if (team == m_team)
+        return;
+    // Team changes place the player back in the queue. Wait for admission
+    // before sending the equip request made by the local weapon selection.
+    m_active = false;
+    m_alive = false;
+    DeathmatchMode::changeTeam(app, team);
+}
+
+bool BombMode::canRequestEquip() const
+{
+    return canRequestBombEquip(m_active, m_alive, m_phase);
 }
 
 void BombMode::update(ClientApp& app, float dt)
