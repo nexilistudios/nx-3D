@@ -11,7 +11,7 @@ namespace vk = spear::rendering::vulkan;
 
 BrushModel::BrushModel(VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commands,
                        VkQueue queue, VkDescriptorPool pool, VkDescriptorSetLayout layout,
-                       const BrushMesh& mesh)
+                       const BrushMesh& mesh, const std::filesystem::path& mapPath)
     : GameObject(spear::physics::bullet::ObjectData({}, 0.0f, glm::vec3(0), glm::vec3(1)), nullptr),
       m_device(device), m_pool(pool)
 {
@@ -26,7 +26,10 @@ BrushModel::BrushModel(VkDevice device, VkPhysicalDevice physicalDevice, VkComma
             auto& batch = m_batches.back();
             batch.count = static_cast<uint32_t>(vertices.size());
             batch.texture = std::make_shared<vk::STBTexture>(device, physicalDevice, commands, queue);
-            batch.texture->loadFromFile(projectAssetPath(std::string("maps/dust2_cs2/textures/") + material + ".png"));
+            auto texturePath = mapPath.parent_path() / "textures" / (std::string(material) + ".png");
+            if (!std::filesystem::exists(texturePath))
+                texturePath = projectAssetPath(std::string("maps/dust2_cs2/textures/") + material + ".png");
+            batch.texture->loadFromFile(texturePath.string());
             batch.descriptor = vk::Texture::allocateDescriptorSet(device, pool, layout,
                     batch.texture->getImageView(), batch.texture->getSampler());
 

@@ -19,6 +19,7 @@
 #include <server/gun/gun_manager.hh>
 
 #include <shared/gamemode.hh>
+#include <shared/brush_map.hh>
 #include <shared/network_ports.hh>
 #include <shared/player_rules.hh>
 
@@ -74,21 +75,22 @@ int main(int argc, char* argv[])
 
     namespace gamemode = nx3d::server::gamemode;
 
-    // A bomb room and a deathmatch room. The gamemode is decided here, purely as
-    // game logic: nexilis does not know about gamemodes, so the registry keeps
-    // track of which room runs which mode.
+    // The first room uses Shipment; the second uses Dust II. Room names are
+    // advertised to clients and identify the bundled map to load.
     {
-        auto room = createRoom("Bomb Match 1");
+        auto room = createRoom(std::string(nx3d::kShipmentRoomName));
         auto roomId = room.getId();
         RoomStorage::add(std::move(room));
-        gamemode::GameModeRegistry::assignRoom(*RoomStorage::getRoomById(roomId), nx3d::GameMode::bomb);
+        gamemode::GameModeRegistry::assignRoom(*RoomStorage::getRoomById(roomId),
+                                                nx3d::GameMode::deathmatch);
     }
 
     {
-        auto room = createRoom("Deathmatch 1");
+        auto room = createRoom(std::string(nx3d::kDust2RoomName));
         auto roomId = room.getId();
         RoomStorage::add(std::move(room));
-        gamemode::GameModeRegistry::assignRoom(*RoomStorage::getRoomById(roomId), nx3d::GameMode::deathmatch);
+        gamemode::GameModeRegistry::assignRoom(*RoomStorage::getRoomById(roomId),
+                                                nx3d::GameMode::bomb);
     }
 
     nexilis::ProtocolManager protocolManager;

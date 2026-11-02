@@ -1,0 +1,32 @@
+{
+  "name": "Shipment-inspired container yard",
+  "generator": "tools/generate_shipment.py",
+  "grid": 32,
+  "labels": [
+    {
+      "name": "North Lane",
+      "x": 0,
+      "z": -690
+    },
+    {
+      "name": "Center",
+      "x": 0,
+      "z": 100
+    },
+    {
+      "name": "West Lane",
+      "x": -675,
+      "z": 0
+    },
+    {
+      "name": "East Lane",
+      "x": 675,
+      "z": 0
+    },
+    {
+      "name": "South Lane",
+      "x": 0,
+      "z": 690
+    }
+  ]
+}

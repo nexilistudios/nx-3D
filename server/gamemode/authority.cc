@@ -62,11 +62,11 @@ struct ContactCheck : btCollisionWorld::ContactResultCallback
 class MapPhysics
 {
 public:
-    MapPhysics()
+    explicit MapPhysics(const char* mapPath)
         : m_dispatcher(&m_configuration),
           m_world(&m_dispatcher, &m_broadphase, &m_solver, &m_configuration)
     {
-        const auto relative = std::filesystem::path("assets") / nx3d::kGeneratedMapPath;
+        const auto relative = std::filesystem::path("assets") / mapPath;
         const char* assetRoot = std::getenv("NX3D_ASSET_ROOT");
         const auto configured = assetRoot ? std::filesystem::path(assetRoot) / relative
                                           : std::filesystem::path(PROJECT_ROOT) / relative;
@@ -301,9 +301,14 @@ private:
     std::mutex m_mutex;
 };
 
-MapPhysics& mapPhysics()
+MapPhysics& mapPhysics(bool shipment)
 {
-    static MapPhysics physics;
+    if (shipment)
+    {
+        static MapPhysics physics(nx3d::kShipmentMapPath);
+        return physics;
+    }
+    static MapPhysics physics(nx3d::kGeneratedMapPath);
     return physics;
 }
 
@@ -363,9 +368,9 @@ std::optional<WeaponRule> weaponRule(const std::string& type)
 }
 } // namespace
 
-Authority::Authority()
+Authority::Authority(bool shipment) : m_shipment(shipment)
 {
-    (void)mapPhysics();
+    (void)mapPhysics(m_shipment);
 }
 
 void Authority::spawn(nexilis::server::Room& room, uint64_t playerId, bool preserveEquipment)
@@ -376,8 +381,11 @@ void Authority::spawn(nexilis::server::Room& room, uint64_t playerId, bool prese
     const auto team = room.getPlayerTeam(playerId);
     if (team != "Terrorist" && team != "Counter Terrorist")
         return;
-    const auto& spawns = team == "Terrorist" ? nx3d::economy::kTSpawns
-                                             : nx3d::economy::kCtSpawns;
+    const auto& spawns = m_shipment
+                                 ? (team == "Terrorist" ? nx3d::economy::kShipmentTSpawns
+                                                        : nx3d::economy::kShipmentCtSpawns)
+                                 : (team == "Terrorist" ? nx3d::economy::kTSpawns
+                                                        : nx3d::economy::kCtSpawns);
     nx3d::economy::SpawnPoint point;
     std::string equipped;
     {
@@ -470,7 +478,7 @@ void Authority::update(nexilis::server::Room& room, float dt)
             auto position = asGlm(user->getObject3D().getPosition());
             const glm::vec2 previousHorizontal(position.x, position.z);
             const bool wasCrouched = state.crouched;
-            mapPhysics().advance(position, direction, jump, crouch, silentWalk, state.crouched,
+            mapPhysics(m_shipment).advance(position, direction, jump, crouch, silentWalk, state.crouched,
                                  state.jumpHeld, state.grounded, state.verticalVelocity, dt);
             stanceChanged = state.crouched != wasCrouched;
             crouched = state.crouched;
@@ -673,7 +681,7 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
             targetId = id;
         }
     }
-    if (!targetId || mapPhysics().blocks(origin, origin + aim * closest))
+    if (!targetId || mapPhysics(m_shipment).blocks(origin, origin + aim * closest))
         return std::nullopt;
     return nexilis::server::Room::ShotHit{targetId, rule->damage};
 }

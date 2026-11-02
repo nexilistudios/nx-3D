@@ -71,6 +71,7 @@ protected:
     glm::vec3 pickSpawnPoint();
 
     std::string m_team;
+    bool m_shipment = false;
 
     // Locally-maintained kill/death table, keyed by player id. Updated from
     // server stats notifications (on kill and on team join); the Tab board is

@@ -23,7 +23,7 @@ public:
         int magazine;
         int reserve;
     };
-    Authority();
+    explicit Authority(bool shipment = false);
     void spawn(nexilis::server::Room& room, uint64_t playerId, bool preserveEquipment = false);
     bool move(nexilis::server::Room& room, uint64_t playerId,
               const nexilis::Vector3f& input, float yaw);
@@ -40,6 +40,7 @@ public:
     void reconcile(const nexilis::server::Room& room);
 
 private:
+    bool m_shipment = false;
     struct WeaponState
     {
         std::string type;

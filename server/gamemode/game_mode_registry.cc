@@ -4,6 +4,7 @@
 #include <server/gamemode/bomb_mode.hh>
 #include <server/gamemode/deathmatch_mode.hh>
 #include <shared/ammunition.hh>
+#include <shared/brush_map.hh>
 #include <shared/economy.hh>
 #include <shared/fall_death.hh>
 
@@ -33,12 +34,12 @@ std::unordered_map<uint64_t, std::unordered_set<uint64_t>> GameModeRegistry::m_f
 
 namespace
 {
-std::unique_ptr<GameMode> createGameMode(nx3d::GameMode gameMode)
+std::unique_ptr<GameMode> createGameMode(nx3d::GameMode gameMode, bool shipment)
 {
     switch (gameMode)
     {
         case nx3d::GameMode::deathmatch:
-            return std::make_unique<DeathmatchMode>();
+            return std::make_unique<DeathmatchMode>(shipment);
         case nx3d::GameMode::bomb:
             return std::make_unique<BombMode>();
 
@@ -49,9 +50,9 @@ std::unique_ptr<GameMode> createGameMode(nx3d::GameMode gameMode)
         case nx3d::GameMode::hardpoint:
         case nx3d::GameMode::custom:
             nexilis::Log::warning("Gamemode not implemented, falling back to deathmatch");
-            return std::make_unique<DeathmatchMode>();
+            return std::make_unique<DeathmatchMode>(shipment);
     }
-    return std::make_unique<DeathmatchMode>();
+    return std::make_unique<DeathmatchMode>(shipment);
 }
 
 } // namespace
@@ -59,9 +60,10 @@ std::unique_ptr<GameMode> createGameMode(nx3d::GameMode gameMode)
 void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode gameMode)
 {
     m_fallenPlayers.erase(room.getId());
-    auto mode = createGameMode(gameMode);
+    const bool shipment = nx3d::isShipmentMap(nx3d::mapPathForRoom(room.getName()));
+    auto mode = createGameMode(gameMode, shipment);
     auto* modePtr = mode.get();
-    auto authority = std::make_unique<Authority>();
+    auto authority = std::make_unique<Authority>(shipment);
     auto* authorityPtr = authority.get();
     const auto roomId = room.getId();
 

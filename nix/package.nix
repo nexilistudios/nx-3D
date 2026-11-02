@@ -143,6 +143,7 @@ stdenv.mkDerivation (finalAttrs: {
       ''
         install -Dm755 -t "$out/bin" server/nx-3D-server
         install -Dm644 -t "$data/assets/maps/dust2_cs2" ../assets/maps/dust2_cs2/map.brush
+        install -Dm644 -t "$data/assets/maps/shipment" ../assets/maps/shipment/map.brush
       ''
   )
   + ''

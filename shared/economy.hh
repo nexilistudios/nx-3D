@@ -111,8 +111,19 @@ inline constexpr std::array<SpawnPoint, 5> kTSpawns{{
         {-561.0f, 192.0f, 771.0f}, {-801.0f, 192.0f, 777.0f},
         {-705.0f, 204.0f, 947.0f},
 }};
+inline constexpr std::array<SpawnPoint, 5> kShipmentCtSpawns{{
+        {-390.0f, 64.0f, -680.0f}, {-220.0f, 64.0f, -680.0f},
+        {0.0f, 64.0f, -680.0f}, {200.0f, 64.0f, -680.0f},
+        {370.0f, 64.0f, -680.0f},
+}};
+inline constexpr std::array<SpawnPoint, 5> kShipmentTSpawns{{
+        {-390.0f, 64.0f, 680.0f}, {-220.0f, 64.0f, 680.0f},
+        {0.0f, 64.0f, 680.0f}, {200.0f, 64.0f, 680.0f},
+        {370.0f, 64.0f, 680.0f},
+}};
 
-inline bool inBuyZone(std::string_view team, float x, float y, float z)
+inline bool inBuyZone(std::string_view team, float x, float y, float z,
+                      bool shipment = false)
 {
     auto close = [=](const auto& spawns)
     {
@@ -126,9 +137,9 @@ inline bool inBuyZone(std::string_view team, float x, float y, float z)
         return false;
     };
     if (team == "Counter Terrorist")
-        return close(kCtSpawns);
+        return shipment ? close(kShipmentCtSpawns) : close(kCtSpawns);
     if (team == "Terrorist")
-        return close(kTSpawns);
+        return shipment ? close(kShipmentTSpawns) : close(kTSpawns);
     return false;
 }
 

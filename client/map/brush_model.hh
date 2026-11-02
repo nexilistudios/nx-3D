@@ -6,6 +6,7 @@
 #include <spear/rendering/vulkan/texture/stb_texture.hh>
 
 #include <memory>
+#include <filesystem>
 #include <vector>
 
 namespace nx3d::client
@@ -16,7 +17,7 @@ class BrushModel : public spear::GameObject
 public:
     BrushModel(VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commands,
                VkQueue queue, VkDescriptorPool pool, VkDescriptorSetLayout layout,
-               const BrushMesh& mesh);
+               const BrushMesh& mesh, const std::filesystem::path& mapPath);
     ~BrushModel();
     void render(spear::Camera& camera) override;
 

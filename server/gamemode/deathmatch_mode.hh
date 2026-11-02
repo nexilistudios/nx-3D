@@ -16,6 +16,7 @@ namespace nx3d::server::gamemode
 class DeathmatchMode : public GameMode
 {
 public:
+    explicit DeathmatchMode(bool shipment = false) : m_economy(shipment) {}
     nx3d::GameMode type() const override;
     void onPlayerDeath(nexilis::server::Room& room, uint64_t killerId, uint64_t victimId) override;
     void onTeamSelected(nexilis::server::Room& room, uint64_t playerId) override;

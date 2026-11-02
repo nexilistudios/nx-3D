@@ -106,6 +106,7 @@ public:
     std::shared_ptr<BrushModel> mapModel;
     std::vector<std::shared_ptr<spear::rendering::vulkan::OBJModel>> mapProps;
     std::unique_ptr<editor::MapEditor> mapEditor;
+    void loadRoomMap(const std::string& roomName);
     void rebuildMapVisuals();
     void rebuildMapCollision();
     std::unique_ptr<btTriangleMesh> mapTriangles;

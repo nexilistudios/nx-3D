@@ -1,4 +1,5 @@
 #include <server/gamemode/game_mode_registry.hh>
+#include <shared/brush_map.hh>
 #include <shared/economy.hh>
 #include <shared/fall_death.hh>
 #include <shared/player_rules.hh>
@@ -82,7 +83,8 @@ int main()
         // Register callbacks before adding more rooms, as the real server does.
         for (uint64_t id = 777; id < 780; ++id)
         {
-            server::RoomStorage::add(server::Room(RoomData(10, "test", id)));
+            server::RoomStorage::add(server::Room(RoomData(
+                    10, id == 778 ? std::string(nx3d::kShipmentRoomName) : "test", id)));
             Registry::assignRoom(*server::RoomStorage::getRoomById(id), nx3d::GameMode::deathmatch);
         }
         auto* room = server::RoomStorage::getRoomById(777);

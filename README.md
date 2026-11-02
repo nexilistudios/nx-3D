@@ -143,8 +143,8 @@ OBJ models can be moved, resized, rotated, duplicated, and deleted like blocks.
 They fit the selection box, which also defines their collision on both client and
 server. C toggles model collision. See [the example asset](assets/props/README.md).
 
-The complete gameplay map is `assets/maps/dust2_cs2/map.brush`. Both programs load
-its brush geometry and OBJ placements; restart clients and the server after
+The Dust II gameplay map is `assets/maps/dust2_cs2/map.brush`. Both programs load
+room-specific brush geometry and OBJ placements; restart clients and the server after
 saving edits, and distribute the same map and model assets to every participant.
 Custom filenames are supported by the editor and `--map-preview --map <file>`.
 The example map is an editing playground; match spawn positions still belong to
@@ -157,6 +157,14 @@ for a separate project. The top-down tool requires Tkinter and provides exact
 numeric fields for dimensions, rotation, ramp tilt, and materials.
 `python3 tools/map_editor.py --check` validates the map, including OBJ records.
 See `assets/maps/dust2_cs2/README.md` for the generated plan.
+
+The separate Shipment container yard is `assets/maps/shipment/map.brush`. It
+uses bright blue, green, and red containers, with its own generated textures
+and Deathmatch spawns. Run `python3 tools/generate_shipment.py` to regenerate
+it. The server offers Shipment as the first room and Dust II as the second;
+clients load the chosen room's map automatically. Use `--map-preview` or
+`--map-editor` with `--map assets/maps/shipment/map.brush` to inspect or edit it. See
+`assets/maps/shipment/README.md` for details.
 
 ## Controls
 

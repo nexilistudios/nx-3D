@@ -13,9 +13,11 @@ DEFAULT_MAP = ROOT / "assets/maps/dust2_cs2/map.brush"
 HEADER = "nx3d-brush-map 2"
 MAX_BRUSHES = 32768
 MATERIALS = ("sand", "paving", "plaster", "whitewash", "stone", "blue", "wood",
-             "crate", "metal", "roof", "dark", "site_a", "site_b", "road")
+             "crate", "metal", "roof", "dark", "site_a", "site_b", "road",
+             "green", "red")
 COLORS = ("#c8b897", "#c7bda8", "#d0b98e", "#e3dfcd", "#a7977c", "#608e9e",
-          "#806443", "#a78b58", "#6e7777", "#ac7964", "#434b4b", "#c97546", "#b76440", "#979187")
+          "#806443", "#a78b58", "#6e7777", "#ac7964", "#434b4b", "#c97546", "#b76440", "#979187",
+          "#36b46b", "#ef534a")
 
 
 @dataclass(frozen=True)
@@ -114,10 +116,14 @@ def read_model_records(path: Path) -> list[str]:
     return records
 
 
-def write_map(path: Path, brushes: list[Brush], model_records: list[str] | tuple = ()) -> None:
+def write_map(path: Path, brushes: list[Brush], model_records: list[str] | tuple = (),
+              description: str | None = None) -> None:
     if len(brushes) > MAX_BRUSHES:
         raise ValueError(f"Map exceeds {MAX_BRUSHES} brushes")
-    lines = [HEADER, "# Generated CS2-style Dust II. All world geometry is editable.",
+    if description is None:
+        description = ("Bright Shipment-inspired container yard"
+                       if path.parent.name == "shipment" else "Generated CS2-style Dust II")
+    lines = [HEADER, f"# {description}. All world geometry is editable.",
              "# brush x y z half_x half_y half_z material slope_x slope_z yaw group"]
     for b in brushes:
         geometry = " ".join(f"{value:.9g}" for value in (b.x, b.y, b.z, b.hx, b.hy, b.hz))

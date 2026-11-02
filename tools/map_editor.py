@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Top-down cube-brush editor for the Dust2 map (standard-library Tkinter)."""
+"""Top-down cube-brush editor for generated maps (standard-library Tkinter)."""
 
 from __future__ import annotations
 
@@ -23,10 +23,15 @@ class Editor:
         self.saved_brushes = self.model.brushes.copy()
         metadata = path.parent / "layout.json"
         self.labels = json.loads(metadata.read_text()).get("labels", []) if metadata.exists() else []
+        self.shipment = path.parent.name == "shipment"
+        self.palette = dict(zip(MATERIALS, COLORS))
+        if self.shipment:
+            self.palette.update({"blue": "#2a8be8", "green": "#31be6f", "red": "#ef4d42",
+                                 "paving": "#e0e7de", "whitewash": "#f7f4d3"})
         self.root = tk.Tk()
         self.root.title(f"nx-3D Cube Map Editor — {path.name}")
         self.root.geometry("1440x920")
-        self.scale = 0.145
+        self.scale = 0.4 if self.shipment else 0.145
         self.origin_x = 450.0
         self.origin_y = 485.0
         self.grid = tk.IntVar(value=32)
@@ -39,7 +44,7 @@ class Editor:
         self.drag_original: Brush | None = None
         self.pan_start: tuple[float, float] | None = None
         self.preview: tuple[float, float, float, float] | None = None
-        self.status = tk.StringVar(value=f"Generated Dust II: {len(self.model.brushes)} editable cubes and ramps.")
+        self.status = tk.StringVar(value=f"{path.parent.name}: {len(self.model.brushes)} editable cubes and ramps.")
         self.fields: dict[str, tk.StringVar] = {}
         self._build_ui()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -147,7 +152,7 @@ class Editor:
             points = [value for p in brush.footprint for value in self.screen(*p)]
             canvas.create_polygon(*points, outline="#fff28a" if selected else "#655f52",
                                   width=3 if selected else 1,
-                                  fill=dict(zip(MATERIALS,COLORS))[brush.material])
+                                  fill=self.palette[brush.material])
         for label in self.labels:
             x,y = self.screen(label["x"],label["z"])
             canvas.create_text(x+1,y+1,text=label["name"],fill="black",font=("TkDefaultFont",9,"bold"))

@@ -306,7 +306,7 @@ void ClientApp::setupScenes()
     const auto mesh = nx3d::buildBrushMesh(mapDocument.brushes);
     mapModel = std::make_shared<BrushModel>(
             renderer.getDevice(), renderer.getPhysicalDevice(), renderer.getCommandPool(),
-            renderer.getGraphicsQueue(), descriptorPool, descriptorSetLayout, mesh);
+            renderer.getGraphicsQueue(), descriptorPool, descriptorSetLayout, mesh, mapFilePath);
     rebuildMapCollision();
     auto game_objects = spear::Scene::Container{mapModel};
     for (const auto& prop : mapDocument.props)
@@ -369,7 +369,8 @@ void ClientApp::rebuildMapVisuals()
     vkDeviceWaitIdle(renderer.getDevice());
     auto nextMap = std::make_shared<BrushModel>(
         renderer.getDevice(), renderer.getPhysicalDevice(), renderer.getCommandPool(),
-        renderer.getGraphicsQueue(), descriptorPool, descriptorSetLayout, buildBrushMesh(mapDocument.brushes));
+        renderer.getGraphicsQueue(), descriptorPool, descriptorSetLayout,
+        buildBrushMesh(mapDocument.brushes), mapFilePath);
     std::vector<std::shared_ptr<vk::OBJModel>> nextProps;
     for (const auto& prop : mapDocument.props)
         nextProps.push_back(createMapPropModel(prop, renderer.getDevice(), renderer.getPhysicalDevice(),
@@ -381,6 +382,21 @@ void ClientApp::rebuildMapVisuals()
     scene->addObject(mapModel);
     for (const auto& prop : mapProps) scene->addObject(prop);
     if (editingMap) rebuildMapCollision();
+}
+
+void ClientApp::loadRoomMap(const std::string& roomName)
+{
+    const auto nextPath = nx3d::projectAssetPath(nx3d::mapPathForRoom(roomName));
+    if (mapFilePath == nextPath)
+        return;
+    std::ifstream file(nextPath);
+    if (!file)
+        throw std::runtime_error("Cannot load room map: " + nextPath);
+    auto nextDocument = nx3d::readMapDocument(file);
+    mapFilePath = nextPath;
+    mapDocument = std::move(nextDocument);
+    rebuildMapVisuals();
+    rebuildMapCollision();
 }
 
 void ClientApp::connect(const std::string& address)
@@ -784,7 +800,8 @@ void ClientApp::openBuyMenu()
         return;
     const std::string ownTeam = ui->teamDisplayText.getString();
     const auto pos = camera.getPosition();
-    if (!nx3d::economy::inBuyZone(ownTeam, pos.x, pos.y, pos.z))
+    if (!nx3d::economy::inBuyZone(ownTeam, pos.x, pos.y, pos.z,
+                                  nx3d::isShipmentMap(mapFilePath)))
     {
         buyError = "Buy only in your team spawn";
         buyErrorSeconds = 2.0f;
@@ -1227,6 +1244,15 @@ void ClientApp::run()
                                 {
                                     selectedRoomId = rooms[idx].getId();
                                     selectedRoomGameMode = gameModeFromName(rooms[idx].getName());
+                                    try
+                                    {
+                                        loadRoomMap(rooms[idx].getName());
+                                    }
+                                    catch (const std::exception& error)
+                                    {
+                                        ui->statusText.setString(error.what());
+                                        break;
+                                    }
                                     tcp_client.sendMessage(
                                             packet::Room::Management::join(client_api, selectedRoomId));
                                     joiningRoom = true;
@@ -1617,7 +1643,8 @@ void ClientApp::run()
                     const auto pos = camera.getPosition();
                     if (!game_mode->canBuy() ||
                         !nx3d::economy::inBuyZone(ui->teamDisplayText.getString(),
-                                                  pos.x, pos.y, pos.z))
+                                                  pos.x, pos.y, pos.z,
+                                                  nx3d::isShipmentMap(mapFilePath)))
                         closeBuyMenu();
                 }
                 const std::string deathText = game_mode->isEliminated() ? "WASTED" : "";

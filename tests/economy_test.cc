@@ -68,6 +68,12 @@ int main()
             "Counter Terrorist can buy at the opposing spawn");
     require(!inBuyZone("Terrorist", 0.0f, 0.0f, 0.0f),
             "Remote purchase was allowed");
+    require(inBuyZone("Counter Terrorist", 0.0f, 64.0f, -680.0f, true) &&
+                    inBuyZone("Terrorist", 0.0f, 64.0f, 680.0f, true),
+            "Shipment spawns missing from buy zones");
+    require(!inBuyZone("Terrorist", 0.0f, 64.0f, -680.0f, true) &&
+                    !inBuyZone("Counter Terrorist", 0.0f, 64.0f, 680.0f, true),
+            "Shipment players can buy at the opposing spawn");
 
     Snapshot sent;
     sent.money = 1200;

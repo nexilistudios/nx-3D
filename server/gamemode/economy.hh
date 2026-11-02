@@ -26,6 +26,7 @@ namespace nx3d::server::gamemode
 class Economy
 {
 public:
+    explicit Economy(bool shipment = false) : m_shipment(shipment) {}
     void joined(nexilis::server::Room& room, uint64_t id)
     {
         nx3d::economy::Snapshot state;
@@ -245,7 +246,7 @@ public:
                 wallet.weapon = nx3d::economy::defaultWeapon(team);
             if (!alive || room.getPlayerHealth(id) <= 0.0f)
                 state.notice = "You must be alive to buy";
-            else if (!nx3d::economy::inBuyZone(team, pos.x, pos.y, pos.z))
+            else if (!nx3d::economy::inBuyZone(team, pos.x, pos.y, pos.z, m_shipment))
                 state.notice = "Buy only in your team spawn";
             else if (*item->team && team != item->team)
                 state.notice = "Unavailable for your team";
@@ -419,6 +420,7 @@ public:
     }
 
 private:
+    bool m_shipment = false;
     struct ThrownGrenade
     {
         uint64_t owner;

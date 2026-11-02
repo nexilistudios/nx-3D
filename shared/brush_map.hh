@@ -6,18 +6,32 @@
 
 #include <array>
 #include <cmath>
+#include <filesystem>
 #include <istream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace nx3d
 {
 inline constexpr const char* kGeneratedMapPath = "maps/dust2_cs2/map.brush";
-inline constexpr std::array<const char*, 14> kMapMaterials{{
+inline constexpr const char* kShipmentMapPath = "maps/shipment/map.brush";
+inline constexpr std::string_view kShipmentRoomName = "Shipment DM";
+inline constexpr std::string_view kDust2RoomName = "Dust2 Bomb";
+inline const char* mapPathForRoom(std::string_view roomName)
+{
+    return roomName == kShipmentRoomName ? kShipmentMapPath : kGeneratedMapPath;
+}
+inline bool isShipmentMap(const std::filesystem::path& path)
+{
+    return path.filename() == "map.brush" && path.parent_path().filename() == "shipment";
+}
+inline constexpr std::array<const char*, 16> kMapMaterials{{
         "sand", "paving", "plaster", "whitewash", "stone", "blue",
-        "wood", "crate", "metal", "roof", "dark", "site_a", "site_b", "road"}};
+        "wood", "crate", "metal", "roof", "dark", "site_a", "site_b", "road",
+        "green", "red"}};
 
 struct MapBrush
 {

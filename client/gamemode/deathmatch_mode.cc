@@ -2,6 +2,7 @@
 #include <client/gamemode/deathmatch_mode.hh>
 #include <client/gamemode/weapon_profiles.hh>
 #include <shared/ammunition.hh>
+#include <shared/brush_map.hh>
 
 #include <nexilis/client/packet.hh>
 
@@ -64,20 +65,17 @@ void DeathmatchMode::onEnter(ClientApp& app, const std::string& team)
 {
     using packet = nexilis::client::Packet;
 
+    m_shipment = nx3d::isShipmentMap(app.mapFilePath);
     m_team = team;
     app.ui->teamDisplayText.setString(m_team);
 
     app.ui->hideLeaderboard();
     m_leaderboard.clear();
 
-    const auto& spawns = (m_team == "Terrorist") ? nx3d::economy::kTSpawns : nx3d::economy::kCtSpawns;
     m_lastSpawnIndex = SIZE_MAX;
-    if (!spawns.empty())
-    {
-        app.camera.setPosition(pickSpawnPoint());
-        app.movement_controller.resetStance();
-        app.movement_controller.resetVerticalMotion();
-    }
+    app.camera.setPosition(pickSpawnPoint());
+    app.movement_controller.resetStance();
+    app.movement_controller.resetVerticalMotion();
 
     // The server replies with a stats seed for the local leaderboard.
     app.tcp_client.sendMessage(packet::Room::Player3D::setTeam(app.client_api, team));
@@ -297,13 +295,9 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
     {
         if (evt.target_id == app.client_api.getClientId())
         {
-            const auto& spawns = (m_team == "Terrorist") ? nx3d::economy::kTSpawns : nx3d::economy::kCtSpawns;
-            if (!spawns.empty())
-            {
-                app.camera.setPosition(pickSpawnPoint());
-                app.movement_controller.resetStance();
-                app.movement_controller.resetVerticalMotion();
-            }
+            app.camera.setPosition(pickSpawnPoint());
+            app.movement_controller.resetStance();
+            app.movement_controller.resetVerticalMotion();
             m_prevCamPos = app.camera.getPosition();
             m_triggerHeld = false;
             m_burstShots = 0;
@@ -684,9 +678,11 @@ void DeathmatchMode::installOverlay(ClientApp& app)
 
 glm::vec3 DeathmatchMode::pickSpawnPoint()
 {
-    const auto& spawns = (m_team == "Terrorist") ? nx3d::economy::kTSpawns : nx3d::economy::kCtSpawns;
-    if (spawns.empty())
-        return glm::vec3{0.0f};
+    const auto& spawns = m_shipment
+                                 ? (m_team == "Terrorist" ? nx3d::economy::kShipmentTSpawns
+                                                          : nx3d::economy::kShipmentCtSpawns)
+                                 : (m_team == "Terrorist" ? nx3d::economy::kTSpawns
+                                                          : nx3d::economy::kCtSpawns);
 
     size_t index = rand() % spawns.size();
     if (spawns.size() > 1 && index == m_lastSpawnIndex)
