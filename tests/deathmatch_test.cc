@@ -224,6 +224,9 @@ int main()
                 "Server stopped gravity when movement packets stopped");
 
         room->spawnPlayer(10);
+        // The generated spawn can be next to map geometry that blocks standing.
+        // Exercise stance changes at the known open position used by this fixture.
+        shopper->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
         const auto standingPosition = shopper->getObject3D().getPosition();
         require(sendAsShooter(client::Packet::Room::Player3D::movement(
                         shooter, Vector3f{1.0f, static_cast<float>(nx3d::kMoveSilentWalk), 0.0f},
