@@ -1341,8 +1341,8 @@ void ClientApp::run()
                     if (currentState == State::CreateRoom && roomMenu)
                     {
                         const int row = roomMenu->getSelectedIndex();
-                        if (event.key.key == SDLK_UP) roomMenu->selectPrevious();
-                        else if (event.key.key == SDLK_DOWN) roomMenu->selectNext();
+                        if (event.key.key == SDLK_UP) roomMenu->selectNext();
+                        else if (event.key.key == SDLK_DOWN) roomMenu->selectPrevious();
                         else if (event.key.key == SDLK_BACKSPACE && row == 0 && !newRoomName.empty())
                         {
                             chat::popBack(newRoomName);
@@ -1399,9 +1399,9 @@ void ClientApp::run()
                     else if (currentState == State::Lobby && roomMenu && !joiningRoom && !creatingRoom)
                     {
                         if (event.key.key == SDLK_UP)
-                            roomMenu->selectPrevious();
-                        else if (event.key.key == SDLK_DOWN)
                             roomMenu->selectNext();
+                        else if (event.key.key == SDLK_DOWN)
+                            roomMenu->selectPrevious();
                         else if (event.key.key == SDLK_RETURN)
                         {
                             const int idx = roomMenu->getSelectedIndex();
