@@ -93,6 +93,11 @@ int main(int argc, char* argv[])
                                                 nx3d::GameMode::bomb);
     }
 
+    RoomStorage::setCreateHandler([](Room& room)
+    {
+        gamemode::GameModeRegistry::assignRoom(room, nx3d::gameModeFromName(room.getName()));
+    });
+
     nexilis::ProtocolManager protocolManager;
 
     // Boost TCP server

@@ -65,6 +65,12 @@ inline GameMode gameModeFromName(const std::string& roomName)
                    [](unsigned char c)
                    { return std::tolower(c); });
 
+    // A custom display name follows the room configuration after " | ".
+    // Only the configuration prefix may decide how the room plays.
+    const auto displaySeparator = lower.find(" | ");
+    if (displaySeparator != std::string::npos)
+        lower.resize(displaySeparator);
+
     if (lower.find("bomb") != std::string::npos)
         return GameMode::bomb;
     if (lower.find("nospawn") != std::string::npos)
@@ -74,6 +80,12 @@ inline GameMode gameModeFromName(const std::string& roomName)
     if (lower.find("custom") != std::string::npos)
         return GameMode::custom;
     return GameMode::deathmatch;
+}
+
+inline std::string roomDisplayName(const std::string& roomName)
+{
+    const auto separator = roomName.find(" | ");
+    return separator == std::string::npos ? roomName : roomName.substr(separator + 3);
 }
 
 } // namespace nx3d

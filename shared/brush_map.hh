@@ -22,7 +22,7 @@ inline constexpr std::string_view kShipmentRoomName = "Shipment DM";
 inline constexpr std::string_view kDust2RoomName = "Dust2 Bomb";
 inline const char* mapPathForRoom(std::string_view roomName)
 {
-    return roomName == kShipmentRoomName ? kShipmentMapPath : kGeneratedMapPath;
+    return roomName.starts_with("Shipment") ? kShipmentMapPath : kGeneratedMapPath;
 }
 inline bool isShipmentMap(const std::filesystem::path& path)
 {

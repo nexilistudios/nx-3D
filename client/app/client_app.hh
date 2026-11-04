@@ -72,6 +72,7 @@ public:
         ServerInput,
         Connecting,
         Lobby,
+        CreateRoom,
         Joining,
         TeamSelect,
         Game,
@@ -159,9 +160,14 @@ public:
     std::mutex mtx;
     std::vector<nexilis::RoomInfo> rooms;
     std::atomic<bool> joiningRoom{false};
+    float joiningRoomTimeout = 0.0f;
     uint64_t selectedRoomId = 0;
     nx3d::GameMode selectedRoomGameMode = nx3d::GameMode::deathmatch;
     float serverPlayerCountRefresh = 0.0f;
+    float roomRefresh = 0.0f;
+    bool creatingRoom = false;
+    float creatingRoomTimeout = 0.0f;
+    std::unordered_set<uint64_t> knownRoomIds;
     std::unordered_map<uint64_t, ui::LeaderboardEntry> teamSelectPlayers;
 
     // --- Server address input ------------------------------------------------
@@ -180,6 +186,13 @@ public:
     // --- Lobby room menu -----------------------------------------------------
     spear::ui::BaseMenuList* roomMenu = nullptr;
     bool menuPopulated = false;
+    nx3d::GameMode newRoomMode = nx3d::GameMode::deathmatch;
+    bool newRoomShipment = true;
+    uint32_t newRoomMaxPlayers = 8;
+    std::string newRoomName;
+    void showLobbyRooms();
+    void showCreateRoom();
+    void joinRoom(uint64_t id, const std::string& name);
 
     // --- Pause / audio -------------------------------------------------------
     float audioVolume = 0.1f;

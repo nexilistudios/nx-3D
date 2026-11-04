@@ -403,6 +403,12 @@ void ClientApp::connect(const std::string& address)
 {
     serverAddress = address;
     serverPlayerCountRefresh = 0.0f;
+    roomRefresh = 0.0f;
+    creatingRoom = false;
+    creatingRoomTimeout = 0.0f;
+    knownRoomIds.clear();
+    rooms.clear();
+    menuPopulated = false;
     teamSelectPlayers.clear();
     ui->serverPlayerCountText.setString("");
     tcp_client.stop();
@@ -413,6 +419,61 @@ void ClientApp::connect(const std::string& address)
 
     auto start_client = nexilis::startClient(client_api, tcp_client, rooms, ready, mtx);
     start_client.detach();
+}
+
+void ClientApp::showLobbyRooms()
+{
+    roomMenu->clearItems();
+    roomMenu->setPosition(glm::vec2(-0.8f, 0.3f));
+    for (const auto& room : rooms)
+        roomMenu->addItem(roomDisplayName(room.getName()));
+    roomMenu->addItem("New Room");
+    ui->statusText.setString(rooms.empty() ? "No rooms available" : "Select a room");
+    ui->instructionsText.setString("Arrow keys: Navigate   |   Enter: Select   |   ESC: Quit");
+}
+
+void ClientApp::showCreateRoom()
+{
+    const int selected = roomMenu->getSelectedIndex();
+    roomMenu->clearItems();
+    roomMenu->setPosition(glm::vec2(-0.8f, -0.2f));
+    roomMenu->addItem("Name: " + (newRoomName.empty() ? "[type a name]" : newRoomName));
+    roomMenu->addItem(std::string("Game mode: ") +
+                      (newRoomMode == nx3d::GameMode::bomb ? "Bomb" : "Deathmatch"));
+    roomMenu->addItem(std::string("Map: ") + (newRoomShipment ? "Shipment" : "Dust2"));
+    roomMenu->addItem("Max players: " + std::to_string(newRoomMaxPlayers));
+    roomMenu->addItem("Create Room");
+    roomMenu->addItem("Back");
+    for (int i = 0; i < selected; ++i)
+        roomMenu->selectNext();
+    ui->statusText.setString("New Room");
+    ui->instructionsText.setString("Type name   |   Up/Down: Select   |   Left/Right: Change   |   Enter: Confirm");
+}
+
+void ClientApp::joinRoom(uint64_t id, const std::string& name)
+{
+    for (const auto& room : client_api.getActiveRooms())
+        if (room.getId() == id && room.getClients().size() >= room.getMaxSize())
+        {
+            ui->statusText.setString("Room is full");
+            return;
+        }
+    selectedRoomId = id;
+    selectedRoomGameMode = gameModeFromName(name);
+    try
+    {
+        loadRoomMap(name);
+    }
+    catch (const std::exception& error)
+    {
+        ui->statusText.setString(error.what());
+        return;
+    }
+    tcp_client.sendMessage(nexilis::client::Packet::Room::Management::join(client_api, id));
+    joiningRoom = true;
+    joiningRoomTimeout = 5.0f;
+    ui->statusText.setString("Joining room...");
+    currentState = State::Joining;
 }
 
 std::unique_ptr<gamemode::GameMode> ClientApp::makeGameMode(nx3d::GameMode gameMode)
@@ -1047,23 +1108,54 @@ void ClientApp::run()
             tcp_client.sendMessage(packet::Set::General::username(client_api, username));
 
             std::lock_guard<std::mutex> lock(mtx);
-            if (!rooms.empty())
-            {
-                roomMenu = &ui->createRoomMenu();
-                roomMenu->setPosition(glm::vec2(-0.8f, 0.3f));
-                roomMenu->setSpacing(40.0f);
-                for (auto& room : rooms)
-                    roomMenu->addItem(room.getName());
-                ui->statusText.setString("Select a room and press Enter to join");
-                ui->instructionsText.setString("Arrow keys: Navigate   |   Enter: Join   |   ESC: Quit");
-            }
-            else
-            {
-                ui->statusText.setString("No rooms available");
-            }
+            roomMenu = &ui->createRoomMenu();
+            roomMenu->setPosition(glm::vec2(-0.8f, 0.3f));
+            roomMenu->setSpacing(40.0f);
+            showLobbyRooms();
             menuPopulated = true;
             currentState = State::Lobby;
             udp_client.start();
+        }
+
+        if (ready && (currentState == State::Lobby || currentState == State::CreateRoom))
+        {
+            if (creatingRoom)
+            {
+                creatingRoomTimeout -= delta_time;
+                if (creatingRoomTimeout <= 0.0f)
+                {
+                    creatingRoom = false;
+                    ui->statusText.setString("Room creation failed or timed out");
+                }
+            }
+            roomRefresh -= delta_time;
+            if (roomRefresh <= 0.0f)
+            {
+                tcp_client.sendMessage(packet::Get::Info::rooms(client_api));
+                roomRefresh = 2.0f;
+            }
+            auto activeRooms = client_api.getActiveRooms();
+            std::vector<nexilis::RoomInfo> updated;
+            updated.reserve(activeRooms.size());
+            for (const auto& room : activeRooms)
+            {
+                updated.emplace_back(room.getId(), room.getName());
+                if (creatingRoom && room.getCreatorId() == client_api.getClientId() &&
+                    !knownRoomIds.contains(room.getId()))
+                {
+                    creatingRoom = false;
+                    joinRoom(room.getId(), room.getName());
+                }
+            }
+            if (currentState == State::Lobby && !creatingRoom &&
+                (updated.size() != rooms.size() ||
+                 !std::equal(updated.begin(), updated.end(), rooms.begin(), rooms.end(),
+                             [](const auto& a, const auto& b)
+                             { return a.getId() == b.getId() && a.getName() == b.getName(); })))
+            {
+                rooms = std::move(updated);
+                showLobbyRooms();
+            }
         }
 
         if (ready && currentState != State::ServerInput)
@@ -1083,10 +1175,22 @@ void ClientApp::run()
 
         if (currentState == State::Joining && client_api.clientInRoom())
         {
+            joiningRoom = false;
             teamSelectPlayers.clear();
             ui->showTeamSelectTexts();
             renderer.setUIRenderer(&ui->renderer());
             currentState = State::TeamSelect;
+        }
+        else if (currentState == State::Joining)
+        {
+            joiningRoomTimeout -= delta_time;
+            if (joiningRoomTimeout <= 0.0f)
+            {
+                joiningRoom = false;
+                currentState = State::Lobby;
+                showLobbyRooms();
+                ui->statusText.setString("Could not join room");
+            }
         }
 
         if (currentState == State::TeamSelect)
@@ -1212,7 +1316,7 @@ void ClientApp::run()
                 ui->usernameInputText.setString(usernameDisplay);
             }
         }
-        else if (currentState == State::Lobby || currentState == State::Connecting ||
+        else if (currentState == State::Lobby || currentState == State::CreateRoom || currentState == State::Connecting ||
                  currentState == State::TeamSelect)
         {
             SDL_Event event;
@@ -1224,11 +1328,75 @@ void ClientApp::run()
                 }
                 if (event.type == SDL_EVENT_KEY_DOWN)
                 {
-                    if (event.key.key == SDLK_ESCAPE)
+                    if (event.key.key == SDLK_ESCAPE && currentState == State::CreateRoom)
+                    {
+                        SDL_StopTextInput(window.getSDLWindow());
+                        currentState = State::Lobby;
+                        showLobbyRooms();
+                    }
+                    else if (event.key.key == SDLK_ESCAPE)
                     {
                         cleanQuit();
                     }
-                    if (currentState == State::Lobby && roomMenu && !joiningRoom)
+                    if (currentState == State::CreateRoom && roomMenu)
+                    {
+                        const int row = roomMenu->getSelectedIndex();
+                        if (event.key.key == SDLK_UP) roomMenu->selectPrevious();
+                        else if (event.key.key == SDLK_DOWN) roomMenu->selectNext();
+                        else if (event.key.key == SDLK_BACKSPACE && row == 0 && !newRoomName.empty())
+                        {
+                            chat::popBack(newRoomName);
+                            showCreateRoom();
+                        }
+                        else if (event.key.key == SDLK_LEFT || event.key.key == SDLK_RIGHT ||
+                                 event.key.key == SDLK_RETURN)
+                        {
+                            const int direction = event.key.key == SDLK_LEFT ? -1 : 1;
+                            if (row == 0 && event.key.key == SDLK_RETURN)
+                                roomMenu->selectNext();
+                            else if (row == 1)
+                                newRoomMode = newRoomMode == nx3d::GameMode::bomb ?
+                                        nx3d::GameMode::deathmatch : nx3d::GameMode::bomb;
+                            else if (row == 2)
+                                newRoomShipment = !newRoomShipment;
+                            else if (row == 3)
+                                newRoomMaxPlayers = std::clamp<int>(
+                                        static_cast<int>(newRoomMaxPlayers) + direction, 2, 16);
+                            else if (row == 4 && event.key.key == SDLK_RETURN)
+                            {
+                                if (newRoomName.find_first_not_of(" \t\r\n") == std::string::npos)
+                                {
+                                    ui->statusText.setString("Enter a room name");
+                                    continue;
+                                }
+                                knownRoomIds.clear();
+                                for (const auto& room : client_api.getActiveRooms())
+                                    knownRoomIds.insert(room.getId());
+                                const std::string name =
+                                        std::string(newRoomShipment ? "Shipment " : "Dust2 ") +
+                                        (newRoomMode == nx3d::GameMode::bomb ? "Bomb" : "DM") +
+                                        " | " + newRoomName;
+                                tcp_client.sendMessage(packet::Room::Management::create(
+                                        client_api, name, nexilis::RoomData::Context::_3D,
+                                        newRoomMaxPlayers));
+                                creatingRoom = true;
+                                creatingRoomTimeout = 5.0f;
+                                SDL_StopTextInput(window.getSDLWindow());
+                                currentState = State::Lobby;
+                                showLobbyRooms();
+                                ui->statusText.setString("Creating room...");
+                            }
+                            else if (row == 5 && event.key.key == SDLK_RETURN)
+                            {
+                                SDL_StopTextInput(window.getSDLWindow());
+                                currentState = State::Lobby;
+                                showLobbyRooms();
+                            }
+                            if (currentState == State::CreateRoom && row >= 1 && row <= 3)
+                                showCreateRoom();
+                        }
+                    }
+                    else if (currentState == State::Lobby && roomMenu && !joiningRoom && !creatingRoom)
                     {
                         if (event.key.key == SDLK_UP)
                             roomMenu->selectPrevious();
@@ -1236,31 +1404,28 @@ void ClientApp::run()
                             roomMenu->selectNext();
                         else if (event.key.key == SDLK_RETURN)
                         {
-                            std::lock_guard<std::mutex> lock(mtx);
-                            if (!rooms.empty())
+                            const int idx = roomMenu->getSelectedIndex();
+                            if (idx == static_cast<int>(rooms.size()))
                             {
-                                int idx = roomMenu->getSelectedIndex();
-                                if (idx >= 0 && idx < static_cast<int>(rooms.size()))
-                                {
-                                    selectedRoomId = rooms[idx].getId();
-                                    selectedRoomGameMode = gameModeFromName(rooms[idx].getName());
-                                    try
-                                    {
-                                        loadRoomMap(rooms[idx].getName());
-                                    }
-                                    catch (const std::exception& error)
-                                    {
-                                        ui->statusText.setString(error.what());
-                                        break;
-                                    }
-                                    tcp_client.sendMessage(
-                                            packet::Room::Management::join(client_api, selectedRoomId));
-                                    joiningRoom = true;
-                                    ui->statusText.setString("Joining room...");
-                                    currentState = State::Joining;
-                                }
+                                currentState = State::CreateRoom;
+                                roomMenu->clearItems();
+                                showCreateRoom();
+                                SDL_StartTextInput(window.getSDLWindow());
                             }
+                            else if (idx >= 0 && idx < static_cast<int>(rooms.size()))
+                                joinRoom(rooms[idx].getId(), rooms[idx].getName());
                         }
+                    }
+                }
+                if (event.type == SDL_EVENT_TEXT_INPUT && currentState == State::CreateRoom &&
+                    roomMenu && roomMenu->getSelectedIndex() == 0)
+                {
+                    const std::string incoming = event.text.text;
+                    if (newRoomName.size() + incoming.size() <= 32 &&
+                        incoming.find_first_of("\r\n|") == std::string::npos)
+                    {
+                        newRoomName += incoming;
+                        showCreateRoom();
                     }
                 }
                 if (event.type == SDL_EVENT_WINDOW_RESIZED)
