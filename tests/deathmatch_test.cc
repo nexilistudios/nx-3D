@@ -211,7 +211,7 @@ int main()
         require(room->getGameItems().empty(),
                 "Server did not consume the pickup");
         require(sendAsShooter(client::Packet::Room::GameItem::update(
-                        shooter, itemId, "picked_up")) == server::CommandResult::failure,
+                        shooter, itemId, "picked_up")) == server::CommandResult::invalid_input,
                 "Server allowed the same weapon to be picked up twice");
 
         room->spawnPlayer(10);
