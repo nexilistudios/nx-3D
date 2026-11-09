@@ -20,7 +20,6 @@
 #include <boost/json/value.hpp>
 
 #include <cmath>
-#include <map>
 #include <memory>
 #include <mutex>
 #include <utility>
@@ -73,7 +72,7 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
     room.setGameItemPickupHandler([authorityPtr, modePtr, pickupMutex](nexilis::server::Room& r, uint64_t id, uint64_t itemId)
                                   {
         std::lock_guard lock(*pickupMutex);
-        auto* user = nexilis::server::ClientStorage::getClientById(id);
+        auto user = nexilis::server::ClientStorage::getClientById(id);
         auto* item = r.getGameItemById(itemId);
         if (!user || user->getRoomId() != r.getId() || !item ||
             item->getStatus() != "on_ground")
@@ -108,13 +107,13 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
                                                         const nexilis::Vector3f& input,
                                                         float yaw)
                                  {
-        auto* r = nexilis::server::RoomStorage::getRoomById(roomId);
+        auto r = nexilis::server::RoomStorage::getRoomById(roomId);
         return r && authorityPtr->move(*r, id, input, yaw); });
     room.setShotHandler([authorityPtr, modePtr, roomId](uint64_t id,
                                                         const nexilis::Vector3f& direction,
                                                         uint8_t slot, uint8_t action)
                         {
-        auto* r = nexilis::server::RoomStorage::getRoomById(roomId);
+        auto r = nexilis::server::RoomStorage::getRoomById(roomId);
         return r ? authorityPtr->fire(*r, id, direction, slot, action,
                                       modePtr->weaponForSlot(id, slot))
                  : std::optional<nexilis::server::Room::ShotHit>{}; });
@@ -149,7 +148,7 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
         }
         if (!slot)
             return true;
-        auto* user = nexilis::server::ClientStorage::getClientById(playerId);
+        auto user = nexilis::server::ClientStorage::getClientById(playerId);
         if (!user || weapon.empty())
             return false;
         const auto dropped = authorityPtr->dropWeapon(playerId, slot, weapon);
@@ -193,13 +192,13 @@ void GameModeRegistry::update(float dt)
 {
     for (auto& [roomId, mode] : m_modes)
     {
-        if (auto* room = nexilis::server::RoomStorage::getRoomById(roomId))
+        if (auto room = nexilis::server::RoomStorage::getRoomById(roomId))
         {
             m_authorities[roomId]->update(*room, dt);
             auto& fallen = m_fallenPlayers[roomId];
             for (auto playerId : room->getClients())
             {
-                auto* player = nexilis::server::ClientStorage::getClientById(playerId);
+                auto player = nexilis::server::ClientStorage::getClientById(playerId);
                 if (!player)
                     continue;
                 if (player->getObject3D().getPosition().y >= nx3d::kFallDeathY)

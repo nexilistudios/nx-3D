@@ -26,7 +26,9 @@ namespace nx3d::server::gamemode
 class Economy
 {
 public:
-    explicit Economy(bool shipment = false) : m_shipment(shipment) {}
+    explicit Economy(bool shipment = false) : m_shipment(shipment)
+    {
+    }
     void joined(nexilis::server::Room& room, uint64_t id)
     {
         nx3d::economy::Snapshot state;
@@ -156,7 +158,8 @@ public:
         {
             std::lock_guard lock(m_mutex);
             auto it = m_wallets.find(id);
-            if (it == m_wallets.end()) return;
+            if (it == m_wallets.end())
+                return;
             it->second.objects.set("bomb", owned ? 1 : 0);
             state = it->second;
         }
@@ -232,7 +235,7 @@ public:
         if (!item)
             return false;
 
-        auto* user = nexilis::server::ClientStorage::getClientById(id);
+        auto user = nexilis::server::ClientStorage::getClientById(id);
         if (!user)
             return false;
         const auto team = room.getPlayerTeam(id);
@@ -282,9 +285,9 @@ public:
                     wallet.objects.add(item->object->id);
                 success = true;
                 state.notice = std::string("Bought ") + item->name;
-                state.effect = item->kind == nx3d::economy::ItemKind::weapon ? "weapon" :
-                               item->kind == nx3d::economy::ItemKind::ammo ? "ammo" :
-                               item->kind == nx3d::economy::ItemKind::health ? "health" : "none";
+                state.effect = item->kind == nx3d::economy::ItemKind::weapon ? "weapon" : item->kind == nx3d::economy::ItemKind::ammo ? "ammo"
+                                                                                  : item->kind == nx3d::economy::ItemKind::health     ? "health"
+                                                                                                                                      : "none";
             }
             state.money = wallet.money;
             state.weapon = wallet.weapon;
@@ -300,7 +303,7 @@ public:
 
     bool throwGrenade(nexilis::server::Room& room, uint64_t id, bool alive, bool smoke = false)
     {
-        auto* user = nexilis::server::ClientStorage::getClientById(id);
+        auto user = nexilis::server::ClientStorage::getClientById(id);
         if (!user || !alive || room.getPlayerHealth(id) <= 0.0f)
             return false;
         nx3d::economy::Snapshot state;
@@ -326,9 +329,7 @@ public:
         }
         send(room, id, state);
         nexilis::server::Command::ClientMsgType data{
-                {"action", "broadcast"}, {"room_id", room.getId()},
-                {"client_id", 0},
-                {"message", boost::json::value(nx3d::economy::encodeGrenade(throwEvent))}};
+                {"action", "broadcast"}, {"room_id", room.getId()}, {"client_id", 0}, {"message", boost::json::value(nx3d::economy::encodeGrenade(throwEvent))}};
         room.broadcastToAll(nexilis::server::Command::clientMessageData(
                 nexilis::CommandType::room, "communication", 0, data));
         return true;
@@ -345,8 +346,8 @@ public:
             if (it == m_wallets.end())
                 return false;
             auto& wallet = it->second;
-            std::string* equipped = action == nx3d::economy::kDropPrimaryAction ? &wallet.primary :
-                                    action == nx3d::economy::kDropSecondaryAction ? &wallet.secondary : nullptr;
+            std::string* equipped = action == nx3d::economy::kDropPrimaryAction ? &wallet.primary : action == nx3d::economy::kDropSecondaryAction ? &wallet.secondary
+                                                                                                                                                  : nullptr;
             if (!equipped || equipped->empty())
                 return false;
             equipped->clear();
@@ -369,12 +370,13 @@ public:
                     exploded.push_back(*it);
                     it = m_thrown.erase(it);
                 }
-                else ++it;
+                else
+                    ++it;
             }
         }
         for (const auto& grenade : exploded)
         {
-            auto* owner = nexilis::server::ClientStorage::getClientById(grenade.owner);
+            auto owner = nexilis::server::ClientStorage::getClientById(grenade.owner);
             if (!owner)
                 continue;
             for (auto target : room.getClients())
@@ -382,7 +384,7 @@ public:
                 if (target == grenade.owner || room.getPlayerTeam(target) == grenade.team ||
                     !room.canDamage(grenade.owner, target) || room.getPlayerHealth(target) <= 0.0f)
                     continue;
-                auto* victim = nexilis::server::ClientStorage::getClientById(target);
+                auto victim = nexilis::server::ClientStorage::getClientById(target);
                 if (!victim)
                     continue;
                 const auto pos = victim->getObject3D().getPosition();
@@ -435,16 +437,14 @@ private:
 
     static void send(nexilis::server::Room& room, uint64_t id, const nx3d::economy::Snapshot& state)
     {
-        auto* user = nexilis::server::ClientStorage::getClientById(id);
+        auto user = nexilis::server::ClientStorage::getClientById(id);
         if (!user || !user->isBoostTCPSet())
             return;
         // Nexilis room messages carry application-specific per-player data.
         // A zero sender ID marks this as server data; the client consumes the
         // reserved prefix before it reaches the visible player chat.
         nexilis::server::Command::ClientMsgType data{
-                {"action", "broadcast"}, {"room_id", room.getId()},
-                {"client_id", 0},
-                {"message", boost::json::value(nx3d::economy::encode(state))}};
+                {"action", "broadcast"}, {"room_id", room.getId()}, {"client_id", 0}, {"message", boost::json::value(nx3d::economy::encode(state))}};
         user->boostTCPSend(nexilis::server::Command::clientMessageData(
                 nexilis::CommandType::room, "communication", 0, data));
     }

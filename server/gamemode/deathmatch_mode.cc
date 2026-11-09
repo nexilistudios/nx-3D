@@ -48,7 +48,7 @@ void DeathmatchMode::onPlayerDeath(nexilis::server::Room& room, uint64_t killerI
         m_respawnTimers[victimId] = 2.0f;
     }
 
-    auto* sender = nexilis::server::ClientStorage::getClientById(
+    auto sender = nexilis::server::ClientStorage::getClientById(
             killerId == 0 ? victimId : killerId);
     if (!sender)
         return;
@@ -96,7 +96,7 @@ void DeathmatchMode::update(nexilis::server::Room& room, float dt)
     }
     for (auto victimId : ready)
     {
-        auto* sender = nexilis::server::ClientStorage::getClientById(victimId);
+        auto sender = nexilis::server::ClientStorage::getClientById(victimId);
         if (!sender)
             continue;
         room.resetPlayerHealth(victimId);

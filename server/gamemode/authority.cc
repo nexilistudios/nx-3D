@@ -1,7 +1,7 @@
 #include <server/gamemode/authority.hh>
 
-#include <shared/economy.hh>
 #include <shared/brush_mesh.hh>
+#include <shared/economy.hh>
 #include <shared/map_document.hh>
 #include <shared/player_hit.hh>
 #include <shared/player_rules.hh>
@@ -21,8 +21,6 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <limits>
-#include <sstream>
 #include <stdexcept>
 #include <unordered_set>
 #include <vector>
@@ -72,7 +70,8 @@ public:
                                           : std::filesystem::path(PROJECT_ROOT) / relative;
         const auto path = std::filesystem::exists(configured) ? configured : relative;
         std::ifstream file(path);
-        if (!file) throw std::runtime_error("Cannot load generated server map: " + path.string());
+        if (!file)
+            throw std::runtime_error("Cannot load generated server map: " + path.string());
         const auto document = nx3d::readMapDocument(file);
         const auto mesh = nx3d::buildBrushMesh(document.brushes);
         for (const auto& vertices : mesh)
@@ -89,8 +88,8 @@ public:
             {
                 const auto vertices = nx3d::propCollisionVertices(prop);
                 for (std::size_t i = 0; i < vertices.size(); i += 3)
-                    m_mesh.addTriangle(asBullet(vertices[i].position), asBullet(vertices[i+1].position),
-                                       asBullet(vertices[i+2].position));
+                    m_mesh.addTriangle(asBullet(vertices[i].position), asBullet(vertices[i + 1].position),
+                                       asBullet(vertices[i + 2].position));
             }
         if (m_mesh.getNumTriangles() == 0)
             throw std::runtime_error("Empty generated server map");
@@ -339,9 +338,7 @@ void publishAnimation(nexilis::server::Room& room, nexilis::server::User& user,
 {
     room.broadcastToAll(nexilis::server::Command::clientMessageData(
             nexilis::CommandType::room, "player_3D", 0,
-            {{"action", "animation"}, {"room_id", room.getId()},
-             {"client_id", user.getId()}, {"state", state.c_str()},
-             {"weapon", weapon.c_str()}, {"duration", duration}}));
+            {{"action", "animation"}, {"room_id", room.getId()}, {"client_id", user.getId()}, {"state", state.c_str()}, {"weapon", weapon.c_str()}, {"duration", duration}}));
 }
 
 struct WeaponRule
@@ -375,7 +372,7 @@ Authority::Authority(bool shipment) : m_shipment(shipment)
 
 void Authority::spawn(nexilis::server::Room& room, uint64_t playerId, bool preserveEquipment)
 {
-    auto* user = nexilis::server::ClientStorage::getClientById(playerId);
+    auto user = nexilis::server::ClientStorage::getClientById(playerId);
     if (!user)
         return;
     const auto team = room.getPlayerTeam(playerId);
@@ -415,7 +412,7 @@ void Authority::spawn(nexilis::server::Room& room, uint64_t playerId, bool prese
 bool Authority::move(nexilis::server::Room& room, uint64_t playerId,
                      const nexilis::Vector3f& input, float yaw)
 {
-    auto* user = nexilis::server::ClientStorage::getClientById(playerId);
+    auto user = nexilis::server::ClientStorage::getClientById(playerId);
     if (!user || user->getRoomId() != room.getId())
         return false;
     glm::vec3 direction(input.x, 0, input.z);
@@ -452,7 +449,7 @@ void Authority::update(nexilis::server::Room& room, float dt)
     const auto now = std::chrono::steady_clock::now();
     for (auto playerId : room.getClients())
     {
-        auto* user = nexilis::server::ClientStorage::getClientById(playerId);
+        auto user = nexilis::server::ClientStorage::getClientById(playerId);
         if (!user || user->getRoomId() != room.getId() ||
             room.getPlayerTeam(playerId).empty() || room.getPlayerHealth(playerId) <= 0.0f)
             continue;
@@ -478,14 +475,14 @@ void Authority::update(nexilis::server::Room& room, float dt)
             auto position = asGlm(user->getObject3D().getPosition());
             const glm::vec2 previousHorizontal(position.x, position.z);
             const bool wasCrouched = state.crouched;
-            mapPhysics(m_shipment).advance(position, direction, jump, crouch, silentWalk, state.crouched,
-                                 state.jumpHeld, state.grounded, state.verticalVelocity, dt);
+            mapPhysics(m_shipment).advance(position, direction, jump, crouch, silentWalk, state.crouched, state.jumpHeld, state.grounded, state.verticalVelocity, dt);
             stanceChanged = state.crouched != wasCrouched;
             crouched = state.crouched;
             const bool moving = glm::distance(previousHorizontal,
                                               glm::vec2(position.x, position.z)) > 0.01f;
             animation = state.crouched ? "crouching" : !moving ? "idle"
-                        : silentWalk ? "sneaking" : "running";
+                                               : silentWalk    ? "sneaking"
+                                                               : "running";
             animationChanged = animation != state.animation ||
                                now - state.lastAnimationBroadcast >= std::chrono::milliseconds(500);
             if (animationChanged)
@@ -543,7 +540,7 @@ void Authority::pickupWeapon(uint64_t playerId, uint8_t slot, const DroppedWeapo
 bool Authority::equipWeapon(nexilis::server::Room& room, uint64_t playerId,
                             const std::string& weapon)
 {
-    auto* user = nexilis::server::ClientStorage::getClientById(playerId);
+    auto user = nexilis::server::ClientStorage::getClientById(playerId);
     if (!user || user->getRoomId() != room.getId() ||
         room.getPlayerHealth(playerId) <= 0.0f || room.getPlayerTeam(playerId).empty() ||
         (!weaponRule(weapon) && weapon != "grenade" && weapon != "smoke" &&
@@ -582,7 +579,7 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
         const nexilis::Vector3f& direction, uint8_t slot, uint8_t action,
         const std::string& weapon)
 {
-    auto* shooter = nexilis::server::ClientStorage::getClientById(shooterId);
+    auto shooter = nexilis::server::ClientStorage::getClientById(shooterId);
     if (!shooter || shooter->getRoomId() != room.getId() ||
         room.getPlayerHealth(shooterId) <= 0.0f || room.getPlayerTeam(shooterId).empty() ||
         (slot != 1 && slot != 2 && slot != 3) || (action != 0 && action != 1))
@@ -661,7 +658,7 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
         if (id == shooterId || room.getPlayerHealth(id) <= 0.0f ||
             room.getPlayerTeam(id) == shooterTeam || !room.canDamage(shooterId, id))
             continue;
-        auto* target = nexilis::server::ClientStorage::getClientById(id);
+        auto target = nexilis::server::ClientStorage::getClientById(id);
         if (!target)
             continue;
         const auto position = target->getObject3D().getPosition();
