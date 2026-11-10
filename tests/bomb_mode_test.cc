@@ -39,7 +39,7 @@ int main()
     queued.setClientId(30);
 
     server::RoomStorage::add(server::Room(RoomData(10, "Bomb test", 777)));
-    auto* room = server::RoomStorage::getRoomById(777);
+    auto room = server::RoomStorage::getRoomById(777);
     GameModeRegistry::assignRoom(*room, nx3d::GameMode::bomb);
     std::vector<std::pair<uint64_t, client::ClientAPI*>> presentClients;
     auto announce = [](client::ClientAPI& api, uint64_t id)
@@ -114,7 +114,7 @@ int main()
                                event.weapon == "bomb"; }),
           "Bomb carrier did not start the round with the bomb equipped");
 
-    auto* ctUser = server::ClientStorage::getClientById(20);
+    auto ctUser = server::ClientStorage::getClientById(20);
     ctUser->getObject3D().setPosition(Vector3f{355.0f, -48.0f, -2364.0f});
     check(room->onPlayerAction(20, 16), "CT could not buy a defuse kit at spawn");
     nx3d::economy::Snapshot kitState;
@@ -123,7 +123,7 @@ int main()
           "Defuse kit purchase did not debit money or grant equipment");
     ctUser->getObject3D().setPosition(Vector3f{0.0f, 0.0f, 0.0f});
     check(!room->onPlayerAction(20, 12), "Purchase outside spawn was accepted");
-    auto* tUser = server::ClientStorage::getClientById(10);
+    auto tUser = server::ClientStorage::getClientById(10);
     tUser->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
     check(!room->onPlayerAction(10, 16), "Terrorist bought a defuse kit");
     check(room->onPlayerAction(10, 20), "Terrorist could not buy smoke");
@@ -243,7 +243,7 @@ int main()
     ctUser->getObject3D().setPosition(bombGroundPos);
     check(!room->onGameItemPickup(20, bombItemId),
           "Counter Terrorist picked up the bomb");
-    auto* secondTerrorist = server::ClientStorage::getClientById(30);
+    auto secondTerrorist = server::ClientStorage::getClientById(30);
     secondTerrorist->getObject3D().setPosition(bombGroundPos);
     check(room->onGameItemPickup(30, bombItemId),
           "Terrorist could not pick up the dropped bomb");
@@ -331,7 +331,7 @@ int main()
           "Half-time score was not carried to new sides");
     check(room->canSelectTeam(10), "Active player could not switch team");
 
-    auto* secondT = server::ClientStorage::getClientById(20);
+    auto secondT = server::ClientStorage::getClientById(20);
     secondT->getObject3D().setPosition(Vector3f{-1600.0f, 64.0f, -2700.0f});
     check(room->onPlayerAction(20, 1), "Second-half plant at B rejected");
     GameModeRegistry::update(3.1f);

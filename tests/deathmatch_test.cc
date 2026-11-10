@@ -87,7 +87,7 @@ int main()
                     10, id == 778 ? std::string(nx3d::kShipmentRoomName) : "test", id)));
             Registry::assignRoom(*server::RoomStorage::getRoomById(id), nx3d::GameMode::deathmatch);
         }
-        auto* room = server::RoomStorage::getRoomById(777);
+        auto room = server::RoomStorage::getRoomById(777);
         room->joinRoom(10);
         room->joinRoom(20);
         server::ServerConfig settings;
@@ -114,7 +114,7 @@ int main()
                 "Non-finite movement was accepted before team selection");
         room->setPlayerTeam(10, "Terrorist");
         room->setPlayerTeam(20, "Counter Terrorist");
-        auto* shopper = server::ClientStorage::getClientById(10);
+        auto shopper = server::ClientStorage::getClientById(10);
         shopper->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
         require(room->onPlayerAction(10, 12), "Terrorist could not buy Desert Eagle at spawn");
         nx3d::economy::Snapshot purchase;
@@ -215,9 +215,9 @@ int main()
                 "Server allowed the same weapon to be picked up twice");
 
         room->spawnPlayer(10);
-        shopper->getObject3D().setPosition(Vector3f{pickupPosition.x,
+        shopper->getObject3D().setPosition(Vector3f(pickupPosition.x,
                                                     pickupPosition.y + 100.0f,
-                                                    pickupPosition.z});
+                                                    pickupPosition.z));
         const float airborneY = shopper->getObject3D().getPosition().y;
         Registry::update(0.05f);
         require(shopper->getObject3D().getPosition().y < airborneY,
@@ -281,7 +281,7 @@ int main()
 
         for (uint64_t kill = 1; kill <= 100; ++kill)
         {
-            auto* target = server::ClientStorage::getClientById(20);
+            auto target = server::ClientStorage::getClientById(20);
             shopper->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
             target->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
             for (int shot = 0; shot < 3; ++shot)
@@ -322,7 +322,7 @@ int main()
             }
         }
 
-        auto* fallingPlayer = server::ClientStorage::getClientById(20);
+        auto fallingPlayer = server::ClientStorage::getClientById(20);
         fallingPlayer->getObject3D().setPosition(Vector3f{0.0f, nx3d::kFallDeathY + 1.0f, 0.0f});
         Registry::update(1.0f / 60.0f);
         require(room->getPlayerDeaths(20) == 100, "Player died above the fall plane");
