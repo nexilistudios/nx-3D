@@ -3,6 +3,7 @@
 #include <server/gamemode/authority.hh>
 #include <server/gamemode/bomb_mode.hh>
 #include <server/gamemode/deathmatch_mode.hh>
+#include <server/gamemode/gungame_mode.hh>
 #include <shared/ammunition.hh>
 #include <shared/brush_map.hh>
 #include <shared/economy.hh>
@@ -41,6 +42,8 @@ std::unique_ptr<GameMode> createGameMode(nx3d::GameMode gameMode, bool shipment)
             return std::make_unique<DeathmatchMode>(shipment);
         case nx3d::GameMode::bomb:
             return std::make_unique<BombMode>();
+        case nx3d::GameMode::gungame:
+            return std::make_unique<GunGameMode>(shipment);
 
         // Not implemented yet. Fall back to deathmatch so a room requesting
         // one of these still runs (with automatic respawns) until the mode is
@@ -114,9 +117,12 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
                                                         uint8_t slot, uint8_t action)
                         {
         auto r = nexilis::server::RoomStorage::getRoomById(roomId);
-        return r ? authorityPtr->fire(*r, id, direction, slot, action,
-                                      modePtr->weaponForSlot(id, slot))
-                 : std::optional<nexilis::server::Room::ShotHit>{}; });
+        if (!r)
+            return std::optional<nexilis::server::Room::ShotHit>{};
+        const auto weapon = modePtr->weaponForSlot(id, slot);
+        return authorityPtr->fire(*r, id, direction, slot, action, weapon,
+                                  [modePtr, id, weapon]()
+                                  { modePtr->onAcceptedShot(id, weapon); }); });
 
     room.setDeathHandler([modePtr](nexilis::server::Room& r, uint64_t killerId, uint64_t victimId)
                          { modePtr->onPlayerDeath(r, killerId, victimId); });

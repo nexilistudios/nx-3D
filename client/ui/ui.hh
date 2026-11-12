@@ -3,6 +3,7 @@
 
 #include <spear/spear_vulkan.hh>
 #include <shared/economy.hh>
+#include <shared/gungame.hh>
 
 #include <cstdint>
 #include <array>
@@ -107,6 +108,7 @@ public:
     /// Show the Tab leaderboard with the given entries. Terrorists are shown
     /// on the left, Counter Terrorists on the right.
     void showLeaderboard(const std::vector<LeaderboardEntry>& entries);
+    void showGunGameResults(const nx3d::gungame::Result& result);
     /// Hide the Tab leaderboard.
     void hideLeaderboard();
     /// Whether the Tab leaderboard is currently shown.

@@ -5,6 +5,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -36,7 +37,7 @@ public:
     std::optional<nexilis::server::Room::ShotHit> fire(
             nexilis::server::Room& room, uint64_t shooterId,
             const nexilis::Vector3f& direction, uint8_t slot, uint8_t action,
-            const std::string& weapon);
+            const std::string& weapon, const std::function<void()>& onAcceptedShot = {});
     void reconcile(const nexilis::server::Room& room);
 
 private:

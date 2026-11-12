@@ -1,7 +1,7 @@
 """Generate the original nx-3D gameplay sound effects.
 
 Run from any directory: python3 assets/sounds/generate.py
-Writes utility clips and six distinct weapon shots next to this script.
+Writes utility clips and seven distinct weapon shots next to this script.
 """
 
 from __future__ import annotations
@@ -215,5 +215,6 @@ if __name__ == "__main__":
         "deagle": (405, 0.43, 82.0, 1.25, 1.45, 1.35, 0.42, 0.070),
         # The MP5 has the shortest, tightest report for rapid fire.
         "mp5": (406, 0.17, 175.0, 0.78, 0.42, 0.38, 0.30, 0.033),
+        "launcher": (407, 0.55, 70.0, 1.35, 1.65, 1.35, 0.30, 0.090),
     }.items():
         save(f"{name}.wav", gunshot(*settings))

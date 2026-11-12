@@ -530,7 +530,9 @@ void DeathmatchMode::onEconomySnapshot(ClientApp& app, const nx3d::economy::Snap
         equipSlot(app, nx3d::findNXObject("bomb")->slot);
     else if (state.effect == "weapon" && hasWeaponProfile(state.weapon))
     {
-        const int slot = nx3d::economy::isSecondary(state.weapon) ? 2 : 1;
+        // Gun Game can issue a pistol as the primary weapon. Equip the slot
+        // assigned by the server instead of inferring it from the weapon type.
+        const int slot = state.primary == state.weapon ? 1 : 2;
         GunSlot& purchased = slot == 1 ? m_primary : m_secondary;
         purchased.type = state.weapon;
         purchased.ammo = -1;

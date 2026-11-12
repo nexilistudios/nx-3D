@@ -102,6 +102,7 @@ void DeathmatchMode::update(nexilis::server::Room& room, float dt)
         room.resetPlayerHealth(victimId);
         room.spawnPlayer(victimId);
         m_economy.respawned(room, victimId);
+        afterRespawn(room, victimId);
         nexilis::nx_data respawnData{
                 static_cast<uint8_t>(nexilis::CommandType::room),
                 static_cast<uint8_t>(nexilis::RoomCommandType::Root::player_3D),

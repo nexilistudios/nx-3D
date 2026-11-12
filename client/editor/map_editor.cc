@@ -1,5 +1,6 @@
 #include <client/app/client_app.hh>
 #include <client/editor/map_editor.hh>
+#include <client/chat/chat_text.hh>
 #include <client/project_root.hh>
 #include <shared/player_rules.hh>
 #include <glm/gtc/quaternion.hpp>
@@ -760,10 +761,11 @@ void MapEditor::refresh()
     labels[35] = notice;
     for (std::size_t i = 0; i < labels.size(); ++i)
     {
-        if (i != 35 && labels[i].size() > 31)
-            labels[i] = labels[i].substr(0, 28) + "...";
-        if (i == 35 && labels[i].size() > 85)
-            labels[i] = labels[i].substr(0, 82) + "...";
+        labels[i] = chat::sanitize(labels[i]);
+        if (i != 35 && chat::characterCount(labels[i]) > 31)
+            labels[i] = chat::truncate(labels[i], 28) + "...";
+        if (i == 35 && chat::characterCount(labels[i]) > 85)
+            labels[i] = chat::truncate(labels[i], 82) + "...";
         if (texts[i]->getString() != labels[i])
             texts[i]->setString(labels[i]);
     }
@@ -802,8 +804,11 @@ void MapEditor::refreshBrowser()
         labels[16] = "Esc: close  |  wheel: browse";
     }
     for (std::size_t i = 0; i < labels.size(); ++i)
-        if (browserTexts[i]->getString() != labels[i])
-            browserTexts[i]->setString(labels[i]);
+    {
+        const auto label = chat::sanitize(labels[i]);
+        if (browserTexts[i]->getString() != label)
+            browserTexts[i]->setString(label);
+    }
 }
 void MapEditor::renderHud()
 {

@@ -16,12 +16,13 @@ void require(bool ok, const char* message)
 int main()
 {
     using namespace nx3d::economy;
-    require(kItems.size() == 11, "Buy catalog changed unexpectedly");
+    require(kItems.size() == 12, "Buy catalog changed unexpectedly");
     require(defaultWeapon("Terrorist") == "glock" &&
                     defaultWeapon("Counter Terrorist") == "usp",
             "Starter pistols do not match teams");
     require(isSecondary("glock") && isSecondary("usp") && isSecondary("deagle") &&
-                    !isSecondary("mp5") && !isSecondary("ak47"),
+                    !isSecondary("mp5") && !isSecondary("ak47") &&
+                    !isSecondary("launcher"),
             "Weapon slot classification is wrong");
     require(itemForAction(19)->kind == ItemKind::grenade &&
                     itemForAction(20)->kind == ItemKind::grenade &&

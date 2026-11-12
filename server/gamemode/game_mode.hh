@@ -38,6 +38,9 @@ public:
     {
         return true;
     }
+    virtual void onAcceptedShot(uint64_t, const std::string&)
+    {
+    }
     virtual bool canSelectTeam(uint64_t) const
     {
         return true;

@@ -32,10 +32,13 @@ public:
     }
     void update(nexilis::server::Room& room, float dt) override;
 
+protected:
+    virtual void afterRespawn(nexilis::server::Room&, uint64_t) {}
+    Economy m_economy;
+
 private:
     std::mutex m_respawnMutex;
     std::unordered_map<uint64_t, float> m_respawnTimers;
-    Economy m_economy;
 };
 
 } // namespace nx3d::server::gamemode

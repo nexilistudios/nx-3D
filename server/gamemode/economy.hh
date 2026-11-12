@@ -206,6 +206,23 @@ public:
         return {};
     }
 
+    void issueGunGameWeapon(nexilis::server::Room& room, uint64_t id,
+                            std::string_view weapon)
+    {
+        nx3d::economy::Snapshot state;
+        {
+            std::lock_guard lock(m_mutex);
+            auto& wallet = m_wallets[id];
+            wallet.primary = weapon == "knife" ? "" : std::string(weapon);
+            wallet.secondary.clear();
+            wallet.weapon = std::string(weapon);
+            wallet.objects = {};
+            state = wallet;
+            state.effect = "weapon";
+        }
+        send(room, id, state);
+    }
+
     bool pickupWeapon(nexilis::server::Room& room, uint64_t id, uint8_t slot,
                       const std::string& weapon)
     {

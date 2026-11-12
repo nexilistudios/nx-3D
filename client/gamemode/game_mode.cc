@@ -88,7 +88,8 @@ void GameMode::updateRemoteAudioEvents(ClientApp& app)
 
         glm::vec3 pos(evt.x, evt.y, evt.z);
         if (evt.sound == audio::kSoundShoot ||
-            (evt.sound >= audio::kSoundAk47 && evt.sound <= audio::kSoundMp5))
+            (evt.sound >= audio::kSoundAk47 && evt.sound <= audio::kSoundMp5) ||
+            evt.sound == audio::kSoundLauncher)
         {
             if (auto* sound = app.gunshotSound(evt.sound))
                 sound->playAt(pos);

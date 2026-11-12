@@ -11,10 +11,11 @@ namespace nx3d::server::gun
 
 GunManager::GunManager()
 {
-    constexpr std::array<std::pair<std::string_view, GunType>, 6> guns{{
+    constexpr std::array<std::pair<std::string_view, GunType>, 7> guns{{
         {"ak47", GunType::AK47}, {"m16", GunType::M16},
         {"glock", GunType::Glock}, {"usp", GunType::USP},
         {"deagle", GunType::Deagle}, {"mp5", GunType::MP5},
+        {"launcher", GunType::Launcher},
     }};
     for (const auto& [id, type] : guns)
     {

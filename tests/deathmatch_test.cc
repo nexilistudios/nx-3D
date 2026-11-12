@@ -1,7 +1,9 @@
 #include <server/gamemode/game_mode_registry.hh>
+#include <server/gamemode/gungame_mode.hh>
 #include <shared/brush_map.hh>
 #include <shared/economy.hh>
 #include <shared/fall_death.hh>
+#include <shared/gungame.hh>
 #include <shared/player_rules.hh>
 
 #include <nexilis/client/packet.hh>
@@ -346,6 +348,97 @@ int main()
         require(nx3d::economy::decode(shooter.getChatSnapshot(777).back().message, balance) &&
                         balance.money == nx3d::economy::kMaximumMoney,
                 "Kill rewards did not respect the money cap");
+
+        nx3d::server::gamemode::GunGameMode gunGame;
+        gunGame.onTeamSelected(*room, 10);
+        gunGame.onTeamSelected(*room, 20);
+        server::ClientStorage::getClientById(10)->setUsername("Mägi 🚀");
+        require(gunGame.weaponForSlot(10, 1) == "glock" &&
+                        gunGame.weaponForSlot(10, 2).empty() &&
+                        gunGame.weaponForSlot(10, 3).empty(),
+                "Gun Game did not issue its first weapon");
+        require(!gunGame.onAction(*room, 10, 10) &&
+                        !gunGame.pickupWeapon(*room, 10, 1, "ak47"),
+                "Gun Game allowed purchases or pickups to skip progression");
+        for (int kill = 1; kill <= nx3d::gungame::kKillsToWin; ++kill)
+        {
+            if (kill == nx3d::gungame::kKillsToWin)
+            {
+                gunGame.onAcceptedShot(10, "launcher");
+                gunGame.onPlayerDeath(*room, 10, 20);
+                require(gunGame.canDamage(10, 20),
+                        "Launcher splash won Gun Game without a knife kill");
+            }
+            gunGame.onAcceptedShot(10, std::string(nx3d::gungame::weaponForKills(kill - 1)));
+            gunGame.onPlayerDeath(*room, 10, 20);
+            if (kill == 1)
+            {
+                gunGame.update(*room, 2.1f);
+                require(gunGame.weaponForSlot(20, 1) == "glock",
+                        "Gun Game victim lost their stage on respawn");
+            }
+            const auto stageSlot = nx3d::gungame::weaponForKills(kill) == "knife" ? 3 : 1;
+            require(gunGame.weaponForSlot(10, stageSlot) ==
+                            nx3d::gungame::weaponForKills(kill),
+                    "Gun Game weapon did not advance after a kill");
+        }
+        require(!gunGame.canDamage(10, 20),
+                "Gun Game continued after the knife kill");
+        std::vector<nx3d::gungame::Standing> tiedStandings{
+                {40, 2, "fourth"}, {30, 4, "third"},
+                {10, 4, "first"}, {20, 1, "second"}};
+        nx3d::gungame::rankStandings(tiedStandings);
+        require(tiedStandings[0].id == 10 && tiedStandings[1].id == 30 &&
+                        tiedStandings[2].id == 40 && tiedStandings[3].id == 20,
+                "Gun Game results were not ranked by kills with stable ties");
+        nx3d::gungame::Result finalResult;
+        require(nx3d::gungame::decodeResult(shooter.getChatSnapshot(777).back().message,
+                                            finalResult) &&
+                        finalResult.winner == 10 && finalResult.standings.size() == 2 &&
+                        finalResult.standings[0].id == 10 &&
+                        finalResult.standings[0].username == "Mägi 🚀" &&
+                        finalResult.standings[0].kills == nx3d::gungame::kKillsToWin &&
+                        finalResult.standings[1].id == 20,
+                "Gun Game did not publish the ranked final result");
+
+        // Exercise a real Gun Game shot through the room command. The starter
+        // Glock occupies primary slot 1 even though it is normally a sidearm.
+        Registry::assignRoom(*room, nx3d::GameMode::gungame);
+        room->setPlayerTeam(10, "Terrorist");
+        room->setPlayerTeam(20, "Counter Terrorist");
+        room->resetPlayerHealth(20);
+        shopper->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
+        fallingPlayer->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
+        const auto gunGameKills = room->getPlayerKills(10);
+        require(sendAsShooter(client::Packet::Room::Player3D::fire(
+                        shooter, Vector3f{0.0f, 0.0f, -1.0f}, 1)) ==
+                        server::CommandResult::success &&
+                        room->getPlayerHealth(20) < 100.0f,
+                "Gun Game starter weapon did not damage an opponent");
+        for (int kill = 1; kill <= 2; ++kill)
+        {
+            for (int shot = 0; shot < 5 && room->getPlayerHealth(20) > 0.0f; ++shot)
+                require(sendAsShooter(client::Packet::Room::Player3D::fire(
+                                shooter, Vector3f{0.0f, 0.0f, -1.0f}, 1)) ==
+                                server::CommandResult::success,
+                        "Gun Game kill shot was rejected");
+            require(room->getPlayerHealth(20) == 0.0f,
+                    "Gun Game starter weapon could not kill an opponent");
+            require(room->getPlayerKills(10) == gunGameKills + kill,
+                    "Gun Game kill did not reach the leaderboard");
+            if (kill == 1)
+            {
+                Registry::update(2.1f);
+                require(room->getPlayerHealth(20) == 100.0f,
+                        "Gun Game victim did not respawn");
+                fallingPlayer->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
+            }
+        }
+        nx3d::economy::Snapshot gunGameStage;
+        require(nx3d::economy::decode(shooter.getChatSnapshot(777).back().message,
+                                      gunGameStage) && gunGameStage.primary == "ak47" &&
+                        gunGameStage.secondary.empty(),
+                "Gun Game kills did not advance the shooter after each kill");
         Registry::clear();
         server::RoomStorage::clear();
         server::ClientStorage::clear();

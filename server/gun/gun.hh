@@ -15,7 +15,8 @@ enum class GunType : uint8_t
     Glock,
     USP,
     Deagle,
-    MP5
+    MP5,
+    Launcher
 };
 
 struct GunDef

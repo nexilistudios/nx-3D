@@ -7,6 +7,7 @@
 #include <client/editor/map_editor.hh>
 #include <client/gamemode/bomb_mode.hh>
 #include <client/gamemode/deathmatch_mode.hh>
+#include <client/gamemode/gungame_mode.hh>
 #include <client/gamemode/weapon_profiles.hh>
 #include <client/gun/weapon_motion.hh>
 #include <client/project_root.hh>
@@ -82,7 +83,7 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
       movement_controller(camera, shared_world.get(), nx3d::kStandingEyeHeight),
       renderer(window),
       serverAddress(initialServerAddress),
-      username(initialUsername.empty() ? "username_" + std::to_string(nexilis::Util::getRandomInt(1000000, 9999999)) : initialUsername),
+      username(initialUsername.empty() ? "username_" + std::to_string(nexilis::Util::getRandomInt(1000000, 9999999)) : chat::limitBytes(initialUsername, 64)),
       client_api(nexilis::client::createClientConfig(serverAddress, "password")),
       tcp_client(client_api),
       udp_client(client_api)
@@ -128,8 +129,8 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
 
     // --- Audio ---
     audio_system.init();
-    constexpr std::array<const char*, 6> shots = {
-            "ak47", "m16", "glock", "usp", "deagle", "mp5"};
+    constexpr std::array<const char*, 7> shots = {
+            "ak47", "m16", "glock", "usp", "deagle", "mp5", "launcher"};
     for (std::size_t i = 0; i < shots.size(); ++i)
     {
         gunshot_audio[i] = std::make_unique<spear::audio::Sound>(
@@ -426,7 +427,7 @@ void ClientApp::showLobbyRooms()
     roomMenu->clearItems();
     roomMenu->setPosition(glm::vec2(-0.8f, 0.3f));
     for (const auto& room : rooms)
-        roomMenu->addItem(roomDisplayName(room.getName()));
+        roomMenu->addItem(chat::sanitize(roomDisplayName(room.getName())));
     roomMenu->addItem("New Room");
     ui->statusText.setString(rooms.empty() ? "No rooms available" : "Select a room");
     ui->instructionsText.setString("Arrow keys: Navigate   |   Enter: Select   |   ESC: Quit");
@@ -439,7 +440,8 @@ void ClientApp::showCreateRoom()
     roomMenu->setPosition(glm::vec2(-0.8f, -0.2f));
     roomMenu->addItem("Name: " + (newRoomName.empty() ? "[type a name]" : newRoomName));
     roomMenu->addItem(std::string("Game mode: ") +
-                      (newRoomMode == nx3d::GameMode::bomb ? "Bomb" : "Deathmatch"));
+                      (newRoomMode == nx3d::GameMode::bomb ? "Bomb" :
+                       newRoomMode == nx3d::GameMode::gungame ? "Gun Game" : "Deathmatch"));
     roomMenu->addItem(std::string("Map: ") + (newRoomShipment ? "Shipment" : "Dust2"));
     roomMenu->addItem("Max players: " + std::to_string(newRoomMaxPlayers));
     roomMenu->addItem("Create Room");
@@ -482,6 +484,8 @@ std::unique_ptr<gamemode::GameMode> ClientApp::makeGameMode(nx3d::GameMode gameM
         return std::make_unique<gamemode::DeathmatchMode>();
     if (gameMode == nx3d::GameMode::bomb)
         return std::make_unique<gamemode::BombMode>();
+    if (gameMode == nx3d::GameMode::gungame)
+        return std::make_unique<gamemode::GunGameMode>();
 
     // Any gamemode without a client implementation yet falls back to
     // deathmatch so the room stays playable.
@@ -554,6 +558,7 @@ void ClientApp::playVoiceCue(audio::VoiceCue cue)
 spear::audio::Sound* ClientApp::gunshotSound(uint8_t sound)
 {
     if (sound == audio::kSoundShoot) sound = audio::kSoundAk47;
+    if (sound == audio::kSoundLauncher) return gunshot_audio.back().get();
     if (sound < audio::kSoundAk47 || sound > audio::kSoundMp5) return nullptr;
     return gunshot_audio[sound - audio::kSoundAk47].get();
 }
@@ -956,6 +961,13 @@ void ClientApp::updateChatMessages()
         {
             const auto& message = messages[chatMessagesConsumed];
             const auto* sender = message.getClient();
+            if (!sender && std::string_view(message.getPayload()).starts_with(nx3d::gungame::kResultPrefix))
+            {
+                nx3d::gungame::Result result;
+                if (game_mode && nx3d::gungame::decodeResult(message.getPayload(), result))
+                    game_mode->onGunGameResult(*this, result);
+                continue;
+            }
             if (!sender && std::string_view(message.getPayload()).starts_with(nx3d::economy::kGrenadeMessagePrefix))
             {
                 nx3d::economy::GrenadeThrow event;
@@ -1254,12 +1266,12 @@ void ClientApp::run()
                         if (activeTextInputField == 0 && !serverAddressInput.empty())
                         {
                             serverInputCleared = true;
-                            serverAddressInput.pop_back();
+                            chat::popBack(serverAddressInput);
                         }
                         else if (activeTextInputField == 1 && !usernameInput.empty())
                         {
                             usernameInputCleared = true;
-                            usernameInput.pop_back();
+                            chat::popBack(usernameInput);
                         }
                     }
                     else if (event.key.key == SDLK_RETURN)
@@ -1281,7 +1293,7 @@ void ClientApp::run()
                             serverAddressInput.clear();
                             serverInputCleared = true;
                         }
-                        serverAddressInput += event.text.text;
+                        chat::appendWithinByteLimit(serverAddressInput, event.text.text, 255);
                     }
                     else
                     {
@@ -1290,7 +1302,7 @@ void ClientApp::run()
                             usernameInput.clear();
                             usernameInputCleared = true;
                         }
-                        usernameInput += event.text.text;
+                        chat::appendWithinByteLimit(usernameInput, event.text.text, 64);
                     }
                 }
             }
@@ -1355,8 +1367,10 @@ void ClientApp::run()
                             if (row == 0 && event.key.key == SDLK_RETURN)
                                 roomMenu->selectNext();
                             else if (row == 1)
-                                newRoomMode = newRoomMode == nx3d::GameMode::bomb ?
-                                        nx3d::GameMode::deathmatch : nx3d::GameMode::bomb;
+                                newRoomMode = newRoomMode == nx3d::GameMode::deathmatch ?
+                                        nx3d::GameMode::bomb :
+                                              newRoomMode == nx3d::GameMode::bomb ?
+                                        nx3d::GameMode::gungame : nx3d::GameMode::deathmatch;
                             else if (row == 2)
                                 newRoomShipment = !newRoomShipment;
                             else if (row == 3)
@@ -1374,7 +1388,8 @@ void ClientApp::run()
                                     knownRoomIds.insert(room.getId());
                                 const std::string name =
                                         std::string(newRoomShipment ? "Shipment " : "Dust2 ") +
-                                        (newRoomMode == nx3d::GameMode::bomb ? "Bomb" : "DM") +
+                                        (newRoomMode == nx3d::GameMode::bomb ? "Bomb" :
+                                         newRoomMode == nx3d::GameMode::gungame ? "GunGame" : "DM") +
                                         " | " + newRoomName;
                                 tcp_client.sendMessage(packet::Room::Management::create(
                                         client_api, name, nexilis::RoomData::Context::_3D,
@@ -1420,11 +1435,10 @@ void ClientApp::run()
                 if (event.type == SDL_EVENT_TEXT_INPUT && currentState == State::CreateRoom &&
                     roomMenu && roomMenu->getSelectedIndex() == 0)
                 {
-                    const std::string incoming = event.text.text;
-                    if (newRoomName.size() + incoming.size() <= 32 &&
-                        incoming.find_first_of("\r\n|") == std::string::npos)
+                    const std::string incoming = chat::sanitize(event.text.text);
+                    if (incoming.find_first_of("\r\n|") == std::string::npos)
                     {
-                        newRoomName += incoming;
+                        chat::appendWithinByteLimit(newRoomName, incoming, 32);
                         showCreateRoom();
                     }
                 }

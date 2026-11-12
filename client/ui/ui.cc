@@ -1,4 +1,5 @@
 #include <client/ui/ui.hh>
+#include <client/chat/chat_text.hh>
 
 #include <SDL3/SDL.h>
 
@@ -607,8 +608,9 @@ void Ui::updatePlayerNameplates(const std::vector<PlayerNameplate>& players)
             plate.text->setColor(player.enemy ? SDL_Color{255, 70, 70, 255}
                                               : SDL_Color{255, 255, 255, 255});
         }
-        if (plate.text->getString() != player.username)
-            plate.text->setString(player.username);
+        const auto name = chat::sanitize(player.username);
+        if (plate.text->getString() != name)
+            plate.text->setString(name);
 
         const glm::vec2 size = plate.text->getSize();
         const glm::vec2 position(player.anchor.x - size.x * 0.5f,
@@ -631,11 +633,8 @@ void Ui::renderPlayerNameplates(spear::ui::RenderContext ctx)
 void Ui::setRowText(spear::ui::vulkan::Text& text, const LeaderboardEntry& entry)
 {
     // Pad the name to a fixed width for column alignment.
-    auto name = entry.username;
-    if (name.size() > 18)
-        name = name.substr(0, 18);
-    else
-        name.append(18 - name.size(), ' ');
+    auto name = chat::truncate(entry.username, 18);
+    name.append(18 - chat::characterCount(name), ' ');
 
     std::string content = name + std::to_string(entry.kills) + "   " + std::to_string(entry.deaths);
     // Only rebuild the texture if the content actually changed, otherwise
@@ -707,8 +706,9 @@ void Ui::setTeamRoster(const std::vector<LeaderboardEntry>& entries)
             const float y = startY - (i % 15) * 0.05f;
             text.setPosition(glm::vec2(x, y));
             text.setColor(color);
-            if (text.getString() != players[i].username)
-                text.setString(players[i].username);
+            const auto name = chat::sanitize(players[i].username);
+            if (text.getString() != name)
+                text.setString(name);
         }
     };
     addSide(ct, -0.78f, -0.08f,
@@ -1153,6 +1153,38 @@ void Ui::showLeaderboard(const std::vector<LeaderboardEntry>& entries)
             leaderboardCTRows[i]->setString("");
     }
 
+    m_leaderboardVisible = true;
+}
+
+void Ui::showGunGameResults(const nx3d::gungame::Result& result)
+{
+    auto setIfChanged = [](spear::ui::vulkan::Text& text, const std::string& value)
+    {
+        if (text.getString() != value)
+            text.setString(value);
+    };
+    setIfChanged(leaderboardTitle, "GUN GAME RESULTS");
+    setIfChanged(leaderboardTHeader, "RANK  PLAYER  KILLS");
+    setIfChanged(leaderboardCTHeader, "RANK  PLAYER  KILLS");
+    for (int row = 0; row < kLeaderboardMaxRows; ++row)
+    {
+        for (int column = 0; column < 2; ++column)
+        {
+            const std::size_t index = static_cast<std::size_t>(column * kLeaderboardMaxRows + row);
+            std::string content;
+            if (index < result.standings.size())
+            {
+                const auto& standing = result.standings[index];
+                content = std::to_string(index + 1) + ". " +
+                          chat::truncate(standing.username, 16) + "  " +
+                          std::to_string(standing.kills);
+                if (standing.id == result.winner)
+                    content += " WINNER";
+            }
+            setIfChanged(column == 0 ? *leaderboardTRows[row] : *leaderboardCTRows[row],
+                         content);
+        }
+    }
     m_leaderboardVisible = true;
 }
 

@@ -63,7 +63,7 @@ struct NXObject
     NXObjectEffect effect;
 };
 
-inline constexpr std::array<NXObject, 13> kNXObjects{{
+inline constexpr std::array<NXObject, 14> kNXObjects{{
     {"ak47", "AK-47", NXObjectKind::firearm, 1, 14, 2700, "Terrorist",
      {"weapons/ak47.obj", "weapons/ak47.mtl", "weapons/ak47.obj", "weapons/ak47.mtl", 7.4f, .50f, {0,-.05f,.20f}, {.68f,-.58f,2.25f}, {-10,33,-12}, {1,4.4f,11.7f}},
      {600,30,3,2.5f,35,true}},
@@ -82,6 +82,9 @@ inline constexpr std::array<NXObject, 13> kNXObjects{{
     {"mp5", "MP5", NXObjectKind::firearm, 1, 13, 1500, "",
      {"weapons/mp5.obj", "weapons/mp5.mtl", "weapons/mp5.obj", "weapons/mp5.mtl", 7.8f, .56f, {0,-.08f,.20f}, {.68f,-.59f,2.22f}, {-10,33,-12}, {1,3.8f,10}},
      {800,30,3,2.4f,26,true}},
+    {"launcher", "Grenade Launcher", NXObjectKind::firearm, 1, 21, 3200, "",
+     {"weapons/launcher.obj", "weapons/launcher.mtl", "weapons/launcher.obj", "weapons/launcher.mtl", 7.5f, .52f, {0,-.08f,.18f}, {.68f,-.59f,2.25f}, {-10,33,-12}, {1.5f,4.0f,10}},
+     {75,1,5,2.8f,0,false}, {1,0,0,190,90}},
     {"knife", "Knife", NXObjectKind::melee, 3, 0, 0, "",
      {"weapons/knife.obj", "weapons/knife.mtl", "weapons/knife.obj", "weapons/knife.mtl", 8, .85f, {0,0,0}, {.7f,-.7f,1.8f}, {0,0,0}, {1,2,6}},
      {100,0,0,0,35,false}},

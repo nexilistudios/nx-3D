@@ -3,6 +3,7 @@
 
 #include <shared/gamemode.hh>
 #include <shared/economy.hh>
+#include <shared/gungame.hh>
 
 #include <SDL3/SDL_events.h>
 
@@ -50,6 +51,9 @@ public:
     {
     }
     virtual void onGrenadeThrown(ClientApp&, const nx3d::economy::GrenadeThrow&)
+    {
+    }
+    virtual void onGunGameResult(ClientApp&, const nx3d::gungame::Result&)
     {
     }
 

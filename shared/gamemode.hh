@@ -23,6 +23,9 @@ enum class GameMode
     /// MR12 bomb rounds with a per-room player queue.
     bomb,
 
+    /// Weapons advance after kills; the final stage wins the match.
+    gungame,
+
     /// No automatic respawns; players stay dead until something revives them.
     nospawn,
 
@@ -42,6 +45,8 @@ inline const char* gameModeToString(GameMode mode)
             return "deathmatch";
         case GameMode::bomb:
             return "bomb";
+        case GameMode::gungame:
+            return "gungame";
         case GameMode::nospawn:
             return "nospawn";
         case GameMode::hardpoint:
@@ -71,6 +76,8 @@ inline GameMode gameModeFromName(const std::string& roomName)
     if (displaySeparator != std::string::npos)
         lower.resize(displaySeparator);
 
+    if (lower.find("gungame") != std::string::npos)
+        return GameMode::gungame;
     if (lower.find("bomb") != std::string::npos)
         return GameMode::bomb;
     if (lower.find("nospawn") != std::string::npos)

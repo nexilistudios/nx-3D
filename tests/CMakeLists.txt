@@ -12,6 +12,7 @@ enable_testing()
 add_executable(deathmatch_test deathmatch_test.cc
     ../server/gamemode/authority.cc
     ../server/gamemode/deathmatch_mode.cc
+    ../server/gamemode/gungame_mode.cc
     ../server/gamemode/bomb_mode.cc
     ../server/gamemode/game_mode_registry.cc)
 target_include_directories(deathmatch_test PRIVATE ..)
@@ -20,10 +21,15 @@ target_include_directories(deathmatch_test PRIVATE ${BULLET_INCLUDE_DIRS})
 target_link_libraries(deathmatch_test PRIVATE Nexilis::nexilis Boost::json ${BULLET_LIBRARIES} glm::glm)
 add_test(NAME deathmatch COMMAND deathmatch_test)
 
+add_executable(chat_text_test chat_text_test.cc)
+target_include_directories(chat_text_test PRIVATE ..)
+add_test(NAME chat_text COMMAND chat_text_test)
+
 add_executable(bomb_mode_test bomb_mode_test.cc
     ../server/gamemode/authority.cc
     ../server/gamemode/bomb_mode.cc
     ../server/gamemode/deathmatch_mode.cc
+    ../server/gamemode/gungame_mode.cc
     ../server/gamemode/game_mode_registry.cc)
 target_include_directories(bomb_mode_test PRIVATE ..)
 target_compile_definitions(bomb_mode_test PRIVATE PROJECT_ROOT="${CMAKE_SOURCE_DIR}")

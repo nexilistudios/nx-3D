@@ -50,6 +50,7 @@ inline constexpr uint8_t kSoundUsp = 7;
 inline constexpr uint8_t kSoundDeagle = 8;
 inline constexpr uint8_t kSoundMp5 = 9;
 inline constexpr uint8_t kSoundDefusing = 10;
+inline constexpr uint8_t kSoundLauncher = 11;
 inline constexpr uint8_t shotSoundForWeapon(const std::string_view type)
 {
     if (type == "m16") return kSoundM16;
@@ -57,6 +58,7 @@ inline constexpr uint8_t shotSoundForWeapon(const std::string_view type)
     if (type == "usp") return kSoundUsp;
     if (type == "deagle") return kSoundDeagle;
     if (type == "mp5") return kSoundMp5;
+    if (type == "launcher") return kSoundLauncher;
     return kSoundAk47;
 }
 } // namespace audio
@@ -119,7 +121,7 @@ public:
     VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
     VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
     spear::audio::AudioSystem audio_system;
-    std::array<std::unique_ptr<spear::audio::Sound>, 6> gunshot_audio;
+    std::array<std::unique_ptr<spear::audio::Sound>, 7> gunshot_audio;
     spear::audio::Sound* gunshotSound(uint8_t sound);
     std::unique_ptr<spear::audio::Sound> hitmarker_audio;
     std::unique_ptr<spear::audio::Sound> reload_audio;

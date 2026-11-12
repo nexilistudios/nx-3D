@@ -1,0 +1,24 @@
+# Original material palette with 1-pixel diffuse swatches
+newmtl launcher_body
+Ka 0.072 0.090 0.081
+Kd 0.160 0.200 0.180
+map_Kd launcher_body.png
+Ks 0.18 0.18 0.18
+Ns 32
+illum 2
+
+newmtl launcher_dark
+Ka 0.020 0.025 0.023
+Kd 0.045 0.055 0.050
+map_Kd launcher_dark.png
+Ks 0.18 0.18 0.18
+Ns 32
+illum 2
+
+newmtl launcher_metal
+Ka 0.140 0.153 0.144
+Kd 0.310 0.340 0.320
+map_Kd launcher_metal.png
+Ks 0.18 0.18 0.18
+Ns 32
+illum 2

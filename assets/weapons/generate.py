@@ -31,6 +31,9 @@ MATERIALS = {
     "mp5_body": (0.12, 0.13, 0.14),
     "mp5_metal": (0.26, 0.27, 0.28),
     "mp5_detail": (0.045, 0.05, 0.055),
+    "launcher_body": (0.16, 0.20, 0.18),
+    "launcher_metal": (0.31, 0.34, 0.32),
+    "launcher_dark": (0.045, 0.055, 0.050),
 }
 
 
@@ -237,6 +240,26 @@ def mp5():
     return gun
 
 
+def launcher():
+    gun = Mesh()
+    gun.box(-.13, .13, -.14, .15, -.48, .47, "launcher_body")
+    gun.box(-.10, .10, -.12, .10, -.98, -.45, "launcher_metal")
+    gun.box(-.18, .18, -.33, -.12, -1.02, -.85, "launcher_body")
+    gun.silhouette([(-.38, -.12), (-.55, -.14), (-.70, -.64),
+                    (-.49, -.68), (-.30, -.27)], .09, "launcher_dark")
+    gun.part = "magazine"
+    gun.box(-.13, .13, -.47, -.13, .12, .38, "launcher_metal")
+    gun.box(-.14, .14, -.48, -.43, .11, .39, "launcher_dark")
+    gun.part = "body"
+    gun.cylinder_z(.42, 1.65, .15, .02, "launcher_metal", 16)
+    gun.cylinder_z(1.63, 1.77, .18, .02, "launcher_dark", 16)
+    gun.cylinder_z(1.75, 1.79, .105, .02, "launcher_body", 16)
+    gun.box(-.19, .19, -.16, -.11, .58, 1.32, "launcher_body")
+    gun.box(-.06, .06, .17, .25, -.24, .20, "launcher_dark")
+    gun.box(-.022, .022, .24, .35, 1.43, 1.48, "launcher_metal")
+    return gun
+
+
 def main():
     output = Path(__file__).resolve().parent
     ak47().write("ak47", output)
@@ -244,6 +267,7 @@ def main():
     for name in ("glock", "usp", "deagle"):
         pistol(name).write(name, output)
     mp5().write("mp5", output)
+    launcher().write("launcher", output)
 
 
 if __name__ == "__main__":

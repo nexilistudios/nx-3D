@@ -48,8 +48,8 @@ constexpr ItemKind itemKind(const NXObject& object)
 
 inline constexpr auto kItems = []
 {
-    std::array<Item, 11> items{};
-    for (uint8_t action = 10; action <= 20; ++action)
+    std::array<Item, 12> items{};
+    for (uint8_t action = 10; action <= 21; ++action)
     {
         const auto* object = findNXObjectForPurchase(action);
         items[action - 10] = {action, object->name.data(),

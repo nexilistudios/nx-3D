@@ -117,6 +117,14 @@ public:
         return hit.hasHit() && hit.m_closestHitFraction < 1.0f;
     }
 
+    glm::vec3 rayEnd(const glm::vec3& from, const glm::vec3& to)
+    {
+        std::lock_guard lock(m_mutex);
+        btCollisionWorld::ClosestRayResultCallback hit(asBullet(from), asBullet(to));
+        m_world.rayTest(asBullet(from), asBullet(to), hit);
+        return hit.hasHit() ? from + (to - from) * hit.m_closestHitFraction : to;
+    }
+
     void advance(glm::vec3& position, const glm::vec3& direction, bool jump,
                  bool crouchRequested, bool silentWalk, bool& crouched,
                  bool& jumpHeld, bool& grounded, float& verticalVelocity, float dt)
@@ -577,7 +585,7 @@ void Authority::refill(uint64_t playerId)
 std::optional<nexilis::server::Room::ShotHit> Authority::fire(
         nexilis::server::Room& room, uint64_t shooterId,
         const nexilis::Vector3f& direction, uint8_t slot, uint8_t action,
-        const std::string& weapon)
+        const std::string& weapon, const std::function<void()>& onAcceptedShot)
 {
     auto shooter = nexilis::server::ClientStorage::getClientById(shooterId);
     if (!shooter || shooter->getRoomId() != room.getId() ||
@@ -646,12 +654,16 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
             publishAnimation(room, *shooter, "reloading", rule->reloadSeconds, weapon);
         return std::nullopt;
     }
+    if (onAcceptedShot)
+        onAcceptedShot();
     publishAnimation(room, *shooter, "shooting", 0.16f, weapon);
 
     const glm::vec3 origin = asGlm(shooter->getObject3D().getPosition());
     const glm::vec3 aim = glm::normalize(asGlm(direction));
     const auto shooterTeam = room.getPlayerTeam(shooterId);
-    float closest = rule->range;
+    const bool launcher = weapon == "launcher";
+    const float range = launcher ? 1200.0f : rule->range;
+    float closest = range;
     uint64_t targetId = 0;
     for (auto id : room.getClients())
     {
@@ -677,6 +689,39 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
             closest = distance;
             targetId = id;
         }
+    }
+    if (launcher)
+    {
+        const glm::vec3 impact = mapPhysics(m_shipment).rayEnd(origin, origin + aim * closest);
+        const auto* object = nx3d::findNXObject("launcher");
+        for (auto id : room.getClients())
+        {
+            if (id == shooterId || room.getPlayerHealth(id) <= 0.0f ||
+                room.getPlayerTeam(id) == shooterTeam || !room.canDamage(shooterId, id))
+                continue;
+            auto victim = nexilis::server::ClientStorage::getClientById(id);
+            if (!victim)
+                continue;
+            const float distance = glm::distance(asGlm(victim->getObject3D().getPosition()), impact);
+            if (distance >= object->effect.radius)
+                continue;
+            const float damage = object->effect.maxDamage *
+                                 (1.0f - distance / object->effect.radius);
+            const bool killed = room.damagePlayer(id, damage);
+            nexilis::nx_data damageData{
+                    static_cast<uint8_t>(nexilis::CommandType::room),
+                    static_cast<uint8_t>(nexilis::RoomCommandType::Root::player_3D),
+                    static_cast<uint8_t>(nexilis::RoomCommandType::PlayerType::shoot)};
+            nexilis::server::Command::ClientMsgType params{
+                    {"target_id", boost::json::value(id)},
+                    {"damage", boost::json::value(static_cast<double>(damage))},
+                    {"new_health", boost::json::value(static_cast<double>(room.getPlayerHealth(id)))} };
+            room.broadcastToAll(nexilis::server::Command::createRoomCommand(
+                    room.getId(), *shooter, damageData, params, 0));
+            if (killed)
+                room.onPlayerDied(shooterId, id);
+        }
+        return std::nullopt;
     }
     if (!targetId || mapPhysics(m_shipment).blocks(origin, origin + aim * closest))
         return std::nullopt;
