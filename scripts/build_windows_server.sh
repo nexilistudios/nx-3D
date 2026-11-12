@@ -83,11 +83,42 @@ cmake -S "$work_dir/bullet-src" -B "$work_dir/bullet-build" \
 cmake --build "$work_dir/bullet-build" --parallel "$jobs"
 cmake --install "$work_dir/bullet-build"
 
+# glm is header-only. Fetch it and install headers plus a CMake config package
+# so find_package(glm) resolves the glm::glm INTERFACE target for MinGW.
+glm_tag="${GLM_TAG:-0.9.9.8}"
+glm_prefix="${GLM_PREFIX:-$work_dir/glm-prefix}"
+if [[ -z "${GLM_PREFIX:-}" ]]; then
+    git clone --quiet --depth 1 --branch "$glm_tag" \
+        https://github.com/g-truc/glm.git "$work_dir/glm-src"
+    mkdir -p "$glm_prefix/include/glm" "$glm_prefix/lib/cmake/glm"
+    cp -a "$work_dir/glm-src/glm/." "$glm_prefix/include/glm/"
+    cat > "$glm_prefix/lib/cmake/glm/glmConfig.cmake" <<'EOF'
+# glm is header-only; expose its headers through the glm::glm INTERFACE target.
+get_filename_component(_glm_root "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+set(_glm_include_dir "${_glm_root}/include")
+
+if(NOT TARGET glm::glm)
+    add_library(glm::glm INTERFACE IMPORTED)
+    set_target_properties(glm::glm PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${_glm_include_dir}")
+endif()
+
+set(glm_FOUND TRUE)
+set(glm_INCLUDE_DIRS "${_glm_include_dir}" CACHE INTERNAL "glm include directory")
+EOF
+    cat > "$glm_prefix/lib/cmake/glm/glmConfigVersion.cmake" <<'EOF'
+set(PACKAGE_VERSION "0.9.9.8")
+set(PACKAGE_VERSION_COMPATIBLE TRUE)
+set(PACKAGE_VERSION_EXACT TRUE)
+EOF
+fi
+
 CI=1 cmake -S "$repo_root" -B "$work_dir/build" \
     -DCMAKE_TOOLCHAIN_FILE="$work_dir/toolchain.cmake" \
     -DCMAKE_BUILD_TYPE=Release \
     -DNX3D_BUILD_CLIENT=OFF -DBUILD_TESTING=OFF \
     -DCMAKE_MODULE_PATH="$work_dir/cmake" \
+    -Dglm_DIR="$glm_prefix/lib/cmake/glm" \
     -DOPENSSL_ROOT_DIR="$openssl_prefix" \
     -DOPENSSL_USE_STATIC_LIBS=TRUE \
     -DBULLET_INCLUDE_DIR="$bullet_prefix/include/bullet" \
