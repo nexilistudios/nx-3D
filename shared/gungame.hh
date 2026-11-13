@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cstdint>
 #include <exception>
 #include <optional>
@@ -18,6 +19,7 @@ namespace nx3d::gungame
 inline constexpr std::array<std::string_view, 6> kWeapons{
         "glock", "mp5", "ak47", "m16", "launcher", "knife"};
 inline constexpr int kKillsToWin = static_cast<int>(kWeapons.size());
+inline constexpr int kRestartSeconds = 15;
 inline constexpr std::string_view weaponForKills(int kills)
 {
     return kWeapons[static_cast<std::size_t>(std::clamp(kills, 0, kKillsToWin - 1))];
@@ -47,6 +49,26 @@ inline void rankStandings(std::vector<Standing>& standings)
 }
 
 inline constexpr std::string_view kResultPrefix = "\x1eNX3D_GUNGAME_RESULT ";
+inline constexpr std::string_view kCountdownPrefix = "\x1eNX3D_GUNGAME_COUNTDOWN ";
+
+inline std::string encodeCountdown(int seconds)
+{
+    return std::string(kCountdownPrefix) + std::to_string(seconds);
+}
+
+inline bool decodeCountdown(std::string_view message, int& seconds)
+{
+    if (!message.starts_with(kCountdownPrefix))
+        return false;
+    const auto value = message.substr(kCountdownPrefix.size());
+    int parsed = -1;
+    const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), parsed);
+    if (error != std::errc{} || end != value.data() + value.size() ||
+        parsed < 0 || parsed > kRestartSeconds)
+        return false;
+    seconds = parsed;
+    return true;
+}
 
 inline std::string encodeResult(const Result& result)
 {

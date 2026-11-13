@@ -968,6 +968,13 @@ void ClientApp::updateChatMessages()
                     game_mode->onGunGameResult(*this, result);
                 continue;
             }
+            if (!sender && std::string_view(message.getPayload()).starts_with(nx3d::gungame::kCountdownPrefix))
+            {
+                int seconds = 0;
+                if (game_mode && nx3d::gungame::decodeCountdown(message.getPayload(), seconds))
+                    game_mode->onGunGameCountdown(*this, seconds);
+                continue;
+            }
             if (!sender && std::string_view(message.getPayload()).starts_with(nx3d::economy::kGrenadeMessagePrefix))
             {
                 nx3d::economy::GrenadeThrow event;

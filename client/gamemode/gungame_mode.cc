@@ -7,13 +7,36 @@ namespace nx3d::client::gamemode
 void GunGameMode::onGunGameResult(ClientApp& app, const nx3d::gungame::Result& result)
 {
     m_result = result;
+    if (m_restartSeconds < 0)
+        m_restartSeconds = nx3d::gungame::kRestartSeconds;
     m_triggerHeld = false;
     app.ui->showGunGameResults(result);
+}
+
+void GunGameMode::onGunGameCountdown(ClientApp& app, int seconds)
+{
+    if (seconds > 0)
+    {
+        m_restartSeconds = seconds;
+        m_triggerHeld = false;
+        return;
+    }
+    m_restartSeconds = -1;
+    m_result.reset();
+    m_stageWeapon.clear();
+    app.ui->roundText.setString("");
+    app.ui->hideLeaderboard();
 }
 
 void GunGameMode::update(ClientApp& app, float dt)
 {
     DeathmatchMode::update(app, dt);
+    if (m_restartSeconds > 0)
+    {
+        const auto timer = "NEXT GAME IN " + std::to_string(m_restartSeconds) + "s";
+        if (app.ui->roundText.getString() != timer)
+            app.ui->roundText.setString(timer);
+    }
     if (m_result)
     {
         if (app.ui->moneyText.getString() != "GUN GAME FINISHED")

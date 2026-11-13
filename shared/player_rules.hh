@@ -23,9 +23,9 @@ inline constexpr float kMaxHorizontalPosition = 5000.0f;
 inline constexpr float kMinPlayerHeight = -512.0f;
 inline constexpr float kMaxPlayerHeight = 1024.0f;
 
-// The M16 fires at 800 RPM (13.33 shots/s); both current rifles deal 35 damage.
+// The M16 fires at 800 RPM (13.33 shots/s); the knife is a one-hit kill.
 inline constexpr float kMaxShootingRate = 16.0f;
-inline constexpr float kMaxDamagePerShot = 35.0f;
+inline constexpr float kMaxDamagePerShot = 100.0f;
 } // namespace nx3d
 
 #endif

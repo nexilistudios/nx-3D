@@ -547,7 +547,7 @@ void BombMode::update(nexilis::server::Room& room, float dt)
             if (m_tScore >= 13 || m_ctScore >= 13 || m_round >= 24)
             {
                 m_phase = Phase::finished;
-                m_seconds = 10.0f;
+                m_seconds = 15.0f;
                 m_notice = m_tScore == m_ctScore ? "Match drawn" : "Match finished";
             }
             else
@@ -562,6 +562,16 @@ void BombMode::update(nexilis::server::Room& room, float dt)
         {
             m_round = m_tScore = m_ctScore = 0;
             m_phase = Phase::waiting;
+            room.resetPlayerStats();
+            const auto players = room.getClients();
+            if (!players.empty())
+            {
+                auto sender = nexilis::server::ClientStorage::getClientById(players.front());
+                if (sender)
+                    room.broadcastToAll(nexilis::server::Command::createRoomLeaderboardCommand(
+                            room.getId(), *sender,
+                            nexilis::server::Command::playerStatsEntries(room, players), 0));
+            }
             m_economy.resetMatch(room, m_players);
             startRound(room);
         }

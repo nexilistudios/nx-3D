@@ -87,7 +87,7 @@ inline constexpr std::array<NXObject, 14> kNXObjects{{
      {75,1,5,2.8f,0,false}, {1,0,0,190,90}},
     {"knife", "Knife", NXObjectKind::melee, 3, 0, 0, "",
      {"weapons/knife.obj", "weapons/knife.mtl", "weapons/knife.obj", "weapons/knife.mtl", 8, .85f, {0,0,0}, {.7f,-.7f,1.8f}, {0,0,0}, {1,2,6}},
-     {100,0,0,0,35,false}},
+     {100,0,0,0,100,false}},
     {"grenade", "HE grenade", NXObjectKind::throwable, 4, 19, 300, "",
      {"weapons/grenade.obj", "weapons/grenade.mtl", "weapons/grenade.obj", "weapons/grenade.mtl", 8, .75f, {0,0,0}, {.7f,-.7f,1.8f}, {0,0,0}, {2,2,2}}, {}, {2,2,0,170,90}},
     {"smoke", "Smoke grenade", NXObjectKind::throwable, 5, 20, 300, "",

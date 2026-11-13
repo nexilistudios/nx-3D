@@ -56,6 +56,9 @@ public:
     virtual void onGunGameResult(ClientApp&, const nx3d::gungame::Result&)
     {
     }
+    virtual void onGunGameCountdown(ClientApp&, int)
+    {
+    }
 
     virtual void onAuthoritativeAnimation(ClientApp&, const std::string&,
                                           const std::string&, float)

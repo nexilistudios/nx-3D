@@ -20,6 +20,7 @@ public:
     }
     void onTeamSelected(nexilis::server::Room& room, uint64_t id) override;
     void onPlayerDeath(nexilis::server::Room& room, uint64_t killer, uint64_t victim) override;
+    void update(nexilis::server::Room& room, float dt) override;
     void onAcceptedShot(uint64_t id, const std::string& weapon) override;
     std::string weaponForSlot(uint64_t id, uint8_t slot) const override;
     bool onAction(nexilis::server::Room&, uint64_t, uint8_t) override
@@ -45,6 +46,9 @@ private:
     std::unordered_map<uint64_t, int> m_kills;
     std::unordered_map<uint64_t, std::string> m_lastShotWeapon;
     bool m_finished = false;
+    bool m_restarting = false;
+    float m_restartSeconds = 0.0f;
+    int m_announcedSeconds = 0;
 };
 } // namespace nx3d::server::gamemode
 

@@ -22,12 +22,12 @@ public:
     }
     bool canMove() const override
     {
-        return !m_result && DeathmatchMode::canMove();
+        return !m_result && m_restartSeconds < 0 && DeathmatchMode::canMove();
     }
 
     void handleKeyDown(ClientApp& app, const SDL_Event& event) override
     {
-        if (m_result || event.key.key == SDLK_G || event.key.key == SDLK_F)
+        if (m_result || m_restartSeconds >= 0 || event.key.key == SDLK_G || event.key.key == SDLK_F)
             return;
         if (event.key.key >= SDLK_1 && event.key.key <= SDLK_3 &&
             event.key.key != (m_stageWeapon == "knife" ? SDLK_3 : SDLK_1))
@@ -36,12 +36,12 @@ public:
     }
     void handleKeyUp(ClientApp& app, const SDL_Event& event) override
     {
-        if (!m_result)
+        if (!m_result && m_restartSeconds < 0)
             DeathmatchMode::handleKeyUp(app, event);
     }
     void handleMouseButtonDown(ClientApp& app, const SDL_Event& event) override
     {
-        if (!m_result)
+        if (!m_result && m_restartSeconds < 0)
             DeathmatchMode::handleMouseButtonDown(app, event);
     }
 
@@ -53,6 +53,7 @@ public:
     }
 
     void onGunGameResult(ClientApp& app, const nx3d::gungame::Result& result) override;
+    void onGunGameCountdown(ClientApp& app, int seconds) override;
 
     void update(ClientApp& app, float dt) override;
 
@@ -65,6 +66,7 @@ protected:
 private:
     std::string m_stageWeapon;
     std::optional<nx3d::gungame::Result> m_result;
+    int m_restartSeconds = -1;
 };
 } // namespace nx3d::client::gamemode
 

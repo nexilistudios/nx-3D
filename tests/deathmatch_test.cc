@@ -96,6 +96,7 @@ int main()
         // This fixture fires hundreds of shots back-to-back to exercise
         // death/respawn; production keeps its separate fire-rate limit.
         settings.getGameplayLimits().setMaxShootingRate(0.0f);
+        settings.getGameplayLimits().setMaxDamagePerShot(nx3d::kMaxDamagePerShot);
         server::Command command(settings);
         TestProtocol protocol;
         auto sendAsShooter = [&](const nx_data& packet)
@@ -286,13 +287,10 @@ int main()
             auto target = server::ClientStorage::getClientById(20);
             shopper->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
             target->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
-            for (int shot = 0; shot < 3; ++shot)
-            {
-                require(sendAsShooter(client::Packet::Room::Player3D::fire(
-                                shooter, Vector3f{0.0f, 0.0f, -1.0f}, 3)) ==
-                                server::CommandResult::success,
-                        "Shot rejected");
-            }
+            require(sendAsShooter(client::Packet::Room::Player3D::fire(
+                            shooter, Vector3f{0.0f, 0.0f, -1.0f}, 3)) ==
+                            server::CommandResult::success,
+                    "Knife hit rejected");
             if (kill == 1)
             {
                 animationEvents = victim.consumeAnimationEvents();
@@ -302,7 +300,7 @@ int main()
                                              event.weapon == "knife"; }),
                         "Server did not broadcast the shooting animation");
             }
-            require(room->getPlayerHealth(20) == 0.0f, "Victim did not stay dead");
+            require(room->getPlayerHealth(20) == 0.0f, "Knife did not kill in one hit");
             require(victim.consumeRespawnEvents().empty(), "Victim respawned too early");
             Registry::update(1.9f);
             require(room->getPlayerHealth(20) == 0.0f, "Respawn delay was too short");
@@ -313,7 +311,8 @@ int main()
             for (auto* api : {&shooter, &victim})
             {
                 auto damage = api->consumeDamageEvents();
-                require(damage.size() == 3 && damage.back().new_health == 0.0f, "Damage events incorrect");
+                require(damage.size() == 1 && damage.front().new_health == 0.0f,
+                        "Knife damage event incorrect");
                 auto respawns = api->consumeRespawnEvents();
                 require(respawns.size() == 1 && respawns.front().target_id == 20, "Respawn event incorrect");
                 auto boards = api->consumeLeaderboardEvents();
@@ -400,6 +399,22 @@ int main()
                         finalResult.standings[0].kills == nx3d::gungame::kKillsToWin &&
                         finalResult.standings[1].id == 20,
                 "Gun Game did not publish the ranked final result");
+        gunGame.update(*room, 14.0f);
+        int countdown = 0;
+        require(!gunGame.canDamage(10, 20) &&
+                        nx3d::gungame::decodeCountdown(shooter.getChatSnapshot(777).back().message,
+                                                       countdown) && countdown == 1 &&
+                        nx3d::gungame::decodeCountdown(victim.getChatSnapshot(777).back().message,
+                                                       countdown) && countdown == 1,
+                "Gun Game countdown was not sent to every player");
+        gunGame.update(*room, 1.0f);
+        require(gunGame.canDamage(10, 20) &&
+                        gunGame.weaponForSlot(10, 1) == "glock" &&
+                        gunGame.weaponForSlot(20, 1) == "glock" &&
+                        room->getPlayerKills(10) == 0 &&
+                        room->getPlayerDeaths(20) == 0 &&
+                        room->getPlayerHealth(20) == 100.0f,
+                "Gun Game did not start a fresh match after 15 seconds");
 
         // Exercise a real Gun Game shot through the room command. The starter
         // Glock occupies primary slot 1 even though it is normally a sidearm.

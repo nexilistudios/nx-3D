@@ -357,6 +357,35 @@ int main()
     check(bomb(postHit).terrorist_score == 2 && room->getPlayerHealth(10) == 0.0f,
           "Post-round death changed the round result");
 
+    // Finish the match, then verify that every client sees the 15-second
+    // intermission and the room starts a fresh match with cleared stats.
+    for (int nextRound = 14; nextRound <= 15; ++nextRound)
+    {
+        GameModeRegistry::update(4.1f);
+        for (auto id : {20u, 30u})
+        {
+            check(room->damagePlayer(id, 100.0f), "Terrorist did not revive for final rounds");
+            room->onPlayerDied(10, id);
+        }
+    }
+    GameModeRegistry::update(4.1f);
+    for (auto* api : {&t, &ct, &queued})
+    {
+        auto events = api->consumeMatchEvents();
+        check(bomb(events).phase == "finished" && bomb(events).seconds == 15.0f,
+              "Finished-match countdown was not sent to every client");
+    }
+    GameModeRegistry::update(14.0f);
+    check(bomb(t.consumeMatchEvents()).seconds == 1.0f,
+          "Finished-match countdown ended before 15 seconds");
+    GameModeRegistry::update(1.0f);
+    auto newMatch = t.consumeMatchEvents();
+    check(bomb(newMatch).phase == "live" && bomb(newMatch).round == 1 &&
+                  bomb(newMatch).terrorist_score == 0 &&
+                  bomb(newMatch).counter_terrorist_score == 0 &&
+                  room->getPlayerKills(10) == 0 && room->getPlayerDeaths(20) == 0,
+          "Bomb room did not start a fresh match after 15 seconds");
+
     GameModeRegistry::clear();
     server::RoomStorage::clear();
     server::ClientStorage::clear();

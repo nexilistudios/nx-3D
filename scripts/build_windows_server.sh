@@ -94,7 +94,7 @@ if [[ -z "${GLM_PREFIX:-}" ]]; then
     cp -a "$work_dir/glm-src/glm/." "$glm_prefix/include/glm/"
     cat > "$glm_prefix/lib/cmake/glm/glmConfig.cmake" <<'EOF'
 # glm is header-only; expose its headers through the glm::glm INTERFACE target.
-get_filename_component(_glm_root "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+get_filename_component(_glm_root "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(_glm_include_dir "${_glm_root}/include")
 
 if(NOT TARGET glm::glm)
