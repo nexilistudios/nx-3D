@@ -3,4 +3,4 @@
 	url = https://github.com/NeuronActivation/spear.git
 [submodule "nexilis"]
 	path = nexilis
-	url = https://github.com/Nexilislib/nexilis.git
+	url = https://github.com/nexilistudios/nexilis.git

@@ -75,7 +75,7 @@ jobs:
         run: echo "sha=$(git rev-parse HEAD:nexilis)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
-          repository: Nexilislib/nexilis
+          repository: nexilistudios/nexilis
           ref: ${{ steps.nexilis.outputs.sha }}
           path: nexilis
           persist-credentials: false
@@ -117,7 +117,7 @@ jobs:
           echo "spear=$(git rev-parse HEAD:spear)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
-          repository: Nexilislib/nexilis
+          repository: nexilistudios/nexilis
           ref: ${{ steps.submodules.outputs.nexilis }}
           path: nexilis
           persist-credentials: false
@@ -182,7 +182,7 @@ jobs:
         run: echo "sha=$(git rev-parse HEAD:nexilis)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
-          repository: Nexilislib/nexilis
+          repository: nexilistudios/nexilis
           ref: ${{ steps.nexilis.outputs.sha }}
           path: nexilis
           persist-credentials: false
@@ -222,7 +222,7 @@ jobs:
           echo "spear=$(git rev-parse HEAD:spear)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
-          repository: Nexilislib/nexilis
+          repository: nexilistudios/nexilis
           ref: ${{ steps.submodules.outputs.nexilis }}
           path: nexilis
           persist-credentials: false
