@@ -11,3 +11,5 @@ dist
 # Map editor recovery and staged writes
 *.brush.bak
 *.brush.saving
+
+nxcsserver.tar
