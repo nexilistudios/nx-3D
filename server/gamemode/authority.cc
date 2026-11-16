@@ -730,7 +730,8 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
 
 void Authority::reconcile(const nexilis::server::Room& room)
 {
-    const std::unordered_set<uint64_t> present(room.getClients().begin(), room.getClients().end());
+    const auto clients = room.getClients();
+    const std::unordered_set<uint64_t> present(clients.begin(), clients.end());
     std::lock_guard lock(m_mutex);
     std::erase_if(m_players, [&](const auto& entry)
                   { return !present.contains(entry.first); });
