@@ -131,7 +131,9 @@ int main(int argc, char* argv[])
 
     nexilis::ProtocolManager protocolManager;
 
-    // Boost TCP server
+    // Boost TCP authenticates the password-protected session with a pinned TLS
+    // certificate. The local Nexilis patch allows gameplay UDP alongside it;
+    // datagrams carry the per-session token MAC.
     auto boostTCPServer =
             protocolManager.createProtocol<nxboost::TCPServer>(server_config);
     boostTCPServer.start();

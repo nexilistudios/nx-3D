@@ -77,7 +77,13 @@ nexilis::client::ClientConfig clientConfig(const std::string& address, const std
     if (nx3d::isValidPublicKeyPin(pin))
         config.setServerPublicKeySha256(pin);
     else
+    {
+        // The map tools never connect. Nexilis requires TLS for a
+        // password-protected client even before start(), so let the unused
+        // local protocol use skip mode instead of failing construction.
+        config.setMode(nexilis::server::AuthenticationMode::skip);
         config.setTls(false);
+    }
     return config;
 }
 }
@@ -1148,6 +1154,8 @@ void ClientApp::run()
             showLobbyRooms();
             menuPopulated = true;
             currentState = State::Lobby;
+            // The token arrives in the client_id reply over TLS TCP; UDP can
+            // now be attached with the local Nexilis patch in place.
             udp_client.start();
         }
 

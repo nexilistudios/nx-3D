@@ -48,13 +48,13 @@ Run the server first, then the client in another terminal:
 ./build/client/nx_3D_client
 ```
 
-The default network ports remain TCP 54200 for authentication, TCP 54202 for the game session, and UDP 54201 for gameplay. To run a server on different ports, pass all three values:
+The server uses TCP 54200 for authentication, UDP 54201 for gameplay, and TCP 54202 for the game session. The password-protected session is established over pinned TLS Boost TCP, while gameplay UDP datagrams are authenticated with the per-session token MAC. To run a server on different ports, pass all three values:
 
 ```sh
 ./build/server/nx-3D-server \
   --tcp-port 55200 \
-  --tcp-session-port 55202 \
-  --udp-port 55201
+  --udp-port 55201 \
+  --tcp-session-port 55202
 ```
 
 Clients connecting to that server need its authentication TCP and UDP ports. The session TCP port does not need a client argument because the server sends it to the client during authentication:
@@ -71,7 +71,7 @@ Each port option is optional. An omitted option keeps its default value, so the 
 
 ### Transport TLS and server identity
 
-Boost TCP in Nexilis uses certificate-based TLS. On first start the server generates a self-signed identity in `tls/server.crt` and `tls/server.key` relative to its working directory, writes the matching public-key pin to `tls/server.pin`, and prints that pin at startup. Later starts reuse the files, so the pin stays the same. The client looks for `tls/server.pin` in its working directory, in the checkout/data root, and in directories relative to its executable, so separate `server/build` and `client/build` directories work without extra arguments. Keep the private key on the server; never ship it to clients.
+Boost TCP in Nexilis uses certificate-based TLS. Password-protected mode requires it on both sides, so a valid server pin is mandatory for every connection. On first start the server generates a self-signed identity in `tls/server.crt` and `tls/server.key` relative to its working directory, writes the matching public-key pin to `tls/server.pin`, and prints that pin at startup. Later starts reuse the files, so the pin stays the same. The client looks for `tls/server.pin` in its working directory, in the checkout/data root, and in directories relative to its executable, so separate `server/build` and `client/build` directories work without extra arguments. Keep the private key on the server; never ship it to clients.
 
 For a remote server, pass its pin to the client through a trusted channel, either as `-tls-pin <64 hex digits>` (or `--tls-pin`) or in `NX3D_TLS_PIN`. The pin is the SHA-256 of the certificate's DER public key, and the server prints it on every start:
 
@@ -101,14 +101,14 @@ The flake packages both programs. `nix run` starts the client and `.#server` the
 
 ```sh
 nix run github:nexilistudios/nx-3D -- -server 127.0.0.1 -username player
-nix run github:nexilistudios/nx-3D#server -- --tcp-port 55200 --tcp-session-port 55202 --udp-port 55201
+nix run github:nexilistudios/nx-3D#server -- --tcp-port 55200 --udp-port 55201 --tcp-session-port 55202
 ```
 
-From a checkout, use `nix run` and `nix run .#server`. The packages build Nexilis and Spear in-tree like the CMake build above, but against the nixpkgs Boost, and install the assets under `share/nx-3D`. The client needs a Vulkan driver the Nix-built loader can find, such as NixOS with `hardware.graphics.enable`. `nix flake check` builds both packages, runs the game tests, and boots a NixOS VM with the server module.
+From a checkout, use `nix run` and `nix run .#server`. The packages build Nexilis and Spear in-tree like the CMake build above and install the assets under `share/nx-3D`. The client needs a Vulkan driver the Nix-built loader can find, such as NixOS with `hardware.graphics.enable`. `nix flake check` builds both packages, runs the game tests, and boots a NixOS VM with the server module.
 
 GitHub source archives omit submodules, so the flake fetches Nexilis and Spear itself at the commits in its `inputs`. Keep them equal to the submodule commits: after bumping a submodule, put the same revision in the `nexilis` or `spear` URL in `flake.nix` and run `nix flake lock`. The **Nix** workflow fails when they differ. Uncommitted changes in the submodule checkouts do not reach the Nix packages; build those with CMake in `nix develop`.
 
-On NixOS, import the module to run the server as a service. It accepts `tcpPort`, `tcpSessionPort`, `udpPort`, and the TLS paths `tlsCertificateFile`, `tlsPrivateKeyFile`, and `tlsPinFile`; `openFirewall` opens all three ports. The identity is generated in the service's state directory (`/var/lib/nx3dServer/tls/`) and its pin is printed to the journal. `programs.nx3dClient.enable = true;` installs the client.
+On NixOS, import the module to run the server as a service. It accepts `tcpPort`, `udpPort`, `tcpSessionPort`, and the TLS paths `tlsCertificateFile`, `tlsPrivateKeyFile`, and `tlsPinFile`; `openFirewall` opens both TCP ports and the gameplay UDP port. The identity is generated in the service's state directory (`/var/lib/nx3dServer/tls/`) and its pin is printed to the journal. `programs.nx3dClient.enable = true;` installs the client.
 
 ```nix
 # Host flake inputs: nx-3D.url = "github:nexilistudios/nx-3D";
