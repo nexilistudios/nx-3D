@@ -35,6 +35,22 @@ in
     udpPort = portOption 54201 "UDP port for gameplay traffic.";
     tcpSessionPort = portOption 54202 "TCP port for sessions.";
 
+    tlsCertificateFile = lib.mkOption {
+      type = lib.types.str;
+      default = "/var/lib/nx3dServer/tls/server.crt";
+      description = "PEM certificate for the server's Boost TCP TLS identity.";
+    };
+    tlsPrivateKeyFile = lib.mkOption {
+      type = lib.types.str;
+      default = "/var/lib/nx3dServer/tls/server.key";
+      description = "Private key for the server's Boost TCP TLS identity.";
+    };
+    tlsPinFile = lib.mkOption {
+      type = lib.types.str;
+      default = "/var/lib/nx3dServer/tls/server.pin";
+      description = "File where the server writes its public-key pin for local clients.";
+    };
+
     openFirewall = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -70,7 +86,17 @@ in
             server.udpPort
             "--tcp-session-port"
             server.tcpSessionPort
+            "--tls-cert"
+            server.tlsCertificateFile
+            "--tls-key"
+            server.tlsPrivateKeyFile
+            "--tls-pin-file"
+            server.tlsPinFile
           ];
+          # The server generates its TLS identity on first start; keep it
+          # writable across restarts despite ProtectSystem=strict.
+          StateDirectory = "nx3dServer";
+          WorkingDirectory = "/var/lib/nx3dServer";
           DynamicUser = true;
           Restart = "on-failure";
           RestartSec = 3;

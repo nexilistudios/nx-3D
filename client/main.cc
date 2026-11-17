@@ -4,8 +4,10 @@
 #include <nexilis/ports.hh>
 
 #include <shared/network_ports.hh>
+#include <shared/network_tls.hh>
 
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -21,6 +23,17 @@ int main(int argc, char* argv[])
     catch (const std::invalid_argument& error)
     {
         std::cerr << "Invalid network port: " << error.what() << std::endl;
+        return 1;
+    }
+
+    nx3d::TlsOptions tlsOptions;
+    try
+    {
+        tlsOptions = nx3d::parseTlsOptions(argc, argv);
+    }
+    catch (const std::invalid_argument& error)
+    {
+        std::cerr << "Invalid TLS option: " << error.what() << std::endl;
         return 1;
     }
 
@@ -45,8 +58,37 @@ int main(int argc, char* argv[])
             }
             mapPath = argv[i];
         }
+    // Nexilis pins the server's public key for Boost TCP TLS. Use the command
+    // line or NX3D_TLS_PIN for a remote server; a local server writes its pin
+    // to tls/server.pin on first start.
+    std::string tlsPin = tlsOptions.pin;
+    if (tlsPin.empty())
+    {
+        const char* environmentPin = std::getenv("NX3D_TLS_PIN");
+        if (environmentPin)
+            tlsPin = environmentPin;
+    }
+    if (tlsPin.empty())
+        tlsPin = nx3d::findServerPin(tlsOptions, argv[0]);
+    if (!nx3d::isValidPublicKeyPin(tlsPin))
+    {
+        if (previewMap || editMap)
+            tlsPin.clear();
+        else
+        {
+            std::cerr << "A valid server public-key pin is required for Boost TCP TLS.\n"
+                      << "Start the server once to create tls/server.pin, or pass "
+                         "-tls-pin <64 hex digits>.\n"
+                      << "Searched:";
+            for (const auto& path : nx3d::pinSearchPaths(tlsOptions, argv[0]))
+                std::cerr << " " << path;
+            std::cerr << std::endl;
+            return 1;
+        }
+    }
+
     nx3d::client::ClientApp app(serverAddress, username, argc > 1 && !previewMap && !editMap,
-                                previewMap, editMap, mapPath);
+                                previewMap, editMap, mapPath, tlsPin);
     app.run();
 
     return 0;

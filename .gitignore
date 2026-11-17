@@ -13,3 +13,6 @@ dist
 *.brush.saving
 
 nxcsserver.tar
+
+# Locally generated server TLS identity
+/tls/

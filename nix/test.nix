@@ -18,6 +18,8 @@ self: {
     machine.wait_for_open_port(55200)
     machine.wait_until_succeeds("ss -Hlun 'sport = :55201' | grep -q .")
     machine.succeed("journalctl -u nx3dServer.service --grep 'game server is running'")
+    machine.wait_until_succeeds("test -s /var/lib/nx3dServer/tls/server.pin")
+    machine.succeed("journalctl -u nx3dServer.service --grep 'Server public key pin'")
 
     machine.systemctl("stop nx3dServer.service")
     machine.succeed("systemctl show -P Result nx3dServer.service | grep -qx success")

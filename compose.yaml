@@ -5,3 +5,8 @@ services:
     stdin_open: true
     tty: true
     restart: unless-stopped
+    volumes:
+      - nx3d-tls:/app/tls
+
+volumes:
+  nx3d-tls:

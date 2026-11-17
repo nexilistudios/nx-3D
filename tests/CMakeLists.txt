@@ -68,6 +68,15 @@ add_executable(network_ports_test network_ports_test.cc)
 target_include_directories(network_ports_test PRIVATE ..)
 add_test(NAME network_ports COMMAND network_ports_test)
 
+add_executable(network_tls_test network_tls_test.cc)
+target_include_directories(network_tls_test PRIVATE ..)
+add_test(NAME network_tls COMMAND network_tls_test)
+
+add_executable(tls_identity_test tls_identity_test.cc ../server/tls_identity.cc)
+target_include_directories(tls_identity_test PRIVATE ..)
+target_link_libraries(tls_identity_test PRIVATE Nexilis::nexilis)
+add_test(NAME tls_identity COMMAND tls_identity_test)
+
 add_executable(brush_map_test brush_map_test.cc)
 target_include_directories(brush_map_test PRIVATE ..)
 target_link_libraries(brush_map_test PRIVATE glm::glm)

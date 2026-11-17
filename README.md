@@ -69,6 +69,21 @@ Clients connecting to that server need its authentication TCP and UDP ports. The
 
 Each port option is optional. An omitted option keeps its default value, so the existing commands continue to work unchanged. Ports must be numbers from 1 through 65535. The single-dash forms (`-tcp-port`, `-tcp-session-port`, and `-udp-port`) are also accepted for consistency with the existing client arguments.
 
+### Transport TLS and server identity
+
+Boost TCP in Nexilis uses certificate-based TLS. On first start the server generates a self-signed identity in `tls/server.crt` and `tls/server.key` relative to its working directory, writes the matching public-key pin to `tls/server.pin`, and prints that pin at startup. Later starts reuse the files, so the pin stays the same. The client looks for `tls/server.pin` in its working directory, in the checkout/data root, and in directories relative to its executable, so separate `server/build` and `client/build` directories work without extra arguments. Keep the private key on the server; never ship it to clients.
+
+For a remote server, pass its pin to the client through a trusted channel, either as `-tls-pin <64 hex digits>` (or `--tls-pin`) or in `NX3D_TLS_PIN`. The pin is the SHA-256 of the certificate's DER public key, and the server prints it on every start:
+
+```sh
+./build/server/nx-3D-server
+# [TLS] Server public key pin: 0422214a...
+./build/client/nx_3D_client -server game.example.com -username player \
+  -tls-pin 0422214a...
+```
+
+Server paths are configurable with `-tls-cert`, `-tls-key`, and `-tls-pin-file` (double-dash forms also work). The client also accepts `-tls-pin-file` for a pin stored elsewhere. A client cannot connect over TLS without a valid 64-digit pin, and it verifies the pin on both the authentication and session TCP connections. Rotating the server identity changes the pin and requires updating every client.
+
 To run only the server with Docker on Linux, initialize the Nexilis submodule and start Compose:
 
 ```sh
@@ -76,7 +91,7 @@ git submodule update --init --recursive nexilis
 docker compose up --build -d
 ```
 
-Use `docker compose logs -f server` to view its output and `docker compose down` to stop it. Compose uses host networking on Linux. Remote clients need the configured authentication TCP, session TCP, and UDP ports. Allow these ports through the host firewall and forward them on the router when hosting behind NAT. The client accepts an IPv4 address or hostname in `-server`. The server currently has hardcoded credentials (`password` for players and `root` for administration); change them in `server/server.cc` before exposing it publicly.
+Use `docker compose logs -f server` to view its output and `docker compose down` to stop it. Compose uses host networking on Linux and a named volume for `/app/tls`, so the generated TLS identity and its pin survive container recreation. Remote clients need the configured authentication TCP, session TCP, and UDP ports. Allow these ports through the host firewall and forward them on the router when hosting behind NAT. The client accepts an IPv4 address or hostname in `-server`. The server currently has hardcoded credentials (`password` for players and `root` for administration); change them in `server/server.cc` before exposing it publicly.
 
 The client initially asks for a server address and username. Enter an IPv4 address or domain name (for example, `game.example.com`); the default is `127.0.0.1`. You can also start it with `-server <address> -username <name>` to connect immediately. Select a room with the arrow keys and Enter, then click a team to join.
 
@@ -93,7 +108,7 @@ From a checkout, use `nix run` and `nix run .#server`. The packages build Nexili
 
 GitHub source archives omit submodules, so the flake fetches Nexilis and Spear itself at the commits in its `inputs`. Keep them equal to the submodule commits: after bumping a submodule, put the same revision in the `nexilis` or `spear` URL in `flake.nix` and run `nix flake lock`. The **Nix** workflow fails when they differ. Uncommitted changes in the submodule checkouts do not reach the Nix packages; build those with CMake in `nix develop`.
 
-On NixOS, import the module to run the server as a service. It accepts `tcpPort`, `tcpSessionPort`, and `udpPort`; `openFirewall` opens all three. `programs.nx3dClient.enable = true;` installs the client.
+On NixOS, import the module to run the server as a service. It accepts `tcpPort`, `tcpSessionPort`, `udpPort`, and the TLS paths `tlsCertificateFile`, `tlsPrivateKeyFile`, and `tlsPinFile`; `openFirewall` opens all three ports. The identity is generated in the service's state directory (`/var/lib/nx3dServer/tls/`) and its pin is printed to the journal. `programs.nx3dClient.enable = true;` installs the client.
 
 ```nix
 # Host flake inputs: nx-3D.url = "github:nexilistudios/nx-3D";

@@ -22,6 +22,7 @@
 #include <shared/fall_death.hh>
 #include <shared/brush_map.hh>
 #include <shared/gamemode.hh>
+#include <shared/network_tls.hh>
 #include <shared/player_rules.hh>
 
 #include <glm/gtc/quaternion.hpp>
@@ -67,10 +68,23 @@ std::string settingsPath()
     SDL_free(prefPath);
     return path;
 }
+
+/// Boost TCP TLS fails closed: a valid pin is mandatory whenever the client
+/// connects. The map tools never connect, so they use plaintext locally.
+nexilis::client::ClientConfig clientConfig(const std::string& address, const std::string& pin)
+{
+    auto config = nexilis::client::createClientConfig(address, "password");
+    if (nx3d::isValidPublicKeyPin(pin))
+        config.setServerPublicKeySha256(pin);
+    else
+        config.setTls(false);
+    return config;
+}
 }
 
 ClientApp::ClientApp(const std::string& initialServerAddress, const std::string& initialUsername,
-                     bool connectOnStart, bool previewMap, bool editMap, const std::string& mapPath)
+                     bool connectOnStart, bool previewMap, bool editMap, const std::string& mapPath,
+                     const std::string& serverPublicKeyPin)
     : window("nx_3D game", spear::BaseWindow::Size{820, 640}),
       camera((previewMap || editMap) ? glm::vec3(-400.0f, 3200.0f, 1800.0f) : glm::vec3(-1600.0f, 64.0f, -2600.0f),
              glm::vec3(0.f, 1.f, 0.f), (previewMap || editMap) ? -90.0f : 90.0f,
@@ -83,8 +97,9 @@ ClientApp::ClientApp(const std::string& initialServerAddress, const std::string&
       movement_controller(camera, shared_world.get(), nx3d::kStandingEyeHeight),
       renderer(window),
       serverAddress(initialServerAddress),
+      serverPublicKeyPin(serverPublicKeyPin),
       username(initialUsername.empty() ? "username_" + std::to_string(nexilis::Util::getRandomInt(1000000, 9999999)) : chat::limitBytes(initialUsername, 64)),
-      client_api(nexilis::client::createClientConfig(serverAddress, "password")),
+      client_api(clientConfig(serverAddress, serverPublicKeyPin)),
       tcp_client(client_api),
       udp_client(client_api)
 {
@@ -414,7 +429,7 @@ void ClientApp::connect(const std::string& address)
     ui->serverPlayerCountText.setString("");
     tcp_client.stop();
     client_api = nexilis::client::ClientAPI(
-            nexilis::client::createClientConfig(serverAddress, "password"));
+            clientConfig(serverAddress, serverPublicKeyPin));
     tcp_client = protocol_manager.createProtocol<nexilis::TCPClient>(client_api);
     udp_client = protocol_manager.createProtocol<nexilis::UDPClient>(client_api);
 

@@ -11,6 +11,7 @@
 #include <nexilis/server/protocol/nxboost/udp_server.hh>
 
 #include <nexilis/server/room_storage.hh>
+#include <server/tls_identity.hh>
 #include <nexilis/server/runtime.hh>
 #include <nexilis/server/server_config.hh>
 
@@ -21,10 +22,12 @@
 #include <shared/gamemode.hh>
 #include <shared/brush_map.hh>
 #include <shared/network_ports.hh>
+#include <shared/network_tls.hh>
 #include <shared/player_rules.hh>
 
 #include <atomic>
 #include <chrono>
+#include <exception>
 #include <functional>
 #include <iostream>
 #include <pthread.h>
@@ -56,6 +59,17 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    nx3d::TlsOptions tlsOptions;
+    try
+    {
+        tlsOptions = nx3d::parseTlsOptions(argc, argv);
+    }
+    catch (const std::invalid_argument& error)
+    {
+        std::cerr << "Invalid TLS option: " << error.what() << std::endl;
+        return 1;
+    }
+
     nexilis::Log::startConsoleLogging(nexilis::logger::LogLevel::Info);
 
     using namespace nexilis::server;
@@ -72,6 +86,23 @@ int main(int argc, char* argv[])
     limits.setMaxMovementSpeed(nx3d::kMaxMovementSpeed);
     limits.setMaxShootingRate(nx3d::kMaxShootingRate);
     limits.setMaxDamagePerShot(nx3d::kMaxDamagePerShot);
+
+    try
+    {
+        // Nexilis Boost TCP uses certificate-based TLS: refuse to start without
+        // a usable server identity instead of accepting connections that fail
+        // the handshake. The first run generates and persists a self-signed one.
+        const auto identity = nx3d::server::loadOrCreateTlsIdentity(tlsOptions);
+        server_config.setTlsIdentity(identity.certificatePem, identity.privateKeyPem);
+        if (identity.generated)
+            std::cout << "[TLS] Generated server identity at " << tlsOptions.certificatePath << std::endl;
+        std::cout << "[TLS] Server public key pin: " << identity.publicKeySha256 << std::endl;
+    }
+    catch (const std::exception& error)
+    {
+        std::cerr << "Unable to configure TLS: " << error.what() << std::endl;
+        return 1;
+    }
 
     namespace gamemode = nx3d::server::gamemode;
 

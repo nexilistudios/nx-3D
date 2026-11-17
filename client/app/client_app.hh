@@ -86,7 +86,8 @@ public:
 
     ClientApp(const std::string& initialServerAddress, const std::string& initialUsername,
               bool connectOnStart, bool previewMap = false,
-              bool editMap = false, const std::string& mapPath = "");
+              bool editMap = false, const std::string& mapPath = "",
+              const std::string& serverPublicKeyPin = "");
     ~ClientApp();
 
     ClientApp(const ClientApp&) = delete;
@@ -153,6 +154,8 @@ public:
 
     // --- Networking ---------------------------------------------------------
     std::string serverAddress;
+    /// SHA-256 pin of the server public key required by Boost TCP TLS.
+    std::string serverPublicKeyPin;
     nexilis::ProtocolManager protocol_manager;
     nexilis::client::ClientAPI client_api;
     nexilis::TCPClient tcp_client;
