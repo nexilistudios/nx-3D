@@ -48,7 +48,7 @@ Run the server first, then the client in another terminal:
 ./build/client/nx_3D_client
 ```
 
-The server uses TCP 54200 for authentication, UDP 54201 for gameplay, and TCP 54202 for the game session. The password-protected session is established over pinned TLS Boost TCP, while gameplay UDP datagrams are authenticated with the per-session token MAC. To run a server on different ports, pass all three values:
+The server listens on TCP 54200 for authentication, UDP 54201 for gameplay, and TCP 54202 for the game session. The password-protected session is established over pinned TLS Boost TCP. Movement input uses the game session TCP connection so the server receives it reliably; other latency-sensitive gameplay datagrams use the authenticated session token over UDP. The server updates movement at 90 Hz and remains authoritative over player positions and speed. To run a server on different ports, pass all three values:
 
 ```sh
 ./build/server/nx-3D-server \
@@ -57,7 +57,7 @@ The server uses TCP 54200 for authentication, UDP 54201 for gameplay, and TCP 54
   --tcp-session-port 55202
 ```
 
-Clients connecting to that server need its authentication TCP and UDP ports. The session TCP port does not need a client argument because the server sends it to the client during authentication:
+Clients connecting to that server need its authentication TCP and gameplay UDP ports. The session TCP port does not need a client argument because the server sends it to the client during authentication:
 
 ```sh
 ./build/client/nx_3D_client \
@@ -91,9 +91,9 @@ git submodule update --init --recursive nexilis
 docker compose up --build -d
 ```
 
-Use `docker compose logs -f server` to view its output and `docker compose down` to stop it. Compose uses host networking on Linux and a named volume for `/app/tls`, so the generated TLS identity and its pin survive container recreation. Remote clients need the configured authentication TCP, session TCP, and UDP ports. Allow these ports through the host firewall and forward them on the router when hosting behind NAT. The client accepts an IPv4 address or hostname in `-server`. The server currently has hardcoded credentials (`password` for players and `root` for administration); change them in `server/server.cc` before exposing it publicly.
+Use `docker compose logs -f server` to view its output and `docker compose down` to stop it. Compose uses host networking on Linux and a named volume for `/app/tls`, so the generated TLS identity and its pin survive container recreation. Remote clients need the configured authentication TCP, session TCP, and gameplay UDP ports. Allow these ports through the host firewall and forward them on the router when hosting behind NAT. The client accepts an IPv4 address or hostname in `-server`. The server currently has hardcoded credentials (`password` for players and `root` for administration); change them in `server/server.cc` before exposing it publicly.
 
-The client initially asks for a server address and username. Enter an IPv4 address or domain name (for example, `game.example.com`); the default is `127.0.0.1`. You can also start it with `-server <address> -username <name>` to connect immediately. Select a room with the arrow keys and Enter, then click a team to join.
+The client initially asks for a server address and username. Enter an IPv4 address or domain name (for example, `game.example.com`); the default is `127.0.0.1`. You can also start it with `-server <address> -username <name>` to connect immediately. Select a room with the arrow keys and Enter, then click a team to join. Players can create public Shipment or Dust II rooms for Deathmatch, Bomb, or Gun Game, with 2–16 players.
 
 ### Nix
 

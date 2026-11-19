@@ -11,13 +11,14 @@
 #include <nexilis/server/protocol/nxboost/udp_server.hh>
 
 #include <nexilis/server/room_storage.hh>
-#include <server/tls_identity.hh>
 #include <nexilis/server/runtime.hh>
 #include <nexilis/server/server_config.hh>
 
 #include <nexilis/server/signal.hh>
 #include <server/gamemode/game_mode_registry.hh>
 #include <server/gun/gun_manager.hh>
+#include <server/room_policy.hh>
+#include <server/tls_identity.hh>
 
 #include <shared/gamemode.hh>
 #include <shared/brush_map.hh>
@@ -79,6 +80,9 @@ int main(int argc, char* argv[])
     server_config.setMode(AuthenticationMode::password_protected);
     server_config.setPassphrase("password");
     server_config.setRootPassword("root");
+    // Leave room for movement plus firing, audio, and menu commands without
+    // relaxing the server's separate movement-speed validation.
+    server_config.setMaxCommandRate(180.0f);
     auto& limits = server_config.getGameplayLimits();
     limits.setMaxHorizontalPosition(nx3d::kMaxHorizontalPosition);
     limits.setMinHeight(nx3d::kMinPlayerHeight);
@@ -124,6 +128,10 @@ int main(int argc, char* argv[])
                                                 nx3d::GameMode::bomb);
     }
 
+    RoomStorage::setClientCreationHandler([](const User&, const nexilis::RoomData& data)
+    {
+        return nx3d::server::allowsClientRoomCreation(data);
+    });
     RoomStorage::setCreateHandler([](Room& room)
     {
         gamemode::GameModeRegistry::assignRoom(room, nx3d::gameModeFromName(room.getName()));
@@ -133,7 +141,8 @@ int main(int argc, char* argv[])
 
     // Boost TCP authenticates the password-protected session with a pinned TLS
     // certificate. The local Nexilis patch allows gameplay UDP alongside it;
-    // datagrams carry the per-session token MAC.
+    // datagrams carry the per-session token MAC. Movement input uses the
+    // reliable game session so dropped datagrams cannot stop server movement.
     auto boostTCPServer =
             protocolManager.createProtocol<nxboost::TCPServer>(server_config);
     boostTCPServer.start();
@@ -167,7 +176,7 @@ int main(int argc, char* argv[])
         return true;
     });
 
-    auto server_runtime = std::thread([&condition, &f](){ nexilis::server::runtime(condition, f, 60); });
+    auto server_runtime = std::thread([&condition, &f](){ nexilis::server::runtime(condition, f, nx3d::kAuthorityTickRate); });
     // clang-format on
 
     std::cout << "Nx3D game server is running. Waiting for SIGINT or SIGTERM..."

@@ -295,7 +295,11 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
     {
         if (evt.target_id == app.client_api.getClientId())
         {
-            app.camera.setPosition(pickSpawnPoint());
+            const auto serverSpawn = app.client_api.getClientPosition3D(evt.target_id);
+            app.camera.setPosition(serverSpawn.x != 0.0f || serverSpawn.y != 0.0f ||
+                                           serverSpawn.z != 0.0f
+                                           ? glm::vec3(serverSpawn.x, serverSpawn.y, serverSpawn.z)
+                                           : pickSpawnPoint());
             app.movement_controller.resetStance();
             app.movement_controller.resetVerticalMotion();
             m_prevCamPos = app.camera.getPosition();

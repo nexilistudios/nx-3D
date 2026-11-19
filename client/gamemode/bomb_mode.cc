@@ -168,7 +168,11 @@ void BombMode::update(ClientApp& app, float dt)
             if (teamChanged)
             {
                 m_lastSpawnIndex = SIZE_MAX;
-                app.camera.setPosition(pickSpawnPoint());
+                const auto serverSpawn = app.client_api.getClientPosition3D(app.client_api.getClientId());
+                app.camera.setPosition(serverSpawn.x != 0.0f || serverSpawn.y != 0.0f ||
+                                               serverSpawn.z != 0.0f
+                                               ? glm::vec3(serverSpawn.x, serverSpawn.y, serverSpawn.z)
+                                               : pickSpawnPoint());
                 app.movement_controller.resetVerticalMotion();
                 m_prevCamPos = app.camera.getPosition();
             }

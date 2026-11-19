@@ -5,6 +5,9 @@
 
 namespace nx3d
 {
+// Server movement and position broadcasts target this rate. Clients send at
+// most once per rendered frame.
+inline constexpr uint32_t kAuthorityTickRate = 90;
 // The generated Dust II spans about X [-2400, 2000], Z [-3300, 1400].
 // Leave room for the player capsule, jumps, and the fall-death plane at -256.
 inline constexpr float kWalkSpeed = 280.0f;

@@ -453,7 +453,19 @@ bool Authority::move(nexilis::server::Room& room, uint64_t playerId,
 
 void Authority::update(nexilis::server::Room& room, float dt)
 {
-    dt = std::clamp(dt, 0.0f, 0.05f);
+    // A slow tick previously discarded everything beyond 50 ms, which made
+    // movement slow down whenever the server stalled. Recover a short missed
+    // tick window in small physics steps instead of losing it. Much larger
+    // deltas are timer-style updates, so keep the old conservative cap to
+    // avoid teleporting players when callers advance game-mode clocks.
+    constexpr float kMaxTickCatchUp = 0.1f;
+    constexpr float kCoarseUpdateLimit = 0.05f;
+    const float elapsed = dt <= kMaxTickCatchUp ? std::clamp(dt, 0.0f, kMaxTickCatchUp)
+                                                : kCoarseUpdateLimit;
+    constexpr float kMaxPhysicsStep = 1.0f / nx3d::kAuthorityTickRate;
+    const int substeps = std::max(1, static_cast<int>(
+            std::ceil(elapsed / kMaxPhysicsStep - 1e-6f)));
+    const float stepDt = elapsed / static_cast<float>(substeps);
     const auto now = std::chrono::steady_clock::now();
     for (auto playerId : room.getClients())
     {
@@ -483,7 +495,11 @@ void Authority::update(nexilis::server::Room& room, float dt)
             auto position = asGlm(user->getObject3D().getPosition());
             const glm::vec2 previousHorizontal(position.x, position.z);
             const bool wasCrouched = state.crouched;
-            mapPhysics(m_shipment).advance(position, direction, jump, crouch, silentWalk, state.crouched, state.jumpHeld, state.grounded, state.verticalVelocity, dt);
+            auto& physics = mapPhysics(m_shipment);
+            for (int step = 0; step < substeps; ++step)
+                physics.advance(position, direction, jump, crouch, silentWalk,
+                                state.crouched, state.jumpHeld, state.grounded,
+                                state.verticalVelocity, stepDt);
             stanceChanged = state.crouched != wasCrouched;
             crouched = state.crouched;
             const bool moving = glm::distance(previousHorizontal,

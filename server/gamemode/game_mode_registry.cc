@@ -69,8 +69,21 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
     auto* authorityPtr = authority.get();
     const auto roomId = room.getId();
 
+    // Game rooms are public; capacity and team admission are checked separately.
+    room.setAdmissionHandler([](const nexilis::server::User&)
+                             { return true; });
     room.setClientPositionAllowed(false);
     room.setClientGameItemCreationAllowed(false);
+    room.setBroadcastHandler([roomId](uint64_t playerId, const std::string& message, bool)
+                             {
+        auto user = nexilis::server::ClientStorage::getClientById(playerId);
+        return user && user->getRoomId() == roomId && !message.empty(); });
+    room.setAudioEventHandler([roomId](uint64_t playerId, uint8_t sound,
+                                       const nexilis::Vector3f&)
+                              {
+        auto user = nexilis::server::ClientStorage::getClientById(playerId);
+        // The game currently defines sound IDs 0 through 11.
+        return user && user->getRoomId() == roomId && sound <= 11; });
     auto pickupMutex = std::make_shared<std::mutex>();
     room.setGameItemPickupHandler([authorityPtr, modePtr, pickupMutex](nexilis::server::Room& r, uint64_t id, uint64_t itemId)
                                   {

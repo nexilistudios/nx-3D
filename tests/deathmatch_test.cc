@@ -1,5 +1,6 @@
 #include <server/gamemode/game_mode_registry.hh>
 #include <server/gamemode/gungame_mode.hh>
+#include <server/room_policy.hh>
 #include <shared/brush_map.hh>
 #include <shared/economy.hh>
 #include <shared/fall_death.hh>
@@ -48,6 +49,25 @@ int main()
     using Registry = nx3d::server::gamemode::GameModeRegistry;
     try
     {
+        server::User roomCreator(42, "127.0.0.1");
+        server::RoomStorage::setClientCreationHandler(
+                [](const server::User&, const RoomData& data)
+                { return nx3d::server::allowsClientRoomCreation(data); });
+        require(server::RoomStorage::allowsClientCreation(roomCreator,
+                        RoomData(42, "Shipment DM | friends", 1001, RoomData::Context::_3D, 8)),
+                "Valid client room creation was denied");
+        require(server::RoomStorage::allowsClientCreation(roomCreator,
+                        RoomData(42, "Dust2 GunGame | friends", 1002, RoomData::Context::_3D, 16)),
+                "Valid Dust2 room creation was denied");
+        require(!server::RoomStorage::allowsClientCreation(roomCreator,
+                        RoomData(42, "Shipment DM | friends", 1003, RoomData::Context::_2D, 8)) &&
+                !server::RoomStorage::allowsClientCreation(roomCreator,
+                        RoomData(42, "Shipment DM | friends", 1004, RoomData::Context::_3D, 17)) &&
+                !server::RoomStorage::allowsClientCreation(roomCreator,
+                        RoomData(42, "Unknown | friends", 1005, RoomData::Context::_3D, 8)) &&
+                !server::RoomStorage::allowsClientCreation(roomCreator,
+                        RoomData(42, "Shipment DM |   ", 1006, RoomData::Context::_3D, 8)),
+                "Unsupported client room creation was allowed");
         client::ClientConfig config;
         client::ClientAPI shooter(config), victim(config);
         shooter.setClientId(10);
@@ -90,8 +110,13 @@ int main()
             Registry::assignRoom(*server::RoomStorage::getRoomById(id), nx3d::GameMode::deathmatch);
         }
         auto room = server::RoomStorage::getRoomById(777);
+        require(room->allowsUser(roomCreator), "Public game room rejected a new player");
         room->joinRoom(10);
         room->joinRoom(20);
+        require(room->canBroadcast(10, "hello", false), "Player chat was rejected");
+        require(!room->canBroadcast(10, "", false), "Empty chat was accepted");
+        require(room->canEmitAudioEvent(10, 4, Vector3f{}), "Player shot audio was rejected");
+        require(!room->canEmitAudioEvent(10, 255, Vector3f{}), "Unknown audio was accepted");
         server::ServerConfig settings;
         // This fixture fires hundreds of shots back-to-back to exercise
         // death/respawn; production keeps its separate fire-rate limit.
@@ -109,6 +134,10 @@ int main()
                         shooter, Vector3f{1.0f, 0.0f, 0.0f}, 0.0f, 0.0f)) ==
                         server::CommandResult::success,
                 "Movement before team selection was reported as invalid");
+        require(sendAsShooter(client::Packet::Room::Player3D::movement(
+                        shooter, Vector3f{1.0f, 7.0f, 0.0f}, 0.0f, 0.0f)) ==
+                        server::CommandResult::success,
+                "Combined movement button flags were rejected");
         require(server::ClientStorage::getClientById(10)->getObject3D().getPosition().x == beforeTeam.x,
                 "Movement before team selection changed server position");
         require(sendAsShooter(client::Packet::Room::Player3D::movement(
@@ -176,14 +205,40 @@ int main()
                     "Server did not confirm reload to the shooter");
         }
 
-        // Client-supplied displacement and delta time are ignored in this room.
+        // Direction and button flags are bounded; client delta time is ignored.
         require(sendAsShooter(client::Packet::Room::Player3D::movement(
                         shooter, Vector3f{100000.0f, 100000.0f, 0.0f}, 1000.0f, 0.0f)) ==
+                        server::CommandResult::invalid_input,
+                "Unbounded movement intent was accepted");
+        require(sendAsShooter(client::Packet::Room::Player3D::movement(
+                        shooter, Vector3f{1.0f, 0.0f, 0.0f}, 1000.0f, 0.0f)) ==
                         server::CommandResult::success,
-                "Movement intent rejected");
+                "Bounded movement intent was rejected");
         const auto afterMove = shopper->getObject3D().getPosition();
         require(std::abs(afterMove.x - originalPosition.x) <= nx3d::kWalkSpeed * 0.1f + 1.0f,
                 "Forged movement speed or delta moved the server player too far");
+
+        // A stalled server tick must advance the missing time in smaller
+        // physics steps instead of clamping it away and slowing the player.
+        const Vector3f stallStart{-592.0f, 192.0f, 764.0f};
+        shopper->getObject3D().setPosition(stallStart);
+        require(sendAsShooter(client::Packet::Room::Player3D::movement(
+                        shooter, Vector3f{1.0f, 0.0f, 0.0f}, 0.0f, 0.0f)) ==
+                        server::CommandResult::success,
+                "Movement before the stalled tick was rejected");
+        Registry::update(0.1f);
+        const auto afterStall = shopper->getObject3D().getPosition();
+        require(afterStall.x - stallStart.x >= nx3d::kWalkSpeed * 0.1f - 5.0f,
+                "A slow server tick discarded movement time");
+        const auto selfView = shooter.getClientPosition3D(10);
+        const auto remoteView = victim.getClientPosition3D(10);
+        require(std::abs(selfView.x - afterStall.x) < 0.01f &&
+                std::abs(selfView.y - afterStall.y) < 0.01f &&
+                std::abs(selfView.z - afterStall.z) < 0.01f &&
+                std::abs(remoteView.x - afterStall.x) < 0.01f &&
+                std::abs(remoteView.y - afterStall.y) < 0.01f &&
+                std::abs(remoteView.z - afterStall.z) < 0.01f,
+                "Local and remote clients disagree on the server player position");
 
         const auto groundItem = client::Packet::Room::GameItem::create(
                 shooter, originalPosition, Vector3f{1, 1, 1},
@@ -455,6 +510,7 @@ int main()
                         gunGameStage.secondary.empty(),
                 "Gun Game kills did not advance the shooter after each kill");
         Registry::clear();
+        server::RoomStorage::setClientCreationHandler({});
         server::RoomStorage::clear();
         server::ClientStorage::clear();
         std::cout << "100 death/respawn cycles passed for both clients\n";

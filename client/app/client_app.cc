@@ -50,6 +50,8 @@ constexpr std::array<spear::BaseWindow::Size, 12> kResolutions{{
         {1920, 1200}, {2048, 1080}, {2560, 1080}, {2560, 1440},
         {2560, 1600}, {3440, 1440}, {3840, 1600}, {3840, 2160}}};
 constexpr std::array<int, 6> kFpsCaps{{0, 30, 60, 120, 144, 240}};
+// Match the authority tick so each new position can use recent input.
+constexpr float kMovementSendInterval = 1.0f / nx3d::kAuthorityTickRate;
 constexpr std::array<const char*, 5> kPlayerParts{{
         "torso", "left_arm", "right_arm", "left_leg", "right_leg"}};
 
@@ -433,6 +435,7 @@ void ClientApp::connect(const std::string& address)
     menuPopulated = false;
     teamSelectPlayers.clear();
     ui->serverPlayerCountText.setString("");
+    udp_client.stop();
     tcp_client.stop();
     client_api = nexilis::client::ClientAPI(
             clientConfig(serverAddress, serverPublicKeyPin));
@@ -516,6 +519,14 @@ std::unique_ptr<gamemode::GameMode> ClientApp::makeGameMode(nx3d::GameMode gameM
 void ClientApp::enterGame(const std::string& team)
 {
     input_send_elapsed = 1.0f;
+    const auto beforeSpawn = client_api.getClientPosition3D(client_api.getClientId());
+    if (beforeSpawn.x != 0.0f || beforeSpawn.y != 0.0f || beforeSpawn.z != 0.0f)
+        spawnSyncBaseline = glm::vec3(beforeSpawn.x, beforeSpawn.y, beforeSpawn.z);
+    else
+        spawnSyncBaseline.reset();
+    // Wait for the server's initial spawn before accepting movement, so the
+    // camera starts from the same position other clients receive.
+    pendingSpawnSync = true;
     ui->showGameHudTexts();
     economyState = {};
     buyNotice.clear();
@@ -1103,6 +1114,7 @@ void ClientApp::cleanQuit()
     {
         tcp_client.sendMessage(nexilis::client::Packet::Room::Management::leave(client_api));
     }
+    udp_client.stop();
     tcp_client.stop();
     vkDestroyDescriptorSetLayout(renderer.getDevice(), descriptorSetLayout, nullptr);
     vkDestroyDescriptorPool(renderer.getDevice(), descriptorPool, nullptr);
@@ -1154,8 +1166,9 @@ void ClientApp::run()
             showLobbyRooms();
             menuPopulated = true;
             currentState = State::Lobby;
-            // The token arrives in the client_id reply over TLS TCP; UDP can
-            // now be attached with the local Nexilis patch in place.
+            // The token arrives with the client_id reply over TLS TCP. Start
+            // gameplay UDP only after that; movement uses the established TCP
+            // session so missed datagrams cannot leave server input stale.
             udp_client.start();
         }
 
@@ -1737,7 +1750,7 @@ void ClientApp::run()
         else
         {
             const bool canMove = currentState != State::Game ||
-                                 (game_mode && game_mode->canMove());
+                                 (game_mode && game_mode->canMove() && !pendingSpawnSync);
             eventHandler.handleEvents(input, movement_controller, delta_time, canMove);
         }
 
@@ -1765,14 +1778,15 @@ void ClientApp::run()
              currentState == State::Paused || currentState == State::Settings))
         {
             input_send_elapsed += delta_time;
-            if (input_send_elapsed >= 0.05f)
+            if (input_send_elapsed >= kMovementSendInterval)
             {
                 glm::vec3 direction(0.0f);
                 const glm::vec3 front = camera.getFront();
                 const glm::vec3 forward = glm::normalize(glm::vec3(front.x, 0.0f, front.z));
                 const glm::vec3 right = glm::normalize(glm::vec3(camera.getRight().x, 0.0f,
                                                                   camera.getRight().z));
-                const bool canMove = currentState == State::Game && game_mode && game_mode->canMove();
+                const bool canMove = currentState == State::Game && game_mode &&
+                                     game_mode->canMove() && !pendingSpawnSync;
                 if (canMove)
                 {
                     if (eventHandler.movementKeyDown(SDLK_W)) direction += forward;
@@ -1791,22 +1805,38 @@ void ClientApp::run()
                 if (canMove && (eventHandler.movementKeyDown(SDLK_LSHIFT) ||
                                 eventHandler.movementKeyDown(SDLK_RSHIFT)))
                     flags |= nx3d::kMoveSilentWalk;
-                udp_client.sendMessage(packet::Room::Player3D::movement(
+                tcp_client.sendMessage(packet::Room::Player3D::movement(
                         client_api,
                         nexilis::Vector3f({direction.x, static_cast<float>(flags), direction.z}),
                         0.0f, yaw));
-                input_send_elapsed = 0.0f;
+                // Keep the remainder so a slow frame does not permanently
+                // lower the send rate; cap the backlog so a long stall does
+                // not emit a burst of stale input packets.
+                input_send_elapsed = std::min(input_send_elapsed - kMovementSendInterval,
+                                              kMovementSendInterval);
             }
 
-            const auto serverPosition = client_api.getClientPosition3D(client_api.getClientId());
-            if (serverPosition.x != 0.0f || serverPosition.y != 0.0f || serverPosition.z != 0.0f)
+            if (auto self = client_api.getClientFromRoom(client_api.getClientId()))
             {
-                const glm::vec3 authoritative(serverPosition.x, serverPosition.y, serverPosition.z);
-                if (glm::distance(camera.getPosition(), authoritative) > 64.0f)
+                const auto serverPosition = self->getObject3D().getPosition();
+                const glm::vec3 authoritative(serverPosition.x, serverPosition.y,
+                                              serverPosition.z);
+                if (pendingSpawnSync)
                 {
-                    camera.setPosition(authoritative);
-                    movement_controller.resetVerticalMotion();
+                    const bool spawnArrived = spawnSyncBaseline
+                        ? glm::distance(authoritative, *spawnSyncBaseline) > 0.01f
+                        : glm::length(authoritative) > 0.01f;
+                    if (spawnArrived)
+                    {
+                        movement_controller.resetVerticalMotion();
+                        pendingSpawnSync = false;
+                    }
                 }
+                // Render from the same authoritative position broadcast to
+                // other clients. Local input is only an intent sent to the
+                // server; its physics step decides the player's actual place.
+                if (!pendingSpawnSync)
+                    camera.setPosition(authoritative);
             }
         }
 
