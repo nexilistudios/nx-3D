@@ -50,6 +50,8 @@ Run the server first, then the client in another terminal:
 
 The server listens on TCP 54200 for authentication, UDP 54201 for gameplay, and TCP 54202 for the game session. The password-protected session is established over pinned TLS Boost TCP. Movement input uses the game session TCP connection so the server receives it reliably; other latency-sensitive gameplay datagrams use the authenticated session token over UDP. The server updates movement at 90 Hz and remains authoritative over player positions and speed. To run a server on different ports, pass all three values:
 
+The client predicts its own camera movement between server updates and eases small corrections when fresh positions arrive. Other players' rendered positions and facing are smoothed between updates; respawns and large teleports appear immediately.
+
 ```sh
 ./build/server/nx-3D-server \
   --tcp-port 55200 \

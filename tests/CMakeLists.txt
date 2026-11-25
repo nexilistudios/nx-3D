@@ -59,6 +59,11 @@ target_include_directories(weapon_motion_test PRIVATE ..)
 target_link_libraries(weapon_motion_test PRIVATE glm::glm)
 add_test(NAME weapon_motion COMMAND weapon_motion_test)
 
+add_executable(network_motion_test network_motion_test.cc)
+target_include_directories(network_motion_test PRIVATE ..)
+target_link_libraries(network_motion_test PRIVATE glm::glm)
+add_test(NAME network_motion COMMAND network_motion_test)
+
 add_executable(player_hit_test player_hit_test.cc)
 target_include_directories(player_hit_test PRIVATE ..)
 target_link_libraries(player_hit_test PRIVATE glm::glm)

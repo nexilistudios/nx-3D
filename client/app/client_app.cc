@@ -1,4 +1,5 @@
 #include <client/app/client_app.hh>
+#include <client/app/network_motion.hh>
 #include <shared/ammunition.hh>
 
 #include <client/chat/chat_text.hh>
@@ -430,6 +431,7 @@ void ClientApp::loadRoomMap(const std::string& roomName)
 void ClientApp::connect(const std::string& address)
 {
     serverAddress = address;
+    lastLocalServerPosition.reset();
     serverPlayerCountRefresh = 0.0f;
     roomRefresh = 0.0f;
     creatingRoom = false;
@@ -489,6 +491,7 @@ void ClientApp::joinRoom(uint64_t id, const std::string& name)
             return;
         }
     selectedRoomId = id;
+    lastLocalServerPosition.reset();
     selectedRoomGameMode = gameModeFromName(name);
     try
     {
@@ -523,6 +526,7 @@ std::unique_ptr<gamemode::GameMode> ClientApp::makeGameMode(nx3d::GameMode gameM
 void ClientApp::enterGame(const std::string& team)
 {
     input_send_elapsed = 1.0f;
+    lastLocalServerPosition.reset();
     const auto beforeSpawn = client_api.getClientPosition3D(client_api.getClientId());
     if (beforeSpawn.x != 0.0f || beforeSpawn.y != 0.0f || beforeSpawn.z != 0.0f)
         spawnSyncBaseline = glm::vec3(beforeSpawn.x, beforeSpawn.y, beforeSpawn.z);
@@ -1836,13 +1840,31 @@ void ClientApp::run()
                     {
                         movement_controller.resetVerticalMotion();
                         pendingSpawnSync = false;
+                        camera.setPosition(authoritative);
+                        lastLocalServerPosition = authoritative;
                     }
                 }
-                // Render from the same authoritative position broadcast to
-                // other clients. Local input is only an intent sent to the
-                // server; its physics step decides the player's actual place.
                 if (!pendingSpawnSync)
-                    camera.setPosition(authoritative);
+                {
+                    const bool fresh = !lastLocalServerPosition ||
+                            glm::distance(*lastLocalServerPosition, authoritative) > 0.001f;
+                    const bool teleported = lastLocalServerPosition &&
+                            glm::distance(*lastLocalServerPosition, authoritative) >= 120.0f;
+                    const bool resting = (game_mode && !game_mode->canMove()) ||
+                            (!eventHandler.movementKeyDown(SDLK_W) &&
+                             !eventHandler.movementKeyDown(SDLK_A) &&
+                             !eventHandler.movementKeyDown(SDLK_S) &&
+                             !eventHandler.movementKeyDown(SDLK_D) &&
+                             !eventHandler.movementKeyDown(SDLK_SPACE) &&
+                             !eventHandler.movementKeyDown(SDLK_LCTRL) &&
+                             !eventHandler.movementKeyDown(SDLK_RCTRL) &&
+                             movement_controller.isOnGround());
+                    camera.setPosition(reconcileLocalPosition(
+                            camera.getPosition(), authoritative,
+                            std::clamp(delta_time, 0.0f, 0.05f),
+                            fresh || resting, teleported));
+                    lastLocalServerPosition = authoritative;
+                }
             }
         }
 
@@ -2239,20 +2261,24 @@ void ClientApp::syncRemotePlayerTransforms(float deltaTime)
         auto it = remote_players.find(player.id);
         if (it != remote_players.end())
         {
-            const glm::vec3 position(player.x, player.y, player.z);
+            const glm::vec3 authoritative(player.x, player.y, player.z);
             auto& motion = remote_player_animations[player.id];
-            setRemotePlayerWeapon(it->second, motion.weapon, position);
             if (!motion.initialized)
             {
-                motion.position = position;
+                motion.position = authoritative;
+                motion.facing = player.yaw;
                 motion.initialized = true;
             }
+            const glm::vec3 previous = motion.position;
+            motion.position = smoothRemotePosition(motion.position, authoritative, dt);
+            motion.facing = smoothRemoteFacing(motion.facing, player.yaw, dt);
+            const glm::vec3 position = motion.position;
+            setRemotePlayerWeapon(it->second, motion.weapon, position);
 
-            const glm::vec2 movement(position.x - motion.position.x,
-                                     position.z - motion.position.z);
+            const glm::vec2 movement(position.x - previous.x,
+                                     position.z - previous.z);
             const float distance = glm::length(movement);
             const float speed = dt > 0.0f && distance < 40.0f ? distance / dt : 0.0f;
-            motion.facing = player.yaw;
             const float measuredSpeed = std::clamp(speed / nx3d::kWalkSpeed, 0.0f, 1.0f);
             const float pace = !motion.authoritative ? measuredSpeed
                                : motion.locomotion == "running" ? 1.0f
@@ -2264,8 +2290,6 @@ void ClientApp::syncRemotePlayerTransforms(float deltaTime)
             motion.stride += motion.speed * dt * 7.0f;
             motion.hitTime = std::max(0.0f, motion.hitTime - dt);
             motion.actionRemaining = std::max(0.0f, motion.actionRemaining - dt);
-            motion.position = position;
-
             const float bobScale = motion.locomotion == "running" ||
                                            motion.locomotion == "sneaking" ? 1.5f : 0.9f;
             const float bob = std::sin(motion.stride * 2.0f) * bobScale * motion.speed +

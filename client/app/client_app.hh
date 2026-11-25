@@ -162,6 +162,7 @@ public:
     nexilis::UDPClient udp_client;
     std::atomic<bool> ready{false};
     float input_send_elapsed = 1.0f;
+    std::optional<glm::vec3> lastLocalServerPosition;
     std::optional<glm::vec3> spawnSyncBaseline;
     bool pendingSpawnSync = false;
     std::mutex mtx;
