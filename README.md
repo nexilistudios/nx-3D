@@ -73,6 +73,8 @@ Each port option is optional. An omitted option keeps its default value, so the 
 
 Boost TCP in Nexilis uses certificate-based TLS. Password-protected mode requires it on both sides, so a valid server pin is mandatory for every connection. On first start the server generates a self-signed identity in `tls/server.crt` and `tls/server.key` relative to its working directory, writes the matching public-key pin to `tls/server.pin`, and prints that pin at startup. Later starts reuse the files, so the pin stays the same. The client looks for `tls/server.pin` in its working directory, in the checkout/data root, and in directories relative to its executable, so separate `server/build` and `client/build` directories work without extra arguments. Keep the private key on the server; never ship it to clients.
 
+Nexilis also requires account credentials for protected sessions. The game generates a new account ID for each connection and uses its existing shared password as the credential. No account registration or player identity is stored on the server; usernames remain display names.
+
 For a remote server, pass its pin to the client through a trusted channel, either as `-tls-pin <64 hex digits>` (or `--tls-pin`) or in `NX3D_TLS_PIN`. The pin is the SHA-256 of the certificate's DER public key, and the server prints it on every start:
 
 ```sh
@@ -277,6 +279,8 @@ Before a public release, exercise multiplayer sessions on real Vulkan hardware, 
 | `spear/`, `nexilis/`              | Engine and networking submodules                                     |
 
 The server creates one bomb room and one deathmatch room. The client uses Nexilis for room and player synchronization, while `spear` supplies Vulkan rendering, physics, input, and audio. Client assets are resolved relative to the repository root compiled into `PROJECT_ROOT` by CMake, or to `NX3D_DATA_DIR` when that is set.
+
+Game rooms advertise the Terrorist and Counter Terrorist teams. Player chat retains join history, while economy, grenade, and Gun Game updates use Nexilis server room events so they stay separate from chat.
 
 ### Sending input
 

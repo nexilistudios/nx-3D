@@ -72,6 +72,8 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
     // Game rooms are public; capacity and team admission are checked separately.
     room.setAdmissionHandler([](const nexilis::server::User&)
                              { return true; });
+    room.setAvailableTeams({"Terrorist", "Counter Terrorist"});
+    room.setBroadcastHistoryEnabled(true);
     room.setClientPositionAllowed(false);
     room.setClientGameItemCreationAllowed(false);
     room.setBroadcastHandler([roomId](uint64_t playerId, const std::string& message, bool)
@@ -200,7 +202,7 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
         return true; });
     room.setCombatHandler([modePtr](uint64_t shooterId, uint64_t targetId)
                           { return modePtr->canDamage(shooterId, targetId); });
-    room.setTeamSelectionHandler([modePtr](uint64_t playerId)
+    room.setTeamSelectionHandler([modePtr](uint64_t playerId, const std::string&)
                                  { return modePtr->canSelectTeam(playerId); });
 
     m_modes[roomId] = std::move(mode);

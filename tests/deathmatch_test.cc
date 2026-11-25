@@ -1,6 +1,7 @@
 #include <server/gamemode/game_mode_registry.hh>
 #include <server/gamemode/gungame_mode.hh>
 #include <server/room_policy.hh>
+#include <tests/server_event_test.hh>
 #include <shared/brush_map.hh>
 #include <shared/economy.hh>
 #include <shared/fall_death.hh>
@@ -150,7 +151,7 @@ int main()
         shopper->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
         require(room->onPlayerAction(10, 12), "Terrorist could not buy Desert Eagle at spawn");
         nx3d::economy::Snapshot purchase;
-        require(nx3d::economy::decode(shooter.getChatSnapshot(777).back().message, purchase) &&
+        require(nx3d::economy::decode(latestServerEvent(shooter, "economy"), purchase) &&
                         purchase.money == 100 && purchase.weapon == "deagle",
                 "Weapon purchase did not update equipment and money");
         require(sendAsShooter(client::Packet::Room::Player3D::matchAction(
@@ -399,7 +400,7 @@ int main()
         Registry::update(1.0f / 60.0f);
         require(room->getPlayerDeaths(20) == 102, "A later fall did not count as a death");
         nx3d::economy::Snapshot balance;
-        require(nx3d::economy::decode(shooter.getChatSnapshot(777).back().message, balance) &&
+        require(nx3d::economy::decode(latestServerEvent(shooter, "economy"), balance) &&
                         balance.money == nx3d::economy::kMaximumMoney,
                 "Kill rewards did not respect the money cap");
 
@@ -446,7 +447,7 @@ int main()
                         tiedStandings[2].id == 40 && tiedStandings[3].id == 20,
                 "Gun Game results were not ranked by kills with stable ties");
         nx3d::gungame::Result finalResult;
-        require(nx3d::gungame::decodeResult(shooter.getChatSnapshot(777).back().message,
+        require(nx3d::gungame::decodeResult(latestServerEvent(shooter, "gungame_result"),
                                             finalResult) &&
                         finalResult.winner == 10 && finalResult.standings.size() == 2 &&
                         finalResult.standings[0].id == 10 &&
@@ -457,9 +458,9 @@ int main()
         gunGame.update(*room, 14.0f);
         int countdown = 0;
         require(!gunGame.canDamage(10, 20) &&
-                        nx3d::gungame::decodeCountdown(shooter.getChatSnapshot(777).back().message,
+                        nx3d::gungame::decodeCountdown(latestServerEvent(shooter, "gungame_countdown"),
                                                        countdown) && countdown == 1 &&
-                        nx3d::gungame::decodeCountdown(victim.getChatSnapshot(777).back().message,
+                        nx3d::gungame::decodeCountdown(latestServerEvent(victim, "gungame_countdown"),
                                                        countdown) && countdown == 1,
                 "Gun Game countdown was not sent to every player");
         gunGame.update(*room, 1.0f);
@@ -505,7 +506,7 @@ int main()
             }
         }
         nx3d::economy::Snapshot gunGameStage;
-        require(nx3d::economy::decode(shooter.getChatSnapshot(777).back().message,
+        require(nx3d::economy::decode(latestServerEvent(shooter, "economy"),
                                       gunGameStage) && gunGameStage.primary == "ak47" &&
                         gunGameStage.secondary.empty(),
                 "Gun Game kills did not advance the shooter after each kill");

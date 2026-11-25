@@ -75,7 +75,11 @@ std::string settingsPath()
 /// connects. The map tools never connect, so they use plaintext locally.
 nexilis::client::ClientConfig clientConfig(const std::string& address, const std::string& pin)
 {
-    auto config = nexilis::client::createClientConfig(address, "password");
+    // Nexilis now requires account credentials for protected TCP sessions.
+    // A fresh ID keeps independent game clients from sharing an account slot.
+    auto config = nexilis::client::createClientConfig(
+            address, "password", "nx3d-" + std::to_string(nexilis::Util::getRandomUint64()),
+            "password");
     if (nx3d::isValidPublicKeyPin(pin))
         config.setServerPublicKeySha256(pin);
     else
@@ -980,6 +984,47 @@ void ClientApp::updateChatMessages()
         chatMessages.clear();
     }
 
+    for (const auto& event : client_api.consumeServerRoomEvents())
+    {
+        if (event.room_id != room_id || !event.payload.is_string())
+            continue;
+        const std::string payload(event.payload.as_string());
+        if (event.event == "gungame_result")
+        {
+            nx3d::gungame::Result result;
+            if (game_mode && nx3d::gungame::decodeResult(payload, result))
+                game_mode->onGunGameResult(*this, result);
+        }
+        else if (event.event == "gungame_countdown")
+        {
+            int seconds = 0;
+            if (game_mode && nx3d::gungame::decodeCountdown(payload, seconds))
+                game_mode->onGunGameCountdown(*this, seconds);
+        }
+        else if (event.event == "grenade")
+        {
+            nx3d::economy::GrenadeThrow grenade;
+            if (game_mode && nx3d::economy::decodeGrenade(payload, grenade))
+                game_mode->onGrenadeThrown(*this, grenade);
+        }
+        else if (event.event == "economy")
+        {
+            nx3d::economy::Snapshot state;
+            if (!nx3d::economy::decode(payload, state))
+                continue;
+            economyState = std::move(state);
+            ui->moneyText.setString("$" + std::to_string(economyState.money) + "  |  B: Buy" +
+                                   (economyState.objects.count("defuse_kit") > 0 ? "  |  KIT" : ""));
+            if (game_mode)
+                game_mode->onEconomySnapshot(*this, economyState);
+            buyNotice = economyState.notice;
+            if (currentState == State::Buy && game_mode)
+                ui->showBuyMenu(buyStyle, economyState,
+                                ui->teamDisplayText.getString(), buyNotice,
+                                selectedRoomGameMode == nx3d::GameMode::bomb);
+        }
+    }
+
     // Snapshot the rooms under their mutex (same pattern as the nexilis
     // messaging example) and consume any messages we have not shown yet.
     for (const auto& room : client_api.getActiveRooms())
@@ -993,45 +1038,6 @@ void ClientApp::updateChatMessages()
         {
             const auto& message = messages[chatMessagesConsumed];
             const auto* sender = message.getClient();
-            if (!sender && std::string_view(message.getPayload()).starts_with(nx3d::gungame::kResultPrefix))
-            {
-                nx3d::gungame::Result result;
-                if (game_mode && nx3d::gungame::decodeResult(message.getPayload(), result))
-                    game_mode->onGunGameResult(*this, result);
-                continue;
-            }
-            if (!sender && std::string_view(message.getPayload()).starts_with(nx3d::gungame::kCountdownPrefix))
-            {
-                int seconds = 0;
-                if (game_mode && nx3d::gungame::decodeCountdown(message.getPayload(), seconds))
-                    game_mode->onGunGameCountdown(*this, seconds);
-                continue;
-            }
-            if (!sender && std::string_view(message.getPayload()).starts_with(nx3d::economy::kGrenadeMessagePrefix))
-            {
-                nx3d::economy::GrenadeThrow event;
-                if (game_mode && nx3d::economy::decodeGrenade(message.getPayload(), event))
-                    game_mode->onGrenadeThrown(*this, event);
-                continue;
-            }
-            if (!sender && std::string_view(message.getPayload()).starts_with(nx3d::economy::kMessagePrefix))
-            {
-                nx3d::economy::Snapshot state;
-                if (nx3d::economy::decode(message.getPayload(), state))
-                {
-                    economyState = std::move(state);
-                    ui->moneyText.setString("$" + std::to_string(economyState.money) + "  |  B: Buy" +
-                                           (economyState.objects.count("defuse_kit") > 0 ? "  |  KIT" : ""));
-                    if (game_mode)
-                        game_mode->onEconomySnapshot(*this, economyState);
-                    buyNotice = economyState.notice;
-                    if (currentState == State::Buy && game_mode)
-                        ui->showBuyMenu(buyStyle, economyState,
-                                        ui->teamDisplayText.getString(), buyNotice,
-                                        selectedRoomGameMode == nx3d::GameMode::bomb);
-                }
-                continue;
-            }
             const std::string name = sender ? sender->getUsername() : std::string("unknown");
 
             chatMessages.push_back(

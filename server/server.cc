@@ -32,6 +32,7 @@
 #include <functional>
 #include <iostream>
 #include <pthread.h>
+#include <string_view>
 
 namespace
 {
@@ -80,6 +81,10 @@ int main(int argc, char* argv[])
     server_config.setMode(AuthenticationMode::password_protected);
     server_config.setPassphrase("password");
     server_config.setRootPassword("root");
+    // The game has no account database. Each client uses a fresh session ID;
+    // the existing shared password remains the credential for joining.
+    server_config.setAccountAuthenticator([](std::string_view account, std::string_view credential)
+                                          { return !account.empty() && credential == "password"; });
     // Leave room for movement plus firing, audio, and menu commands without
     // relaxing the server's separate movement-speed validation.
     server_config.setMaxCommandRate(180.0f);

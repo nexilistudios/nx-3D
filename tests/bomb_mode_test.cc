@@ -3,6 +3,7 @@
 #include <shared/bomb_sites.hh>
 #include <shared/bomb_damage.hh>
 #include <shared/player_rules.hh>
+#include <tests/server_event_test.hh>
 
 #include <nexilis/client/client_api.hh>
 #include <nexilis/command_type.hh>
@@ -89,7 +90,8 @@ int main()
                   "Cannot start game because Counter Terrorist team is empty",
           "Missing-team error was not sent to clients");
 
-    check(room->canSelectTeam(10), "Waiting player could not switch team");
+    check(room->canSelectTeam(10, "Counter Terrorist"), "Waiting player could not switch team");
+    check(!room->canSelectTeam(10, "Unknown"), "Unknown team was accepted");
     room->setPlayerTeam(10, "Counter Terrorist");
     GameModeRegistry::update(1.0f);
     auto waitingForT = t.consumeMatchEvents();
@@ -104,7 +106,7 @@ int main()
     auto first = t.consumeMatchEvents();
     check(bomb(first).round == 1 && bomb(first).alive, "Bad first round state");
     nx3d::economy::Snapshot initialInventory;
-    check(nx3d::economy::decode(t.getChatSnapshot(777).back().message, initialInventory) &&
+    check(nx3d::economy::decode(latestServerEvent(t, "economy"), initialInventory) &&
                   initialInventory.objects.count("bomb") == 1 &&
                   initialInventory.effect == "bomb_spawn",
           "Terrorist was not issued the bomb NXObject");
@@ -118,7 +120,7 @@ int main()
     ctUser->getObject3D().setPosition(Vector3f{355.0f, -48.0f, -2364.0f});
     check(room->onPlayerAction(20, 16), "CT could not buy a defuse kit at spawn");
     nx3d::economy::Snapshot kitState;
-    check(nx3d::economy::decode(ct.getChatSnapshot(777).back().message, kitState) &&
+    check(nx3d::economy::decode(latestServerEvent(ct, "economy"), kitState) &&
                   kitState.money == 400 && kitState.objects.count("defuse_kit") == 1,
           "Defuse kit purchase did not debit money or grant equipment");
     ctUser->getObject3D().setPosition(Vector3f{0.0f, 0.0f, 0.0f});
@@ -129,7 +131,7 @@ int main()
     check(room->onPlayerAction(10, 20), "Terrorist could not buy smoke");
     check(room->onPlayerAction(10, 19), "Terrorist could not buy an HE grenade");
     nx3d::economy::Snapshot throwableInventory;
-    check(nx3d::economy::decode(t.getChatSnapshot(777).back().message,
+    check(nx3d::economy::decode(latestServerEvent(t, "economy"),
                                 throwableInventory) &&
                   throwableInventory.objects.count("smoke") == 1 &&
                   throwableInventory.objects.count("grenade") == 1,
@@ -140,7 +142,7 @@ int main()
     check(room->onPlayerAction(10, nx3d::economy::kThrowSmokeAction),
           "Smoke throw was rejected");
     nx3d::economy::GrenadeThrow smoke;
-    check(nx3d::economy::decodeGrenade(t.getChatSnapshot(777).back().message, smoke) &&
+    check(nx3d::economy::decodeGrenade(latestServerEvent(t, "grenade"), smoke) &&
                   smoke.objectId == "smoke" && smoke.owner == 10,
           "Smoke event was not broadcast with its type");
     check(!room->onPlayerAction(10, nx3d::economy::kThrowSmokeAction),
@@ -186,7 +188,7 @@ int main()
     check(bomb(planted).bomb_planted && bomb(planted).bomb_x == 1152.0f,
           "Bomb did not plant at A");
     nx3d::economy::Snapshot plantedInventory;
-    check(nx3d::economy::decode(t.getChatSnapshot(777).back().message, plantedInventory) &&
+    check(nx3d::economy::decode(latestServerEvent(t, "economy"), plantedInventory) &&
                   plantedInventory.objects.count("bomb") == 0,
           "Bomb remained in inventory after planting");
     ctUser->getObject3D().setPosition(Vector3f{1152.0f, 160.0f, -2416.0f});
@@ -201,8 +203,8 @@ int main()
     GameModeRegistry::update(0.2f);
     check(room->canDamage(30, 20), "Queued player not admitted next round");
     nx3d::economy::Snapshot firstTInventory, secondTInventory;
-    check(nx3d::economy::decode(t.getChatSnapshot(777).back().message, firstTInventory) &&
-                  nx3d::economy::decode(queued.getChatSnapshot(777).back().message,
+    check(nx3d::economy::decode(latestServerEvent(t, "economy"), firstTInventory) &&
+                  nx3d::economy::decode(latestServerEvent(queued, "economy"),
                                         secondTInventory) &&
                   firstTInventory.objects.count("bomb") +
                           secondTInventory.objects.count("bomb") == 1,
@@ -213,7 +215,7 @@ int main()
                   (secondTInventory.effect == "bomb_spawn"),
           "Round start did not identify the bomb carrier for auto-equip");
     nx3d::economy::Snapshot survivingCtInventory;
-    check(nx3d::economy::decode(ct.getChatSnapshot(777).back().message,
+    check(nx3d::economy::decode(latestServerEvent(ct, "economy"),
                                 survivingCtInventory) &&
                   survivingCtInventory.objects.count("defuse_kit") == 1 &&
                   firstTInventory.objects.count("grenade") == 1 &&
@@ -251,7 +253,7 @@ int main()
                   !room->onPlayerAction(10, nx3d::economy::kEquipBombAction),
           "Bomb ownership did not transfer on pickup");
     nx3d::economy::Snapshot pickedBomb;
-    check(nx3d::economy::decode(queued.getChatSnapshot(777).back().message, pickedBomb) &&
+    check(nx3d::economy::decode(latestServerEvent(queued, "economy"), pickedBomb) &&
                   pickedBomb.objects.count("bomb") == 1 &&
                   pickedBomb.effect == "bomb_pickup",
           "Bomb pickup did not update the item inventory");
@@ -283,9 +285,9 @@ int main()
                                { return item.getType() == "bomb"; }),
                   "Old round bomb remained on the ground");
             nx3d::economy::Snapshot survivor, respawnedCt, respawnedT;
-            check(nx3d::economy::decode(t.getChatSnapshot(777).back().message, survivor) &&
-                          nx3d::economy::decode(ct.getChatSnapshot(777).back().message, respawnedCt) &&
-                          nx3d::economy::decode(queued.getChatSnapshot(777).back().message,
+            check(nx3d::economy::decode(latestServerEvent(t, "economy"), survivor) &&
+                          nx3d::economy::decode(latestServerEvent(ct, "economy"), respawnedCt) &&
+                          nx3d::economy::decode(latestServerEvent(queued, "economy"),
                                                 respawnedT) &&
                           survivor.primary == "mp5" && survivor.secondary == "deagle" &&
                           survivor.objects.count("grenade") == 1 &&
@@ -320,7 +322,7 @@ int main()
                   room->getPlayerTeam(20) == "Terrorist",
           "Halftime did not swap sides");
     nx3d::economy::Snapshot swappedInventory;
-    check(nx3d::economy::decode(t.getChatSnapshot(777).back().message,
+    check(nx3d::economy::decode(latestServerEvent(t, "economy"),
                                 swappedInventory) &&
                   swappedInventory.primary.empty() && swappedInventory.secondary == "usp" &&
                   swappedInventory.objects.count("grenade") == 0,
@@ -329,7 +331,7 @@ int main()
     check(bomb(secondHalf).round == 13 &&
                   bomb(secondHalf).counter_terrorist_score == 11,
           "Half-time score was not carried to new sides");
-    check(room->canSelectTeam(10), "Active player could not switch team");
+    check(room->canSelectTeam(10, "Terrorist"), "Active player could not switch team");
 
     auto secondT = server::ClientStorage::getClientById(20);
     secondT->getObject3D().setPosition(Vector3f{-1600.0f, 64.0f, -2700.0f});

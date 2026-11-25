@@ -2,6 +2,7 @@
 #define NX3D_SERVER_GAMEMODE_ECONOMY_HH
 
 #include <shared/economy.hh>
+#include <server/room_event.hh>
 
 #include <nexilis/command_type.hh>
 #include <nexilis/room_command_type.hh>
@@ -345,10 +346,8 @@ public:
                                     nx3d::economy::kGrenadeFuseSeconds});
         }
         send(room, id, state);
-        nexilis::server::Command::ClientMsgType data{
-                {"action", "broadcast"}, {"room_id", room.getId()}, {"client_id", 0}, {"message", boost::json::value(nx3d::economy::encodeGrenade(throwEvent))}};
-        room.broadcastToAll(nexilis::server::Command::clientMessageData(
-                nexilis::CommandType::room, "communication", 0, data));
+        room.broadcastToAll(nx3d::server::roomEvent(
+                room.getId(), "grenade", nx3d::economy::encodeGrenade(throwEvent)));
         return true;
     }
 
@@ -457,13 +456,8 @@ private:
         auto user = nexilis::server::ClientStorage::getClientById(id);
         if (!user || !user->isBoostTCPSet())
             return;
-        // Nexilis room messages carry application-specific per-player data.
-        // A zero sender ID marks this as server data; the client consumes the
-        // reserved prefix before it reaches the visible player chat.
-        nexilis::server::Command::ClientMsgType data{
-                {"action", "broadcast"}, {"room_id", room.getId()}, {"client_id", 0}, {"message", boost::json::value(nx3d::economy::encode(state))}};
-        user->boostTCPSend(nexilis::server::Command::clientMessageData(
-                nexilis::CommandType::room, "communication", 0, data));
+        user->boostTCPSend(nx3d::server::roomEvent(
+                room.getId(), "economy", nx3d::economy::encode(state)));
     }
 
     mutable std::mutex m_mutex;

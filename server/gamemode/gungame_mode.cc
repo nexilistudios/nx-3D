@@ -1,6 +1,7 @@
 #include <server/gamemode/gungame_mode.hh>
 
 #include <shared/gungame.hh>
+#include <server/room_event.hh>
 
 #include <nexilis/command_type.hh>
 #include <nexilis/room_command_type.hh>
@@ -19,11 +20,8 @@ namespace
 {
 void broadcastCountdown(nexilis::server::Room& room, int seconds)
 {
-    nexilis::server::Command::ClientMsgType data{
-            {"action", "broadcast"}, {"room_id", room.getId()}, {"client_id", 0},
-            {"message", boost::json::value(nx3d::gungame::encodeCountdown(seconds))}};
-    room.broadcastToAll(nexilis::server::Command::clientMessageData(
-            nexilis::CommandType::room, "communication", 0, data));
+    room.broadcastToAll(nx3d::server::roomEvent(
+            room.getId(), "gungame_countdown", nx3d::gungame::encodeCountdown(seconds)));
 }
 } // namespace
 
@@ -88,11 +86,8 @@ void GunGameMode::onPlayerDeath(nexilis::server::Room& room, uint64_t killer,
     }
     nx3d::gungame::rankStandings(result.standings);
     broadcastCountdown(room, nx3d::gungame::kRestartSeconds);
-    nexilis::server::Command::ClientMsgType data{
-            {"action", "broadcast"}, {"room_id", room.getId()}, {"client_id", 0},
-            {"message", boost::json::value(nx3d::gungame::encodeResult(result))}};
-    room.broadcastToAll(nexilis::server::Command::clientMessageData(
-            nexilis::CommandType::room, "communication", 0, data));
+    room.broadcastToAll(nx3d::server::roomEvent(
+            room.getId(), "gungame_result", nx3d::gungame::encodeResult(result)));
 }
 
 void GunGameMode::update(nexilis::server::Room& room, float dt)
