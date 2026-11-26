@@ -5,6 +5,7 @@
 #include <shared/map_document.hh>
 #include <shared/player_hit.hh>
 #include <shared/player_rules.hh>
+#include <server/room_event.hh>
 
 #include <nexilis/command_type.hh>
 #include <nexilis/room_command_type.hh>
@@ -453,6 +454,56 @@ bool Authority::move(nexilis::server::Room& room, uint64_t playerId,
 
 void Authority::update(nexilis::server::Room& room, float dt)
 {
+    std::vector<FlyingGrenade> exploded;
+    {
+        std::lock_guard lock(m_mutex);
+        for (auto it = m_flyingGrenades.begin(); it != m_flyingGrenades.end();)
+        {
+            it->seconds -= std::max(0.0f, dt);
+            if (it->seconds <= 0.0f)
+            {
+                exploded.push_back(*it);
+                it = m_flyingGrenades.erase(it);
+            }
+            else
+                ++it;
+        }
+    }
+    const auto* launcherObject = nx3d::findNXObject("launcher");
+    for (const auto& grenade : exploded)
+    {
+        auto owner = nexilis::server::ClientStorage::getClientById(grenade.owner);
+        if (!owner || owner->getRoomId() != room.getId())
+            continue;
+        for (auto id : room.getClients())
+        {
+            if (id == grenade.owner || room.getPlayerHealth(id) <= 0.0f ||
+                room.getPlayerTeam(id) == grenade.team || !room.canDamage(grenade.owner, id))
+                continue;
+            auto victim = nexilis::server::ClientStorage::getClientById(id);
+            if (!victim)
+                continue;
+            const float distance = glm::distance(asGlm(victim->getObject3D().getPosition()),
+                                                 glm::vec3(grenade.x, grenade.y, grenade.z));
+            if (distance >= launcherObject->effect.radius)
+                continue;
+            const float damage = launcherObject->effect.maxDamage *
+                                 (1.0f - distance / launcherObject->effect.radius);
+            const bool killed = room.damagePlayer(id, damage);
+            nexilis::nx_data damageData{
+                    static_cast<uint8_t>(nexilis::CommandType::room),
+                    static_cast<uint8_t>(nexilis::RoomCommandType::Root::player_3D),
+                    static_cast<uint8_t>(nexilis::RoomCommandType::PlayerType::shoot)};
+            nexilis::server::Command::ClientMsgType params{
+                    {"target_id", boost::json::value(id)},
+                    {"damage", boost::json::value(static_cast<double>(damage))},
+                    {"new_health", boost::json::value(static_cast<double>(room.getPlayerHealth(id)))} };
+            room.broadcastToAll(nexilis::server::Command::createRoomCommand(
+                    room.getId(), *owner, damageData, params, 0));
+            if (killed)
+                room.onPlayerDied(grenade.owner, id);
+        }
+    }
     // A slow tick previously discarded everything beyond 50 ms, which made
     // movement slow down whenever the server stalled. Recover a short missed
     // tick window in small physics steps instead of losing it. Much larger
@@ -709,34 +760,16 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
     if (launcher)
     {
         const glm::vec3 impact = mapPhysics(m_shipment).rayEnd(origin, origin + aim * closest);
-        const auto* object = nx3d::findNXObject("launcher");
-        for (auto id : room.getClients())
+        const float flightSeconds = std::max(0.05f, glm::distance(origin, impact) / 1600.0f);
         {
-            if (id == shooterId || room.getPlayerHealth(id) <= 0.0f ||
-                room.getPlayerTeam(id) == shooterTeam || !room.canDamage(shooterId, id))
-                continue;
-            auto victim = nexilis::server::ClientStorage::getClientById(id);
-            if (!victim)
-                continue;
-            const float distance = glm::distance(asGlm(victim->getObject3D().getPosition()), impact);
-            if (distance >= object->effect.radius)
-                continue;
-            const float damage = object->effect.maxDamage *
-                                 (1.0f - distance / object->effect.radius);
-            const bool killed = room.damagePlayer(id, damage);
-            nexilis::nx_data damageData{
-                    static_cast<uint8_t>(nexilis::CommandType::room),
-                    static_cast<uint8_t>(nexilis::RoomCommandType::Root::player_3D),
-                    static_cast<uint8_t>(nexilis::RoomCommandType::PlayerType::shoot)};
-            nexilis::server::Command::ClientMsgType params{
-                    {"target_id", boost::json::value(id)},
-                    {"damage", boost::json::value(static_cast<double>(damage))},
-                    {"new_health", boost::json::value(static_cast<double>(room.getPlayerHealth(id)))} };
-            room.broadcastToAll(nexilis::server::Command::createRoomCommand(
-                    room.getId(), *shooter, damageData, params, 0));
-            if (killed)
-                room.onPlayerDied(shooterId, id);
+            std::lock_guard lock(m_mutex);
+            m_flyingGrenades.push_back({shooterId, shooterTeam, impact.x, impact.y,
+                                        impact.z, flightSeconds});
         }
+        room.broadcastToAll(nx3d::server::roomEvent(
+                room.getId(), "launcher", nx3d::economy::encodeLauncher(
+                        {shooterId, origin.x, origin.y, origin.z,
+                         impact.x, impact.y, impact.z, flightSeconds})));
         return std::nullopt;
     }
     if (!targetId || mapPhysics(m_shipment).blocks(origin, origin + aim * closest))

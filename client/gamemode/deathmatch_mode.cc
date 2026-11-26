@@ -100,7 +100,7 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
     for (auto it = m_grenadeVisuals.begin(); it != m_grenadeVisuals.end();)
     {
         it->age += delta_time;
-        if (it->age >= nx3d::economy::kGrenadeFuseSeconds && it->model)
+        if (it->age >= it->flightSeconds && it->model)
         {
             if (!it->smoke && app.explosion_audio)
                 app.explosion_audio->playAt(it->end);
@@ -158,14 +158,15 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
         }
         if (it->model)
         {
-            const float progress = it->age / nx3d::economy::kGrenadeFuseSeconds;
+            const float progress = std::min(1.0f, it->age / it->flightSeconds);
             const glm::vec3 position = it->start + (it->end - it->start) * progress +
-                                       glm::vec3(0.0f, std::sin(progress * 3.14159265f) * 55.0f, 0.0f);
+                                       glm::vec3(0.0f, it->launched ? 0.0f :
+                                                 std::sin(progress * 3.14159265f) * 55.0f, 0.0f);
             it->model->setPosition({position.x, position.y, position.z});
         }
         else if (it->smoke)
         {
-            const float cloudAge = it->age - nx3d::economy::kGrenadeFuseSeconds;
+            const float cloudAge = it->age - it->flightSeconds;
             if (it->smokeEmitterId != 0 &&
                 cloudAge >= nx3d::economy::kSmokeDurationSeconds - kSmokeParticleLifetime)
             {
@@ -180,7 +181,7 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
         }
         else
         {
-            const float burstAge = it->age - nx3d::economy::kGrenadeFuseSeconds;
+            const float burstAge = it->age - it->flightSeconds;
             const float progress = std::min(1.0f, burstAge / kExplosionVisualSeconds);
             for (std::size_t spark = 0; spark < it->sparks.size(); ++spark)
             {
@@ -192,7 +193,7 @@ void DeathmatchMode::update(ClientApp& app, float delta_time)
                         std::cos(angle) * distance, height, std::sin(angle) * distance));
             }
         }
-        if (!it->model && it->age >= nx3d::economy::kGrenadeFuseSeconds +
+        if (!it->model && it->age >= it->flightSeconds +
                                   (it->smoke ? nx3d::economy::kSmokeDurationSeconds :
                                                kExplosionVisualSeconds))
         {
@@ -601,6 +602,13 @@ void DeathmatchMode::onGrenadeThrown(ClientApp& app, const nx3d::economy::Grenad
                 event.objectId == "smoke");
 }
 
+void DeathmatchMode::onLauncherFired(ClientApp& app,
+                                    const nx3d::economy::LauncherProjectile& event)
+{
+    showGrenade(app, {event.x, event.y, event.z},
+                {event.endX, event.endY, event.endZ}, false, event.flightSeconds, true);
+}
+
 void DeathmatchMode::handleKeyUp(ClientApp& app, const SDL_Event& event)
 {
     if (event.key.key == SDLK_TAB)
@@ -812,7 +820,8 @@ void DeathmatchMode::throwGrenade(ClientApp& app)
         refreshWeaponHud(app);
 }
 
-void DeathmatchMode::showGrenade(ClientApp& app, glm::vec3 start, glm::vec3 end, bool smoke)
+void DeathmatchMode::showGrenade(ClientApp& app, glm::vec3 start, glm::vec3 end, bool smoke,
+                                float flightSeconds, bool launched)
 {
     const auto profile = getWeaponProfile(smoke ? "smoke" : "grenade");
     auto model = std::make_shared<spear::rendering::vulkan::OBJModel>(
@@ -823,7 +832,7 @@ void DeathmatchMode::showGrenade(ClientApp& app, glm::vec3 start, glm::vec3 end,
             blt::ObjectData(app.shared_world, 0.0f, start, app.default_size));
     model->scale(glm::vec3(profile.ground_scale));
     app.scene_manager.getCurrentScene()->addObject(model);
-    m_grenadeVisuals.push_back({model, start, end, 0.0f, smoke});
+    m_grenadeVisuals.push_back({model, start, end, 0.0f, smoke, flightSeconds, launched});
 }
 
 void DeathmatchMode::refreshWeaponHud(ClientApp& app)

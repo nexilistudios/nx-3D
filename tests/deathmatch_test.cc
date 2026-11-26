@@ -404,6 +404,26 @@ int main()
                         balance.money == nx3d::economy::kMaximumMoney,
                 "Kill rewards did not respect the money cap");
 
+        room->resetPlayerHealth(20);
+        shopper->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
+        fallingPlayer->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
+        require(room->onPlayerAction(10, 21) &&
+                        room->onPlayerAction(10, nx3d::economy::kEquipPrimaryAction),
+                "Launcher could not be bought and equipped");
+        require(sendAsShooter(client::Packet::Room::Player3D::fire(
+                        shooter, Vector3f{0.0f, 0.0f, -1.0f}, 1)) ==
+                        server::CommandResult::success,
+                "Launcher shot was rejected");
+        nx3d::economy::LauncherProjectile projectile;
+        require(nx3d::economy::decodeLauncher(latestServerEvent(victim, "launcher"), projectile) &&
+                        projectile.owner == 10 && projectile.flightSeconds > 0.0f,
+                "Launcher projectile was not broadcast");
+        require(room->getPlayerHealth(20) == 100.0f,
+                "Launcher exploded before its projectile arrived");
+        Registry::update(projectile.flightSeconds + 0.01f);
+        require(room->getPlayerHealth(20) < 100.0f,
+                "Launcher projectile did not explode on arrival");
+
         nx3d::server::gamemode::GunGameMode gunGame;
         gunGame.onTeamSelected(*room, 10);
         gunGame.onTeamSelected(*room, 20);

@@ -156,6 +156,41 @@ struct Snapshot
 
 inline constexpr std::string_view kMessagePrefix = "\x1eNX3D_ECONOMY ";
 inline constexpr std::string_view kGrenadeMessagePrefix = "\x1eNX3D_GRENADE ";
+inline constexpr std::string_view kLauncherMessagePrefix = "\x1eNX3D_LAUNCHER ";
+
+struct LauncherProjectile
+{
+    uint64_t owner = 0;
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    float endX = 0.0f, endY = 0.0f, endZ = 0.0f;
+    float flightSeconds = 0.0f;
+};
+
+inline std::string encodeLauncher(const LauncherProjectile& shot)
+{
+    return std::string(kLauncherMessagePrefix) + std::to_string(shot.owner) + " " +
+           std::to_string(shot.x) + " " + std::to_string(shot.y) + " " +
+           std::to_string(shot.z) + " " + std::to_string(shot.endX) + " " +
+           std::to_string(shot.endY) + " " + std::to_string(shot.endZ) + " " +
+           std::to_string(shot.flightSeconds);
+}
+
+inline bool decodeLauncher(std::string_view message, LauncherProjectile& shot)
+{
+    if (!message.starts_with(kLauncherMessagePrefix))
+        return false;
+    std::istringstream input{std::string(message.substr(kLauncherMessagePrefix.size()))};
+    LauncherProjectile next;
+    if (!(input >> next.owner >> next.x >> next.y >> next.z >> next.endX >>
+          next.endY >> next.endZ >> next.flightSeconds) || next.owner == 0 ||
+        !std::isfinite(next.x) || !std::isfinite(next.y) || !std::isfinite(next.z) ||
+        !std::isfinite(next.endX) || !std::isfinite(next.endY) ||
+        !std::isfinite(next.endZ) || !std::isfinite(next.flightSeconds) ||
+        next.flightSeconds <= 0.0f || next.flightSeconds > 2.0f)
+        return false;
+    shot = next;
+    return true;
+}
 
 struct GrenadeThrow
 {

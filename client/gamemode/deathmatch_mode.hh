@@ -45,6 +45,7 @@ public:
     void changeTeam(ClientApp& app, const std::string& team) override;
     void onEconomySnapshot(ClientApp& app, const nx3d::economy::Snapshot& state) override;
     void onGrenadeThrown(ClientApp& app, const nx3d::economy::GrenadeThrow& event) override;
+    void onLauncherFired(ClientApp& app, const nx3d::economy::LauncherProjectile& event) override;
     void onAuthoritativeAnimation(ClientApp& app, const std::string& state,
                                   const std::string& weapon, float duration) override;
 
@@ -65,7 +66,9 @@ protected:
     int nextUtilitySlot() const;
     int utilityKey() const;
     void throwGrenade(ClientApp& app);
-    void showGrenade(ClientApp& app, glm::vec3 start, glm::vec3 end, bool smoke);
+    void showGrenade(ClientApp& app, glm::vec3 start, glm::vec3 end, bool smoke,
+                     float flightSeconds = nx3d::economy::kGrenadeFuseSeconds,
+                     bool launched = false);
     void installOverlay(ClientApp& app);
     float fireIntervalSeconds() const;
     glm::vec3 pickSpawnPoint();
@@ -108,6 +111,8 @@ protected:
         glm::vec3 end;
         float age = 0.0f;
         bool smoke = false;
+        float flightSeconds = nx3d::economy::kGrenadeFuseSeconds;
+        bool launched = false;
         spear::rendering::SmokeManager::Id smokeEmitterId = 0;
         std::vector<std::shared_ptr<spear::rendering::vulkan::Cube>> sparks;
     };

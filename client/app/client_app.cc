@@ -1011,6 +1011,12 @@ void ClientApp::updateChatMessages()
             if (game_mode && nx3d::economy::decodeGrenade(payload, grenade))
                 game_mode->onGrenadeThrown(*this, grenade);
         }
+        else if (event.event == "launcher")
+        {
+            nx3d::economy::LauncherProjectile projectile;
+            if (game_mode && nx3d::economy::decodeLauncher(payload, projectile))
+                game_mode->onLauncherFired(*this, projectile);
+        }
         else if (event.event == "economy")
         {
             nx3d::economy::Snapshot state;

@@ -10,6 +10,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace nx3d::server::gamemode
 {
@@ -67,8 +68,17 @@ private:
         WeaponState knife;
     };
 
+    struct FlyingGrenade
+    {
+        uint64_t owner;
+        std::string team;
+        float x, y, z;
+        float seconds;
+    };
+
     std::mutex m_mutex;
     std::unordered_map<uint64_t, PlayerState> m_players;
+    std::vector<FlyingGrenade> m_flyingGrenades;
     uint64_t m_spawnCounter = 0;
 };
 

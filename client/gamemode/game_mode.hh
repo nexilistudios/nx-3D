@@ -53,6 +53,9 @@ public:
     virtual void onGrenadeThrown(ClientApp&, const nx3d::economy::GrenadeThrow&)
     {
     }
+    virtual void onLauncherFired(ClientApp&, const nx3d::economy::LauncherProjectile&)
+    {
+    }
     virtual void onGunGameResult(ClientApp&, const nx3d::gungame::Result&)
     {
     }
