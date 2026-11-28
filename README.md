@@ -190,7 +190,7 @@ See `assets/maps/dust2_cs2/README.md` for the generated plan.
 The separate Shipment container yard is `assets/maps/shipment/map.brush`. It
 uses bright blue, green, and red containers, with its own generated textures
 and Deathmatch spawns. Run `python3 tools/generate_shipment.py` to regenerate
-it. The server offers Shipment as the first room and Dust II as the second;
+it. The server starts with Shipment Deathmatch, Dust II Bomb, and Shipment Gun Game rooms;
 clients load the chosen room's map automatically. Use `--map-preview` or
 `--map-editor` with `--map assets/maps/shipment/map.brush` to inspect or edit it. See
 `assets/maps/shipment/README.md` for details.

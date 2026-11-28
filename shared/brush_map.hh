@@ -20,6 +20,7 @@ inline constexpr const char* kGeneratedMapPath = "maps/dust2_cs2/map.brush";
 inline constexpr const char* kShipmentMapPath = "maps/shipment/map.brush";
 inline constexpr std::string_view kShipmentRoomName = "Shipment DM";
 inline constexpr std::string_view kDust2RoomName = "Dust2 Bomb";
+inline constexpr std::string_view kShipmentGunGameRoomName = "Shipment GunGame";
 inline const char* mapPathForRoom(std::string_view roomName)
 {
     return roomName.starts_with("Shipment") ? kShipmentMapPath : kGeneratedMapPath;

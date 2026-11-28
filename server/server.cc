@@ -115,8 +115,7 @@ int main(int argc, char* argv[])
 
     namespace gamemode = nx3d::server::gamemode;
 
-    // The first room uses Shipment; the second uses Dust II. Room names are
-    // advertised to clients and identify the bundled map to load.
+    // Room names are advertised to clients and identify the bundled map to load.
     {
         auto room = createRoom(std::string(nx3d::kShipmentRoomName));
         auto roomId = room.getId();
@@ -131,6 +130,14 @@ int main(int argc, char* argv[])
         RoomStorage::add(std::move(room));
         gamemode::GameModeRegistry::assignRoom(*RoomStorage::getRoomById(roomId),
                                                 nx3d::GameMode::bomb);
+    }
+
+    {
+        auto room = createRoom(std::string(nx3d::kShipmentGunGameRoomName));
+        auto roomId = room.getId();
+        RoomStorage::add(std::move(room));
+        gamemode::GameModeRegistry::assignRoom(*RoomStorage::getRoomById(roomId),
+                                                nx3d::GameMode::gungame);
     }
 
     RoomStorage::setClientCreationHandler([](const User&, const nexilis::RoomData& data)
