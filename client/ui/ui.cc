@@ -835,8 +835,8 @@ void Ui::showBuyMenu(BuyStyle style, const nx3d::economy::Snapshot& state,
         text.setString(std::string(item.name) + "  $" + std::to_string(item.price));
         if (style == BuyStyle::List)
         {
-            text.setPosition(glm::vec2(-0.63f, 0.40f - static_cast<float>(i) * 0.095f));
-            m_buyItemQuads[i]->setPosition(glm::vec2(-0.68f, 0.36f - static_cast<float>(i) * 0.095f));
+            text.setPosition(glm::vec2(-0.63f, 0.40f - static_cast<float>(i) * 0.09f));
+            m_buyItemQuads[i]->setPosition(glm::vec2(-0.68f, 0.36f - static_cast<float>(i) * 0.09f));
             m_buyItemQuads[i]->setSize(glm::vec2(1.35f, 0.085f));
         }
         else if (style == BuyStyle::Radial)
@@ -852,9 +852,9 @@ void Ui::showBuyMenu(BuyStyle style, const nx3d::economy::Snapshot& state,
         else
         {
             text.setPosition(glm::vec2(-0.69f + static_cast<float>(i % 3) * 0.52f,
-                                       0.34f - static_cast<float>(i / 3) * 0.26f));
+                                       0.34f - static_cast<float>(i / 3) * 0.22f));
             m_buyItemQuads[i]->setPosition(glm::vec2(-0.73f + static_cast<float>(i % 3) * 0.52f,
-                                                     0.23f - static_cast<float>(i / 3) * 0.26f));
+                                                     0.23f - static_cast<float>(i / 3) * 0.22f));
             m_buyItemQuads[i]->setSize(glm::vec2(0.50f, 0.22f));
         }
     }
@@ -892,14 +892,14 @@ int Ui::buyItemAt(float x, float y) const
     {
         if (m_buyStyle == BuyStyle::List)
         {
-            const float rowY = 0.40f - static_cast<float>(i) * 0.095f;
+            const float rowY = 0.40f - static_cast<float>(i) * 0.09f;
             if (x >= -0.68f && x <= 0.63f && y >= rowY - 0.035f && y <= rowY + 0.055f)
                 return static_cast<int>(i);
         }
         else
         {
             const float rowX = -0.69f + static_cast<float>(i % 3) * 0.52f;
-            const float rowY = 0.34f - static_cast<float>(i / 3) * 0.26f;
+            const float rowY = 0.34f - static_cast<float>(i / 3) * 0.22f;
             if (x >= rowX - 0.03f && x <= rowX + 0.48f &&
                 y >= rowY - 0.08f && y <= rowY + 0.07f)
                 return static_cast<int>(i);

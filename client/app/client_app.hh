@@ -56,6 +56,7 @@ inline constexpr uint8_t kSoundLauncher = 11;
 inline constexpr uint8_t shotSoundForWeapon(const std::string_view type)
 {
     if (type == "m16") return kSoundM16;
+    if (type == "m60") return kSoundM16;
     if (type == "glock") return kSoundGlock;
     if (type == "usp") return kSoundUsp;
     if (type == "deagle") return kSoundDeagle;

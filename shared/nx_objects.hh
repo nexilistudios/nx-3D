@@ -64,7 +64,7 @@ struct NXObject
     NXObjectEffect effect;
 };
 
-inline constexpr std::array<NXObject, 14> kNXObjects{{
+inline constexpr std::array<NXObject, 15> kNXObjects{{
     {"ak47", "AK-47", NXObjectKind::firearm, 1, 14, 2700, "Terrorist",
      {"weapons/ak47.obj", "weapons/ak47.mtl", "weapons/ak47.obj", "weapons/ak47.mtl", 7.4f, .50f, {0,-.05f,.20f}, {.68f,-.58f,2.25f}, {-10,33,-12}, {1,4.4f,11.7f}},
      {600,30,3,2.5f,35,true,200}},
@@ -83,6 +83,9 @@ inline constexpr std::array<NXObject, 14> kNXObjects{{
     {"mp5", "MP5", NXObjectKind::firearm, 1, 13, 1500, "",
      {"weapons/mp5.obj", "weapons/mp5.mtl", "weapons/mp5.obj", "weapons/mp5.mtl", 7.8f, .56f, {0,-.08f,.20f}, {.68f,-.59f,2.22f}, {-10,33,-12}, {1,3.8f,10}},
      {800,30,3,2.4f,26,true,100}},
+    {"m60", "M60 LMG", NXObjectKind::firearm, 1, 22, 6000, "",
+     {"weapons/m60.obj", "weapons/m60.mtl", "weapons/m60.obj", "weapons/m60.mtl", 7.2f, .48f, {0,-.05f,.25f}, {.68f,-.59f,2.3f}, {-10,33,-12}, {2.0f,4.4f,13.0f}},
+     {550,100,2,5.5f,40,true,200}},
     {"launcher", "Grenade Launcher", NXObjectKind::firearm, 1, 21, 3200, "",
      {"weapons/launcher.obj", "weapons/launcher.mtl", "weapons/launcher.obj", "weapons/launcher.mtl", 7.5f, .52f, {0,-.08f,.18f}, {.68f,-.59f,2.25f}, {-10,33,-12}, {1.5f,4.0f,10}},
      {75,1,5,2.8f,0,false}, {1,0,0,190,90}},

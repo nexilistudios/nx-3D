@@ -16,8 +16,8 @@
 namespace nx3d::gungame
 {
 // A kill advances to the next stage. The kill made with the final knife wins.
-inline constexpr std::array<std::string_view, 6> kWeapons{
-        "glock", "mp5", "ak47", "m16", "launcher", "knife"};
+inline constexpr std::array<std::string_view, 7> kWeapons{
+        "glock", "mp5", "ak47", "m16", "m60", "launcher", "knife"};
 inline constexpr int kKillsToWin = static_cast<int>(kWeapons.size());
 inline constexpr int kRestartSeconds = 15;
 inline constexpr std::string_view weaponForKills(int kills)

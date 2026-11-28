@@ -80,8 +80,9 @@ int main()
         for (const auto& pistol : {"glock", "usp", "deagle"})
             validate(pistol, 60, 100, 3, -0.35f, 0.7f);
         validate("mp5", 120, 200, 3, -1.0f, 1.5f);
+        validate("m60", 200, 300, 3, -1.3f, 2.2f);
         validate("launcher", 120, 200, 3, -0.9f, 1.7f);
-        for (const auto& gun : {"ak47", "m16", "glock", "usp", "deagle", "mp5", "launcher"})
+        for (const auto& gun : {"ak47", "m16", "glock", "usp", "deagle", "mp5", "m60", "launcher"})
             validateReloadParts(gun);
         validate("knife", 20, 16, 2, -0.8f, 0.7f);
         validate("grenade", 20, 16, 2, -0.15f, 0.15f);

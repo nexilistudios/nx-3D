@@ -31,6 +31,9 @@ MATERIALS = {
     "mp5_body": (0.12, 0.13, 0.14),
     "mp5_metal": (0.26, 0.27, 0.28),
     "mp5_detail": (0.045, 0.05, 0.055),
+    "m60_body": (0.20, 0.22, 0.20),
+    "m60_metal": (0.10, 0.11, 0.10),
+    "m60_detail": (0.035, 0.040, 0.035),
     "launcher_body": (0.16, 0.20, 0.18),
     "launcher_metal": (0.31, 0.34, 0.32),
     "launcher_dark": (0.045, 0.055, 0.050),
@@ -240,6 +243,45 @@ def mp5():
     return gun
 
 
+def m60():
+    gun = Mesh()
+    # Broad receiver, fixed stock, and long barrel distinguish the belt-fed LMG.
+    gun.box(-.17, .17, -.15, .15, -.49, .62, "m60_metal")
+    gun.box(-.18, .18, .15, .20, -.43, .43, "m60_body")
+    gun.silhouette([(-.47, .09), (-.72, .11), (-1.32, .03),
+                    (-1.36, -.24), (-.78, -.25), (-.46, -.12)],
+                   .12, "m60_body")
+    gun.box(-.13, .13, -.28, -.10, -1.37, -1.26, "m60_detail")
+    gun.silhouette([(-.28, -.13), (-.45, -.16), (-.59, -.68),
+                    (-.37, -.70), (-.18, -.29)], .09, "m60_body")
+    gun.box(-.04, .04, -.34, -.18, .00, .15, "m60_detail")
+    # The ammunition box is the removable reload part.
+    gun.part = "magazine"
+    gun.box(-.40, -.14, -.64, -.15, -.15, .46, "m60_body")
+    gun.box(-.41, -.13, -.67, -.61, -.17, .48, "m60_metal")
+    for z in (-.09, .04, .17, .30):
+        gun.box(-.42, -.40, -.60, -.19, z, z + .025, "m60_detail")
+    gun.part = "body"
+    gun.box(-.21, .21, -.10, .05, .53, 1.29, "m60_body")
+    gun.cylinder_z(.54, 1.35, .09, -.02, "m60_metal", 12)
+    gun.cylinder_z(1.32, 2.20, .05, -.02, "m60_metal", 12)
+    gun.cylinder_z(2.14, 2.29, .075, -.02, "m60_detail", 10)
+    gun.box(-.025, .025, .04, .26, 2.05, 2.10, "m60_metal")
+    gun.box(-.14, .14, .22, .27, -.24, .45, "m60_metal")
+    gun.box(-.15, -.11, .14, .25, -.26, .48, "m60_detail")
+    gun.box(.11, .15, .14, .25, -.26, .48, "m60_detail")
+    gun.box(-.19, .19, .17, .22, 1.17, 1.22, "m60_metal")
+    # Folding bipod under the barrel.
+    for side in (-1, 1):
+        x = side * .17
+        gun.box(x - .018, x + .018, -.59, -.12, 1.25, 1.31, "m60_metal")
+        gun.box(x - .09, x + .09, -.61, -.57, 1.23, 1.34, "m60_detail")
+    for z in (.65, .81, .97, 1.13):
+        gun.box(-.225, -.215, -.04, .04, z, z + .025, "m60_detail")
+        gun.box(.215, .225, -.04, .04, z, z + .025, "m60_detail")
+    return gun
+
+
 def launcher():
     gun = Mesh()
     gun.box(-.13, .13, -.14, .15, -.48, .47, "launcher_body")
@@ -267,6 +309,7 @@ def main():
     for name in ("glock", "usp", "deagle"):
         pistol(name).write(name, output)
     mp5().write("mp5", output)
+    m60().write("m60", output)
     launcher().write("launcher", output)
 
 

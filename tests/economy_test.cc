@@ -16,13 +16,20 @@ void require(bool ok, const char* message)
 int main()
 {
     using namespace nx3d::economy;
-    require(kItems.size() == 12, "Buy catalog changed unexpectedly");
+    require(kItems.size() == 13, "Buy catalog changed unexpectedly");
+    const auto* m60 = nx3d::findNXObject("m60");
+    require(m60 && m60->combat.magazineSize == 100 && m60->combat.automatic &&
+                    itemForAction(22)->object == m60,
+            "M60 belt or purchase action is incorrect");
+    for (const auto& item : kItems)
+        if (item.kind == ItemKind::weapon && item.object != m60)
+            require(m60->price > item.price, "M60 is not the most expensive gun");
     require(defaultWeapon("Terrorist") == "glock" &&
                     defaultWeapon("Counter Terrorist") == "usp",
             "Starter pistols do not match teams");
     require(isSecondary("glock") && isSecondary("usp") && isSecondary("deagle") &&
                     !isSecondary("mp5") && !isSecondary("ak47") &&
-                    !isSecondary("launcher"),
+                    !isSecondary("launcher") && !isSecondary("m60"),
             "Weapon slot classification is wrong");
     require(itemForAction(19)->kind == ItemKind::grenade &&
                     itemForAction(20)->kind == ItemKind::grenade &&

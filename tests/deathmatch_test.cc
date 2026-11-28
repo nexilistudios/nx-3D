@@ -506,6 +506,9 @@ int main()
         require(!gunGame.onAction(*room, 10, 10) &&
                         !gunGame.pickupWeapon(*room, 10, 1, "ak47"),
                 "Gun Game allowed purchases or pickups to skip progression");
+        require(nx3d::gungame::weaponForKills(4) == "m60" &&
+                        nx3d::gungame::weaponForKills(5) == "launcher",
+                "M60 Gun Game stage is not before the launcher");
         for (int kill = 1; kill <= nx3d::gungame::kKillsToWin; ++kill)
         {
             if (kill == nx3d::gungame::kKillsToWin)

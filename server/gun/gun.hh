@@ -16,6 +16,7 @@ enum class GunType : uint8_t
     USP,
     Deagle,
     MP5,
+    M60,
     Launcher
 };
 
