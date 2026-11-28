@@ -34,6 +34,7 @@
 #include <fstream>
 #include <iostream>
 #include <iomanip>
+#include <iterator>
 #include <sstream>
 #include <thread>
 
@@ -452,14 +453,25 @@ void ClientApp::connect(const std::string& address)
     start_client.detach();
 }
 
-void ClientApp::showLobbyRooms()
+void ClientApp::showLobbyRooms(int selectedIndex)
 {
     roomMenu->clearItems();
     roomMenu->setPosition(glm::vec2(-0.8f, 0.3f));
+    const auto activeRooms = client_api.getActiveRooms();
     for (const auto& room : rooms)
-        roomMenu->addItem(chat::sanitize(roomDisplayName(room.getName())) +
+    {
+        const auto active = std::find_if(activeRooms.begin(), activeRooms.end(),
+                                         [&](const auto& candidate)
+                                         { return candidate.getId() == room.getId(); });
+        const std::string occupancy = active == activeRooms.end() ? "0/?" :
+                std::to_string(active->getClients().size()) + "/" +
+                std::to_string(active->getMaxSize());
+        roomMenu->addItem(chat::sanitize(roomDisplayName(room.getName())) + " " + occupancy +
                           (nx3d::teamDamageEnabled(room.getName()) ? " [Team damage]" : ""));
+    }
     roomMenu->addItem("New Room");
+    for (int i = 0; i < std::min(selectedIndex, static_cast<int>(rooms.size())); ++i)
+        roomMenu->selectNext();
     ui->statusText.setString(rooms.empty() ? "No rooms available" : "Select a room");
     ui->instructionsText.setString("Arrow keys: Navigate   |   Enter: Select   |   ESC: Quit");
 }
@@ -1211,10 +1223,13 @@ void ClientApp::run()
             }
             auto activeRooms = client_api.getActiveRooms();
             std::vector<nexilis::RoomInfo> updated;
+            std::vector<std::pair<std::size_t, std::size_t>> updatedCounts;
             updated.reserve(activeRooms.size());
+            updatedCounts.reserve(activeRooms.size());
             for (const auto& room : activeRooms)
             {
                 updated.emplace_back(room.getId(), room.getName());
+                updatedCounts.emplace_back(room.getClients().size(), room.getMaxSize());
                 if (creatingRoom && room.getCreatorId() == client_api.getClientId() &&
                     !knownRoomIds.contains(room.getId()))
                 {
@@ -1223,13 +1238,26 @@ void ClientApp::run()
                 }
             }
             if (currentState == State::Lobby && !creatingRoom &&
-                (updated.size() != rooms.size() ||
+                (updatedCounts != roomPlayerCounts || updated.size() != rooms.size() ||
                  !std::equal(updated.begin(), updated.end(), rooms.begin(), rooms.end(),
                              [](const auto& a, const auto& b)
                              { return a.getId() == b.getId() && a.getName() == b.getName(); })))
             {
+                int selectedIndex = roomMenu->getSelectedIndex();
+                if (selectedIndex == static_cast<int>(rooms.size()))
+                    selectedIndex = static_cast<int>(updated.size());
+                else if (selectedIndex >= 0 && selectedIndex < static_cast<int>(rooms.size()))
+                {
+                    const auto selectedRoomId = rooms[selectedIndex].getId();
+                    const auto selected = std::find_if(updated.begin(), updated.end(),
+                                                       [selectedRoomId](const auto& room)
+                                                       { return room.getId() == selectedRoomId; });
+                    selectedIndex = selected == updated.end() ? 0 :
+                            static_cast<int>(std::distance(updated.begin(), selected));
+                }
                 rooms = std::move(updated);
-                showLobbyRooms();
+                roomPlayerCounts = std::move(updatedCounts);
+                showLobbyRooms(selectedIndex);
             }
         }
 

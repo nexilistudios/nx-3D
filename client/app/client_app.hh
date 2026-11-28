@@ -21,11 +21,13 @@
 
 #include <atomic>
 #include <array>
+#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -167,6 +169,7 @@ public:
     bool pendingSpawnSync = false;
     std::mutex mtx;
     std::vector<nexilis::RoomInfo> rooms;
+    std::vector<std::pair<std::size_t, std::size_t>> roomPlayerCounts;
     std::atomic<bool> joiningRoom{false};
     float joiningRoomTimeout = 0.0f;
     uint64_t selectedRoomId = 0;
@@ -199,7 +202,7 @@ public:
     bool newRoomTeamDamage = false;
     uint32_t newRoomMaxPlayers = 8;
     std::string newRoomName;
-    void showLobbyRooms();
+    void showLobbyRooms(int selectedIndex = 0);
     void showCreateRoom();
     void joinRoom(uint64_t id, const std::string& name);
 
