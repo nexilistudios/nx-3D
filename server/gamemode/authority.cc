@@ -379,7 +379,8 @@ Authority::Authority(bool shipment) : m_shipment(shipment)
     (void)mapPhysics(m_shipment);
 }
 
-void Authority::spawn(nexilis::server::Room& room, uint64_t playerId, bool preserveEquipment)
+void Authority::spawn(nexilis::server::Room& room, uint64_t playerId,
+                      bool preserveEquipment, bool gunGame)
 {
     auto user = nexilis::server::ClientStorage::getClientById(playerId);
     if (!user)
@@ -396,7 +397,18 @@ void Authority::spawn(nexilis::server::Room& room, uint64_t playerId, bool prese
     std::string equipped;
     {
         std::lock_guard lock(m_mutex);
-        point = spawns[m_spawnCounter++ % spawns.size()];
+        if (gunGame)
+        {
+            std::uniform_int_distribution<std::size_t> distribution(0, nx3d::economy::kGunGameSpawnCount - 2);
+            std::size_t index = distribution(m_spawnRandom);
+            const auto last = m_lastGunGameSpawn.find(playerId);
+            if (last != m_lastGunGameSpawn.end() && index >= last->second)
+                ++index;
+            m_lastGunGameSpawn[playerId] = index;
+            point = nx3d::economy::gunGameSpawn(m_shipment, index);
+        }
+        else
+            point = spawns[m_spawnCounter++ % spawns.size()];
         auto& state = m_players[playerId];
         const auto primary = preserveEquipment ? state.primary : WeaponState{};
         const auto secondary = preserveEquipment ? state.secondary : WeaponState{};
@@ -783,6 +795,8 @@ void Authority::reconcile(const nexilis::server::Room& room)
     const std::unordered_set<uint64_t> present(clients.begin(), clients.end());
     std::lock_guard lock(m_mutex);
     std::erase_if(m_players, [&](const auto& entry)
+                  { return !present.contains(entry.first); });
+    std::erase_if(m_lastGunGameSpawn, [&](const auto& entry)
                   { return !present.contains(entry.first); });
 }
 

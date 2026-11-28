@@ -122,6 +122,39 @@ inline constexpr std::array<SpawnPoint, 5> kShipmentTSpawns{{
         {370.0f, 64.0f, 680.0f},
 }};
 
+// Gun Game can start or respawn on either team's side or in the rest of the arena.
+// Y is the standing camera height above the local floor.
+inline constexpr std::array<SpawnPoint, 8> kDust2GunGameMapSpawns{{
+        {-1584.0f, 64.0f, -2496.0f}, // B site
+        {-1520.0f, 64.0f, -1152.0f}, // upper tunnels
+        {-880.0f, -48.0f, -1408.0f}, // lower tunnels
+        {-704.0f, -48.0f, -2256.0f}, // CT mid
+        {-304.0f, -48.0f, -2176.0f}, // CT mid approach
+        {704.0f, 160.0f, -2560.0f}, // A site
+        {1456.0f, 64.0f, -1440.0f}, // long A
+        {-368.0f, 192.0f, -480.0f}, // top mid
+}};
+inline constexpr std::array<SpawnPoint, 8> kShipmentGunGameMapSpawns{{
+        {-680.0f, 64.0f, -350.0f}, {-680.0f, 64.0f, 150.0f},
+        {-680.0f, 64.0f, 450.0f}, {680.0f, 64.0f, -350.0f},
+        {680.0f, 64.0f, 150.0f}, {680.0f, 64.0f, 450.0f},
+        {0.0f, 64.0f, -120.0f}, {0.0f, 64.0f, 120.0f},
+}};
+
+inline constexpr std::size_t kGunGameSpawnCount =
+        kCtSpawns.size() + kTSpawns.size() + kDust2GunGameMapSpawns.size();
+
+inline constexpr SpawnPoint gunGameSpawn(bool shipment, std::size_t index)
+{
+    if (index < kCtSpawns.size())
+        return shipment ? kShipmentCtSpawns[index] : kCtSpawns[index];
+    index -= kCtSpawns.size();
+    if (index < kTSpawns.size())
+        return shipment ? kShipmentTSpawns[index] : kTSpawns[index];
+    index -= kTSpawns.size();
+    return shipment ? kShipmentGunGameMapSpawns[index] : kDust2GunGameMapSpawns[index];
+}
+
 inline bool inBuyZone(std::string_view team, float x, float y, float z,
                       bool shipment = false)
 {

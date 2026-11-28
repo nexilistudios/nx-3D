@@ -15,6 +15,7 @@
 #include <nexilis/server/room_storage.hh>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -497,6 +498,32 @@ int main()
         Registry::assignRoom(*room, nx3d::GameMode::gungame);
         room->setPlayerTeam(10, "Terrorist");
         room->setPlayerTeam(20, "Counter Terrorist");
+        std::array<bool, 3> seenSpawnCategory{};
+        std::size_t previousSpawn = nx3d::economy::kGunGameSpawnCount;
+        for (int spawn = 0; spawn < 200; ++spawn)
+        {
+            room->spawnPlayer(20);
+            const auto position = fallingPlayer->getObject3D().getPosition();
+            std::size_t matched = nx3d::economy::kGunGameSpawnCount;
+            for (std::size_t index = 0; index < nx3d::economy::kGunGameSpawnCount; ++index)
+            {
+                const auto point = nx3d::economy::gunGameSpawn(false, index);
+                if (position.x == point.x && position.y == point.y && position.z == point.z)
+                {
+                    matched = index;
+                    break;
+                }
+            }
+            require(matched < nx3d::economy::kGunGameSpawnCount && matched != previousSpawn,
+                    "Gun Game spawn was outside the pool or repeated immediately");
+            seenSpawnCategory[matched < nx3d::economy::kCtSpawns.size() ? 0 :
+                              matched < nx3d::economy::kCtSpawns.size() +
+                                        nx3d::economy::kTSpawns.size() ? 1 : 2] = true;
+            previousSpawn = matched;
+        }
+        require(std::all_of(seenSpawnCategory.begin(), seenSpawnCategory.end(),
+                            [](bool seen) { return seen; }),
+                "Gun Game did not use all three spawn categories");
         room->resetPlayerHealth(20);
         shopper->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
         fallingPlayer->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});

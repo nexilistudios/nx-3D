@@ -692,6 +692,15 @@ void DeathmatchMode::installOverlay(ClientApp& app)
 
 glm::vec3 DeathmatchMode::pickSpawnPoint()
 {
+    if (type() == nx3d::GameMode::gungame)
+    {
+        size_t index = rand() % nx3d::economy::kGunGameSpawnCount;
+        if (index == m_lastSpawnIndex)
+            index = (index + 1) % nx3d::economy::kGunGameSpawnCount;
+        m_lastSpawnIndex = index;
+        const auto point = nx3d::economy::gunGameSpawn(m_shipment, index);
+        return {point.x, point.y, point.z};
+    }
     const auto& spawns = m_shipment
                                  ? (m_team == "Terrorist" ? nx3d::economy::kShipmentTSpawns
                                                           : nx3d::economy::kShipmentCtSpawns)

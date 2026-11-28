@@ -8,6 +8,7 @@
 #include <functional>
 #include <mutex>
 #include <optional>
+#include <random>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -26,7 +27,8 @@ public:
         int reserve;
     };
     explicit Authority(bool shipment = false);
-    void spawn(nexilis::server::Room& room, uint64_t playerId, bool preserveEquipment = false);
+    void spawn(nexilis::server::Room& room, uint64_t playerId,
+               bool preserveEquipment = false, bool gunGame = false);
     bool move(nexilis::server::Room& room, uint64_t playerId,
               const nexilis::Vector3f& input, float yaw);
     void update(nexilis::server::Room& room, float dt);
@@ -80,6 +82,8 @@ private:
     std::unordered_map<uint64_t, PlayerState> m_players;
     std::vector<FlyingGrenade> m_flyingGrenades;
     uint64_t m_spawnCounter = 0;
+    std::mt19937 m_spawnRandom{std::random_device{}()};
+    std::unordered_map<uint64_t, std::size_t> m_lastGunGameSpawn;
 };
 
 } // namespace nx3d::server::gamemode

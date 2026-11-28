@@ -120,7 +120,8 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
         r.deleteGameItem(itemId);
         return true; });
     room.setSpawnHandler([authorityPtr, modePtr](nexilis::server::Room& r, uint64_t id)
-                         { authorityPtr->spawn(r, id, modePtr->preserveEquipmentOnSpawn(id)); });
+                         { authorityPtr->spawn(r, id, modePtr->preserveEquipmentOnSpawn(id),
+                                               modePtr->type() == nx3d::GameMode::gungame); });
     room.setMovementInputHandler([authorityPtr, roomId](uint64_t id,
                                                         const nexilis::Vector3f& input,
                                                         float yaw)
