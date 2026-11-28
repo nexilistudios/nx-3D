@@ -682,9 +682,10 @@ void ClientApp::pauseGame()
         settingsHovered = false;
         SDL_SetWindowRelativeMouseMode(window.getSDLWindow(), false);
         ui->pauseTitle.setString("PAUSED");
-        ui->pauseTeamTitle.setString("CHANGE TEAM");
-        ui->pauseCTText.setString("COUNTER TERRORIST");
-        ui->pauseTText.setString("TERRORIST");
+        const bool teamChoice = selectedRoomGameMode != nx3d::GameMode::gungame;
+        ui->pauseTeamTitle.setString(teamChoice ? "CHANGE TEAM" : "");
+        ui->pauseCTText.setString(teamChoice ? "COUNTER TERRORIST" : "");
+        ui->pauseTText.setString(teamChoice ? "TERRORIST" : "");
         ui->pauseQuitText.setString("[ QUIT GAME ]");
         ui->pauseSettingsText.setString("[ SETTINGS ]");
         ui->pauseInstructions.setString("ESC: Resume   |   Click a button");
@@ -741,9 +742,10 @@ void ClientApp::closeSettings()
     ui->hideSettings();
     currentState = State::Paused;
     ui->pauseTitle.setString("PAUSED");
-    ui->pauseTeamTitle.setString("CHANGE TEAM");
-    ui->pauseCTText.setString("COUNTER TERRORIST");
-    ui->pauseTText.setString("TERRORIST");
+    const bool teamChoice = selectedRoomGameMode != nx3d::GameMode::gungame;
+    ui->pauseTeamTitle.setString(teamChoice ? "CHANGE TEAM" : "");
+    ui->pauseCTText.setString(teamChoice ? "COUNTER TERRORIST" : "");
+    ui->pauseTText.setString(teamChoice ? "TERRORIST" : "");
     ui->pauseSettingsText.setString("[ SETTINGS ]");
     ui->pauseQuitText.setString("[ QUIT GAME ]");
     ui->pauseInstructions.setString("ESC: Resume   |   Click a button");
@@ -1344,9 +1346,14 @@ void ClientApp::run()
         {
             joiningRoom = false;
             teamSelectPlayers.clear();
-            ui->showTeamSelectTexts();
-            renderer.setUIRenderer(&ui->renderer());
-            currentState = State::TeamSelect;
+            if (selectedRoomGameMode == nx3d::GameMode::gungame)
+                enterGame("");
+            else
+            {
+                ui->showTeamSelectTexts();
+                renderer.setUIRenderer(&ui->renderer());
+                currentState = State::TeamSelect;
+            }
         }
         else if (currentState == State::Joining)
         {
@@ -1664,8 +1671,10 @@ void ClientApp::run()
                     float my = 1.0f - (static_cast<float>(event.motion.y) / static_cast<float>(live_h ? live_h : 1)) * 2.0f;
                     quitHovered = (mx >= -0.42f && mx <= 0.42f && my >= -0.37f && my <= -0.25f);
                     settingsHovered = (mx >= -0.42f && mx <= 0.42f && my >= -0.17f && my <= -0.05f);
-                    ctTeamHovered = (mx >= -0.44f && mx <= -0.02f && my >= 0.10f && my <= 0.23f);
-                    tTeamHovered = (mx >= 0.02f && mx <= 0.44f && my >= 0.10f && my <= 0.23f);
+                    ctTeamHovered = selectedRoomGameMode != nx3d::GameMode::gungame &&
+                                    (mx >= -0.44f && mx <= -0.02f && my >= 0.10f && my <= 0.23f);
+                    tTeamHovered = selectedRoomGameMode != nx3d::GameMode::gungame &&
+                                   (mx >= 0.02f && mx <= 0.44f && my >= 0.10f && my <= 0.23f);
                 }
                 if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT)
                 {
@@ -1673,13 +1682,15 @@ void ClientApp::run()
                     SDL_GetWindowSize(window.getSDLWindow(), &live_w, &live_h);
                     float mx = (static_cast<float>(event.button.x) / static_cast<float>(live_w ? live_w : 1)) * 2.0f - 1.0f;
                     float my = 1.0f - (static_cast<float>(event.button.y) / static_cast<float>(live_h ? live_h : 1)) * 2.0f;
-                    if (game_mode && mx >= -0.44f && mx <= -0.02f && my >= 0.10f && my <= 0.23f)
+                    if (game_mode && selectedRoomGameMode != nx3d::GameMode::gungame &&
+                        mx >= -0.44f && mx <= -0.02f && my >= 0.10f && my <= 0.23f)
                     {
                         game_mode->changeTeam(*this, "Counter Terrorist");
                         resumeGame();
                         break;
                     }
-                    if (game_mode && mx >= 0.02f && mx <= 0.44f && my >= 0.10f && my <= 0.23f)
+                    if (game_mode && selectedRoomGameMode != nx3d::GameMode::gungame &&
+                        mx >= 0.02f && mx <= 0.44f && my >= 0.10f && my <= 0.23f)
                     {
                         game_mode->changeTeam(*this, "Terrorist");
                         resumeGame();

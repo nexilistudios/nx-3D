@@ -591,8 +591,18 @@ int main()
         // Exercise a real Gun Game shot through the room command. The starter
         // Glock occupies primary slot 1 even though it is normally a sidearm.
         Registry::assignRoom(*room, nx3d::GameMode::gungame);
-        room->setPlayerTeam(10, "Terrorist");
-        room->setPlayerTeam(20, "Counter Terrorist");
+        room->setPlayerTeam(10, "");
+        room->setPlayerTeam(20, "");
+        require(!room->trySelectTeam(10, "Counter Terrorist"),
+                "Gun Game accepted a client-selected character");
+        Registry::update(0.01f);
+        for (auto id : {10, 20})
+            require(room->getPlayerTeam(id) == "Terrorist" ||
+                            room->getPlayerTeam(id) == "Counter Terrorist",
+                    "Gun Game did not assign a character automatically");
+        room->setPlayerTeam(20, room->getPlayerTeam(10));
+        require(room->canDamage(10, 20),
+                "Gun Game blocked damage against the same character model");
         std::array<bool, 3> seenSpawnCategory{};
         std::size_t previousSpawn = nx3d::economy::kGunGameSpawnCount;
         for (int spawn = 0; spawn < 200; ++spawn)
@@ -629,7 +639,7 @@ int main()
                         shooter, Vector3f{0.0f, 0.0f, -1.0f}, 1)) ==
                         server::CommandResult::success &&
                         room->getPlayerHealth(20) < 100.0f,
-                "Gun Game starter weapon did not damage an opponent");
+                "Gun Game starter weapon did not damage an opponent using the same character model");
         auto gunGameDamage = victim.consumeDamageEvents();
         require(gunGameDamage.size() == 1 && gunGameDamage.front().damage == 100.0f,
                 "Glock headshot did not deal 100 damage");

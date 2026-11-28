@@ -216,8 +216,10 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
     room.setTeamDamageEnabled(allowTeamDamage);
     room.setCombatHandler([modePtr](uint64_t shooterId, uint64_t targetId)
                           { return modePtr->canDamage(shooterId, targetId); });
-    room.setTeamSelectionHandler([modePtr](uint64_t playerId, const std::string&)
-                                 { return modePtr->canSelectTeam(playerId); });
+    room.setTeamSelectionHandler([modePtr, gameMode](uint64_t playerId, const std::string&)
+                                 {
+        return gameMode != nx3d::GameMode::gungame && modePtr->canSelectTeam(playerId);
+    });
 
     m_modes[roomId] = std::move(mode);
     m_authorities[roomId] = std::move(authority);

@@ -92,6 +92,21 @@ void GunGameMode::onPlayerDeath(nexilis::server::Room& room, uint64_t killer,
 
 void GunGameMode::update(nexilis::server::Room& room, float dt)
 {
+    // Character models are cosmetic in this free-for-all mode. The server
+    // chooses one for every new member instead of accepting a client choice.
+    std::uniform_int_distribution<int> character(0, 1);
+    for (auto id : room.getClients())
+        if (room.getPlayerTeam(id).empty())
+        {
+            room.setPlayerTeam(id, character(m_characterRandom) == 0
+                                           ? "Counter Terrorist" : "Terrorist");
+            auto user = nexilis::server::ClientStorage::getClientById(id);
+            if (user)
+                room.broadcastToAll(nexilis::server::Command::createRoomLeaderboardCommand(
+                        room.getId(), *user,
+                        nexilis::server::Command::playerStatsEntries(room, room.getClients()), 0));
+        }
+
     DeathmatchMode::update(room, dt);
 
     int countdown = -1;

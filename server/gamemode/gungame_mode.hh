@@ -4,6 +4,7 @@
 #include <server/gamemode/deathmatch_mode.hh>
 
 #include <mutex>
+#include <random>
 #include <unordered_map>
 
 namespace nx3d::server::gamemode
@@ -42,6 +43,7 @@ protected:
     void afterRespawn(nexilis::server::Room& room, uint64_t id) override;
 
 private:
+    std::mt19937 m_characterRandom{std::random_device{}()};
     mutable std::mutex m_progressMutex;
     std::unordered_map<uint64_t, int> m_kills;
     std::unordered_map<uint64_t, std::string> m_lastShotWeapon;

@@ -67,7 +67,7 @@ void DeathmatchMode::onEnter(ClientApp& app, const std::string& team)
 
     m_shipment = nx3d::isShipmentMap(app.mapFilePath);
     m_team = team;
-    app.ui->teamDisplayText.setString(m_team);
+    app.ui->teamDisplayText.setString(type() == nx3d::GameMode::gungame ? "GUN GAME" : m_team);
 
     app.ui->hideLeaderboard();
     m_leaderboard.clear();
@@ -78,7 +78,8 @@ void DeathmatchMode::onEnter(ClientApp& app, const std::string& team)
     app.movement_controller.resetVerticalMotion();
 
     // The server replies with a stats seed for the local leaderboard.
-    app.tcp_client.sendMessage(packet::Room::Player3D::setTeam(app.client_api, team));
+    if (type() != nx3d::GameMode::gungame)
+        app.tcp_client.sendMessage(packet::Room::Player3D::setTeam(app.client_api, team));
 
     m_health = 100;
     m_hurtSoundCooldown = 0.0f;
