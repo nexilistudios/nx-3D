@@ -749,6 +749,7 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
     float closest = range;
     uint64_t targetId = 0;
     bool hitHead = false;
+    bool hitLeg = false;
     for (auto id : room.getClients())
     {
         if (id == shooterId || room.getPlayerHealth(id) <= 0.0f ||
@@ -775,6 +776,7 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
             closest = hit.distance;
             targetId = id;
             hitHead = hit.head;
+            hitLeg = hit.leg;
         }
     }
     if (launcher)
@@ -794,8 +796,9 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
     }
     if (!targetId || mapPhysics(m_shipment).blocks(origin, origin + aim * closest))
         return std::nullopt;
-    return nexilis::server::Room::ShotHit{
-            targetId, hitHead && rule->headDamage > 0.0f ? rule->headDamage : rule->damage};
+    const float damage = hitHead && rule->headDamage > 0.0f ? rule->headDamage :
+                         hitLeg && weapon != "knife" ? rule->damage * 0.5f : rule->damage;
+    return nexilis::server::Room::ShotHit{targetId, damage};
 }
 
 void Authority::reconcile(const nexilis::server::Room& room)

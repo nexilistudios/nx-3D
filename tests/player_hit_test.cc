@@ -27,6 +27,17 @@ int main()
     if (playerHit({0.0f, -9.0f, -30.0f}, -forward, player, 0.0f).head ||
         playerHit({0.0f, -9.0f, 30.0f}, forward, player, 0.0f).head)
         throw std::runtime_error("Throat registered as a headshot");
+    for (float legHeight : {-36.0f, -55.0f})
+    {
+        for (float legX : {-6.0f, 6.0f})
+            if (!playerHit({legX, legHeight, 30.0f}, forward, player, 0.0f).leg)
+                throw std::runtime_error("Thigh or lower leg did not register as a leg hit");
+    }
+    if (playerHit({0.0f, -36.0f, 30.0f}, forward, player, 0.0f).leg ||
+        playerHit({6.0f, -25.0f, 30.0f}, forward, player, 0.0f).leg ||
+        !playerHit({6.0f, -35.0f, 30.0f}, forward, player, 0.0f,
+                   nx3d::kCrouchingEyeHeight).leg)
+        throw std::runtime_error("Hip, stomach, or crouched leg classification is incorrect");
     for (const auto* pistol : {"glock", "usp", "deagle"})
         if (nx3d::findNXObject(pistol)->combat.headDamage != 100.0f)
             throw std::runtime_error("Pistol head damage is incorrect");

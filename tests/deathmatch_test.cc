@@ -198,6 +198,17 @@ int main()
         const auto bodyDamage = victim.consumeDamageEvents();
         require(bodyDamage.size() == 1 && bodyDamage.front().damage == 35.0f,
                 "Desert Eagle body hit changed damage");
+        room->resetPlayerHealth(20);
+        server::ClientStorage::getClientById(20)->getObject3D().setPosition(
+                Vector3f{-587.0f, 247.0f, 700.0f});
+        require(sendAsShooter(client::Packet::Room::Player3D::fire(
+                        shooter, Vector3f{0.0f, 0.0f, -1.0f}, 2)) ==
+                        server::CommandResult::success,
+                "Desert Eagle leg shot was rejected");
+        const auto legDamage = victim.consumeDamageEvents();
+        require(legDamage.size() == 1 && legDamage.front().damage == 17.5f,
+                "Desert Eagle leg shot did not deal half body damage");
+        shooter.consumeDamageEvents();
         room->setPlayerTeam(20, "Counter Terrorist");
         room->resetPlayerHealth(20);
         shopper->getObject3D().setPosition(Vector3f{0.0f, 0.0f, 0.0f});

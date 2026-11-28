@@ -50,6 +50,7 @@ struct PlayerHit
 {
     float distance = std::numeric_limits<float>::infinity();
     bool head = false;
+    bool leg = false;
 };
 
 inline PlayerHit playerHit(const glm::vec3& origin, const glm::vec3& direction,
@@ -72,11 +73,11 @@ inline PlayerHit playerHit(const glm::vec3& origin, const glm::vec3& direction,
             {{-8.0f, -7.0f, -8.0f}, {8.0f, 12.0f, 8.0f}},     // head, including face
             {{-15.0f, -12.0f, -9.0f}, {15.0f, -7.0f, 9.0f}},  // shoulders and throat
             {{-15.0f, -34.0f, -9.0f}, {15.0f, -12.0f, 9.0f}}, // torso
+            {{-11.0f, -64.0f, -9.0f}, {-0.5f, -34.0f, 9.0f}}, // left leg
+            {{0.5f, -64.0f, -9.0f}, {11.0f, -34.0f, 9.0f}},   // right leg
             {{-11.0f, -41.0f, -9.0f}, {11.0f, -34.0f, 9.0f}}, // hips
             {{-19.0f, -46.0f, -9.0f}, {-8.0f, -10.0f, 9.0f}}, // left arm
-            {{8.0f, -46.0f, -9.0f}, {19.0f, -10.0f, 9.0f}},   // right arm
-            {{-11.0f, -64.0f, -9.0f}, {-0.5f, -41.0f, 9.0f}}, // left leg
-            {{0.5f, -64.0f, -9.0f}, {11.0f, -41.0f, 9.0f}}    // right leg
+            {{8.0f, -46.0f, -9.0f}, {19.0f, -10.0f, 9.0f}}    // right arm
     }};
     const float heightScale = eyeHeight / kStandingEyeHeight;
     PlayerHit hit;
@@ -90,6 +91,7 @@ inline PlayerHit playerHit(const glm::vec3& origin, const glm::vec3& direction,
         {
             hit.distance = distance;
             hit.head = index == 0;
+            hit.leg = index == 3 || index == 4;
         }
     }
     return hit;
