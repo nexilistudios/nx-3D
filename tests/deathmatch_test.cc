@@ -526,9 +526,10 @@ int main()
         require(!gunGame.onAction(*room, 10, 10) &&
                         !gunGame.pickupWeapon(*room, 10, 1, "ak47"),
                 "Gun Game allowed purchases or pickups to skip progression");
-        require(nx3d::gungame::weaponForKills(4) == "m60" &&
-                        nx3d::gungame::weaponForKills(5) == "launcher",
-                "M60 Gun Game stage is not before the launcher");
+        require(nx3d::gungame::weaponForKills(1) == "deagle" &&
+                        nx3d::gungame::weaponForKills(5) == "m60" &&
+                        nx3d::gungame::weaponForKills(6) == "launcher",
+                "Gun Game weapon stages are out of order");
         for (int kill = 1; kill <= nx3d::gungame::kKillsToWin; ++kill)
         {
             if (kill == nx3d::gungame::kKillsToWin)
@@ -632,7 +633,7 @@ int main()
         auto gunGameDamage = victim.consumeDamageEvents();
         require(gunGameDamage.size() == 1 && gunGameDamage.front().damage == 100.0f,
                 "Glock headshot did not deal 100 damage");
-        for (int kill = 1; kill <= 2; ++kill)
+        for (int kill = 1; kill <= 3; ++kill)
         {
             for (int shot = 0; shot < 5 && room->getPlayerHealth(20) > 0.0f; ++shot)
                 require(sendAsShooter(client::Packet::Room::Player3D::fire(
@@ -641,15 +642,16 @@ int main()
                         "Gun Game kill shot was rejected");
             require(room->getPlayerHealth(20) == 0.0f,
                     "Gun Game starter weapon could not kill an opponent");
-            if (kill == 2)
+            if (kill >= 2)
             {
                 gunGameDamage = victim.consumeDamageEvents();
                 require(gunGameDamage.size() == 1 && gunGameDamage.front().damage == 100.0f,
-                        "MP5 headshot did not deal 100 damage");
+                        kill == 2 ? "Desert Eagle headshot did not deal 100 damage" :
+                                    "MP5 headshot did not deal 100 damage");
             }
             require(room->getPlayerKills(10) == gunGameKills + kill,
                     "Gun Game kill did not reach the leaderboard");
-            if (kill == 1)
+            if (kill < 3)
             {
                 Registry::update(2.1f);
                 require(room->getPlayerHealth(20) == 100.0f,
