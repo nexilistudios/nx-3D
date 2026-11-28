@@ -73,6 +73,17 @@ public:
         send(room, id, state);
     }
 
+    void refillAmmo(nexilis::server::Room& room, uint64_t id)
+    {
+        nx3d::economy::Snapshot state;
+        {
+            std::lock_guard lock(m_mutex);
+            state = m_wallets[id];
+        }
+        state.effect = "ammo";
+        send(room, id, state);
+    }
+
     void resetMatch(nexilis::server::Room& room, const std::unordered_set<uint64_t>& players)
     {
         for (auto id : players)
@@ -425,7 +436,7 @@ public:
                 room.broadcastToAll(nexilis::server::Command::createRoomCommand(
                         room.getId(), *owner, damageData, params, 0));
                 if (killed)
-                    room.onPlayerDied(target == grenade.owner ? 0 : grenade.owner, target);
+                    room.onPlayerDied(grenade.owner, target);
             }
         }
     }

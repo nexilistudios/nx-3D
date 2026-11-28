@@ -41,15 +41,19 @@ void DeathmatchMode::onPlayerDeath(nexilis::server::Room& room, uint64_t killerI
 {
     using namespace nexilis;
 
-    room.recordKill(killerId, victimId);
-    m_economy.died(room, killerId, victimId);
+    const bool selfKilled = killerId == victimId;
+    const auto creditedKiller = selfKilled ? 0 : killerId;
+    room.recordKill(creditedKiller, victimId);
+    m_economy.died(room, creditedKiller, victimId);
+    if (selfKilled)
+        m_economy.refillAmmo(room, victimId);
     {
         std::lock_guard lock(m_respawnMutex);
         m_respawnTimers[victimId] = 2.0f;
     }
 
     auto sender = nexilis::server::ClientStorage::getClientById(
-            killerId == 0 ? victimId : killerId);
+            creditedKiller == 0 ? victimId : creditedKiller);
     if (!sender)
         return;
 
@@ -58,8 +62,8 @@ void DeathmatchMode::onPlayerDeath(nexilis::server::Room& room, uint64_t killerI
     auto statsPayload = nexilis::server::Command::createRoomLeaderboardCommand(
             room.getId(), *sender,
             nexilis::server::Command::playerStatsEntries(
-                    room, killerId == 0 ? std::vector<uint64_t>{victimId}
-                                        : std::vector<uint64_t>{killerId, victimId}),
+                    room, creditedKiller == 0 ? std::vector<uint64_t>{victimId}
+                                               : std::vector<uint64_t>{creditedKiller, victimId}),
             0);
     room.broadcastToAll(statsPayload);
 

@@ -467,9 +467,20 @@ int main()
         require(nx3d::economy::decodeGrenade(latestServerEvent(shooter, "grenade"), ownGrenade),
                 "HE grenade event was not broadcast");
         shopper->getObject3D().setPosition(Vector3f{ownGrenade.endX, 192.0f, ownGrenade.endZ});
-        Registry::update(nx3d::economy::kGrenadeFuseSeconds + 0.01f);
-        require(room->getPlayerHealth(10) < 100.0f,
-                "Own HE grenade did not cause self damage");
+        const auto killsBeforeSelfDeath = room->getPlayerKills(10);
+        const auto deathsBeforeSelfDeath = room->getPlayerDeaths(10);
+        room->damagePlayer(10, 40.0f);
+        Registry::update(nx3d::economy::kGrenadeFuseSeconds - 0.05f);
+        Registry::update(0.06f);
+        nx3d::economy::Snapshot selfDeathAmmo;
+        require(room->getPlayerHealth(10) == 0.0f,
+                "Own HE grenade did not kill the injured owner");
+        require(room->getPlayerKills(10) == killsBeforeSelfDeath &&
+                        room->getPlayerDeaths(10) == deathsBeforeSelfDeath + 1,
+                "Self-kill changed kill credit or missed a death");
+        require(nx3d::economy::decode(latestServerEvent(shooter, "economy"), selfDeathAmmo) &&
+                        selfDeathAmmo.effect == "ammo",
+                "Self-kill did not send a full-ammo snapshot");
 
         nx3d::server::gamemode::GunGameMode gunGame;
         gunGame.onTeamSelected(*room, 10);

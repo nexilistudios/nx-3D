@@ -257,22 +257,26 @@ void BombMode::onPlayerDeath(nexilis::server::Room& room, uint64_t killerId, uin
 
 void BombMode::recordDeath(nexilis::server::Room& room, uint64_t killerId, uint64_t victimId)
 {
+    const bool selfKilled = killerId == victimId;
+    const auto creditedKiller = selfKilled ? 0 : killerId;
     const bool carriedBomb = m_economy.hasBomb(victimId);
     m_alive.erase(victimId);
     if (m_actionPlayer == victimId)
         clearAction();
-    m_economy.died(room, killerId, victimId);
+    m_economy.died(room, creditedKiller, victimId);
+    if (selfKilled)
+        m_economy.refillAmmo(room, victimId);
     if (carriedBomb && !m_planted)
         dropBomb(room, victimId);
-    room.recordKill(killerId, victimId);
+    room.recordKill(creditedKiller, victimId);
     auto sender = nexilis::server::ClientStorage::getClientById(
-            killerId == 0 ? victimId : killerId);
+            creditedKiller == 0 ? victimId : creditedKiller);
     if (sender)
         room.broadcastToAll(nexilis::server::Command::createRoomLeaderboardCommand(
                 room.getId(), *sender,
                 nexilis::server::Command::playerStatsEntries(
-                        room, killerId == 0 ? std::vector<uint64_t>{victimId}
-                                            : std::vector<uint64_t>{killerId, victimId}),
+                        room, creditedKiller == 0 ? std::vector<uint64_t>{victimId}
+                                                   : std::vector<uint64_t>{creditedKiller, victimId}),
                 0));
 }
 

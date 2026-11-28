@@ -140,8 +140,13 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
                                   [modePtr, id, weapon]()
                                   { modePtr->onAcceptedShot(id, weapon); }); });
 
-    room.setDeathHandler([modePtr](nexilis::server::Room& r, uint64_t killerId, uint64_t victimId)
-                         { modePtr->onPlayerDeath(r, killerId, victimId); });
+    room.setDeathHandler([modePtr, authorityPtr](nexilis::server::Room& r,
+                                                 uint64_t killerId, uint64_t victimId)
+                         {
+        modePtr->onPlayerDeath(r, killerId, victimId);
+        if (killerId == victimId)
+            authorityPtr->refill(victimId);
+    });
     room.setTeamHandler([modePtr](nexilis::server::Room& r, uint64_t playerId)
                         { modePtr->onTeamSelected(r, playerId); });
     room.setActionHandler([modePtr, authorityPtr, pickupMutex](nexilis::server::Room& r,

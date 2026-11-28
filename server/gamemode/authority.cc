@@ -516,7 +516,7 @@ void Authority::update(nexilis::server::Room& room, float dt)
             room.broadcastToAll(nexilis::server::Command::createRoomCommand(
                     room.getId(), *owner, damageData, params, 0));
             if (killed)
-                room.onPlayerDied(id == grenade.owner ? 0 : grenade.owner, id);
+                room.onPlayerDied(grenade.owner, id);
         }
     }
     // A slow tick previously discarded everything beyond 50 ms, which made
