@@ -6,6 +6,7 @@
 #include <client/crosshair/crosshair.hh>
 #include <client/ui/ui.hh>
 #include <shared/map_document.hh>
+#include <shared/bullet_hole.hh>
 
 #include <nexilis/client/client_api.hh>
 #include <nexilis/protocol_manager.hh>
@@ -22,6 +23,7 @@
 #include <atomic>
 #include <array>
 #include <cstddef>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -35,6 +37,7 @@
 namespace nx3d::client
 {
 class BrushModel;
+class BulletHoleModel;
 namespace editor { class MapEditor; }
 
 namespace audio
@@ -112,6 +115,12 @@ public:
     MapDocument mapDocument;
     std::shared_ptr<BrushModel> mapModel;
     std::vector<std::shared_ptr<spear::rendering::vulkan::OBJModel>> mapProps;
+    std::deque<std::pair<uint64_t, std::shared_ptr<BulletHoleModel>>> bulletHoles;
+    std::unordered_set<uint64_t> bulletHoleIds;
+    uint64_t expiredBulletHoleId = 0;
+    void addBulletHole(const nx3d::BulletHole& hole);
+    void clearBulletHoles();
+    void clearBulletHolesBefore(uint64_t firstValidId);
     std::unique_ptr<editor::MapEditor> mapEditor;
     void loadRoomMap(const std::string& roomName);
     void rebuildMapVisuals();

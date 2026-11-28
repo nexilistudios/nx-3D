@@ -61,6 +61,11 @@ struct ContactCheck : btCollisionWorld::ContactResultCallback
 class MapPhysics
 {
 public:
+    struct SurfaceHit
+    {
+        glm::vec3 position;
+        glm::vec3 normal;
+    };
     explicit MapPhysics(const char* mapPath)
         : m_dispatcher(&m_configuration),
           m_world(&m_dispatcher, &m_broadphase, &m_solver, &m_configuration)
@@ -108,14 +113,19 @@ public:
         m_world.removeRigidBody(m_body.get());
     }
 
-    bool blocks(const glm::vec3& from, const glm::vec3& to)
+    std::optional<SurfaceHit> rayHit(const glm::vec3& from, const glm::vec3& to)
     {
         if (glm::distance(from, to) < 0.001f)
-            return false;
+            return std::nullopt;
         std::lock_guard lock(m_mutex);
         btCollisionWorld::ClosestRayResultCallback hit(asBullet(from), asBullet(to));
         m_world.rayTest(asBullet(from), asBullet(to), hit);
-        return hit.hasHit() && hit.m_closestHitFraction < 1.0f;
+        if (!hit.hasHit())
+            return std::nullopt;
+        const auto& point = hit.m_hitPointWorld;
+        const auto& normal = hit.m_hitNormalWorld;
+        return SurfaceHit{{point.x(), point.y(), point.z()},
+                          {normal.x(), normal.y(), normal.z()}};
     }
 
     glm::vec3 rayEnd(const glm::vec3& from, const glm::vec3& to)
@@ -794,11 +804,61 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
                          impact.x, impact.y, impact.z, flightSeconds})));
         return std::nullopt;
     }
-    if (!targetId || mapPhysics(m_shipment).blocks(origin, origin + aim * closest))
+    if (weapon != "knife")
+    {
+        if (auto surface = mapPhysics(m_shipment).rayHit(origin, origin + aim * closest))
+        {
+            const float normalLength = glm::length(surface->normal);
+            if (!std::isfinite(normalLength) || normalLength < 0.9f)
+                return std::nullopt;
+            auto normal = surface->normal / normalLength;
+            if (glm::dot(normal, aim) > 0.0f)
+                normal = -normal;
+            nx3d::BulletHole hole;
+            {
+                std::lock_guard lock(m_mutex);
+                hole = {m_nextBulletHoleId++, surface->position, normal};
+                m_bulletHoles.push_back(hole);
+                if (m_bulletHoles.size() > nx3d::kMaxBulletHoles)
+                    m_bulletHoles.pop_front();
+            }
+            room.broadcastToAll(nx3d::server::roomEvent(
+                    room.getId(), "bullet_hole", nx3d::encodeBulletHole(hole)));
+            return std::nullopt;
+        }
+    }
+    if (!targetId)
         return std::nullopt;
     const float damage = hitHead && rule->headDamage > 0.0f ? rule->headDamage :
                          hitLeg && weapon != "knife" ? rule->damage * 0.5f : rule->damage;
     return nexilis::server::Room::ShotHit{targetId, damage};
+}
+
+void Authority::sendBulletHoles(nexilis::server::Room& room, uint64_t playerId)
+{
+    auto user = nexilis::server::ClientStorage::getClientById(playerId);
+    if (!user || !user->isBoostTCPSet())
+        return;
+    std::deque<nx3d::BulletHole> holes;
+    {
+        std::lock_guard lock(m_mutex);
+        holes = m_bulletHoles;
+    }
+    for (const auto& hole : holes)
+        user->boostTCPSend(nx3d::server::roomEvent(
+                room.getId(), "bullet_hole", nx3d::encodeBulletHole(hole)));
+}
+
+void Authority::resetBulletHoles(nexilis::server::Room& room)
+{
+    uint64_t firstValidId;
+    {
+        std::lock_guard lock(m_mutex);
+        m_bulletHoles.clear();
+        firstValidId = m_nextBulletHoleId;
+    }
+    room.broadcastToAll(nx3d::server::roomEvent(
+            room.getId(), "bullet_holes_clear", nx3d::encodeBulletHoleReset(firstValidId)));
 }
 
 void Authority::reconcile(const nexilis::server::Room& room)

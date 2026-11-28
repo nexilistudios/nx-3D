@@ -4,6 +4,7 @@
 #include <tests/server_event_test.hh>
 #include <shared/brush_map.hh>
 #include <shared/economy.hh>
+#include <shared/bullet_hole.hh>
 #include <shared/fall_death.hh>
 #include <shared/gungame.hh>
 #include <shared/player_rules.hh>
@@ -209,6 +210,22 @@ int main()
         const auto legDamage = victim.consumeDamageEvents();
         require(legDamage.size() == 1 && legDamage.front().damage == 17.5f,
                 "Desert Eagle leg shot did not deal half body damage");
+        nx3d::BulletHole wallMark;
+        require(sendAsShooter(client::Packet::Room::Player3D::fire(
+                        shooter, Vector3f{0.0f, -1.0f, 0.0f}, 2)) ==
+                        server::CommandResult::success &&
+                        nx3d::decodeBulletHole(latestServerEvent(shooter, "bullet_hole"), wallMark) &&
+                        latestServerEvent(victim, "bullet_hole") ==
+                                nx3d::encodeBulletHole(wallMark) &&
+                        wallMark.normal.y > 0.5f,
+                "Accepted shot did not broadcast the same map impact to both clients");
+        room->setPlayerTeam(20, "Terrorist");
+        const auto replay = victim.consumeServerRoomEvents();
+        require(std::any_of(replay.begin(), replay.end(), [&](const auto& event)
+                            { return event.event == "bullet_hole" &&
+                                     event.payload.is_string() &&
+                                     event.payload.as_string() == nx3d::encodeBulletHole(wallMark); }),
+                "Existing bullet hole was not replayed on team admission");
         shooter.consumeDamageEvents();
         room->setPlayerTeam(20, "Counter Terrorist");
         room->resetPlayerHealth(20);
@@ -497,6 +514,8 @@ int main()
                 "Self-kill did not send a full-ammo snapshot");
 
         nx3d::server::gamemode::GunGameMode gunGame;
+        int newGunGameMatches = 0;
+        gunGame.setNewMatchHandler([&](server::Room&) { ++newGunGameMatches; });
         gunGame.onTeamSelected(*room, 10);
         gunGame.onTeamSelected(*room, 20);
         server::ClientStorage::getClientById(10)->setUsername("Mägi 🚀");
@@ -560,6 +579,7 @@ int main()
                 "Gun Game countdown was not sent to every player");
         gunGame.update(*room, 1.0f);
         require(gunGame.canDamage(10, 20) &&
+                        newGunGameMatches == 1 &&
                         gunGame.weaponForSlot(10, 1) == "glock" &&
                         gunGame.weaponForSlot(20, 1) == "glock" &&
                         room->getPlayerKills(10) == 0 &&

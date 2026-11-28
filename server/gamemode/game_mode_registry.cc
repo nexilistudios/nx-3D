@@ -67,6 +67,8 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
     auto* modePtr = mode.get();
     auto authority = std::make_unique<Authority>(shipment);
     auto* authorityPtr = authority.get();
+    mode->setNewMatchHandler([authorityPtr](nexilis::server::Room& r)
+                             { authorityPtr->resetBulletHoles(r); });
     const auto roomId = room.getId();
 
     // Game rooms are public; capacity and team admission are checked separately.
@@ -147,8 +149,11 @@ void GameModeRegistry::assignRoom(nexilis::server::Room& room, nx3d::GameMode ga
         if (killerId == victimId)
             authorityPtr->refill(victimId);
     });
-    room.setTeamHandler([modePtr](nexilis::server::Room& r, uint64_t playerId)
-                        { modePtr->onTeamSelected(r, playerId); });
+    room.setTeamHandler([modePtr, authorityPtr](nexilis::server::Room& r, uint64_t playerId)
+                        {
+        modePtr->onTeamSelected(r, playerId);
+        authorityPtr->sendBulletHoles(r, playerId);
+    });
     room.setActionHandler([modePtr, authorityPtr, pickupMutex](nexilis::server::Room& r,
                                                                uint64_t playerId, uint8_t action)
                           {

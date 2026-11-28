@@ -564,6 +564,7 @@ void BombMode::update(nexilis::server::Room& room, float dt)
         m_seconds -= dt;
         if (m_seconds <= 0.0f)
         {
+            newMatchStarted(room);
             m_round = m_tScore = m_ctScore = 0;
             m_phase = Phase::waiting;
             room.resetPlayerStats();

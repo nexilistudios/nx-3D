@@ -1,4 +1,5 @@
 #include <client/app/client_app.hh>
+#include <client/map/bullet_hole_model.hh>
 #include <client/app/network_motion.hh>
 #include <shared/ammunition.hh>
 
@@ -427,6 +428,56 @@ void ClientApp::loadRoomMap(const std::string& roomName)
     mapDocument = std::move(nextDocument);
     rebuildMapVisuals();
     rebuildMapCollision();
+}
+
+void ClientApp::clearBulletHoles()
+{
+    auto scene = scene_manager.getSceneById(game_scene_id);
+    for (auto& [id, model] : bulletHoles)
+    {
+        scene->removeObject(model->getId());
+        pendingDestroy[(frameCount - 1) % 3].push_back(std::move(model));
+    }
+    bulletHoles.clear();
+    bulletHoleIds.clear();
+    expiredBulletHoleId = 0;
+}
+
+void ClientApp::clearBulletHolesBefore(uint64_t firstValidId)
+{
+    expiredBulletHoleId = std::max(expiredBulletHoleId, firstValidId - 1);
+    auto scene = scene_manager.getSceneById(game_scene_id);
+    for (auto it = bulletHoles.begin(); it != bulletHoles.end();)
+    {
+        if (it->first >= firstValidId)
+        {
+            ++it;
+            continue;
+        }
+        bulletHoleIds.erase(it->first);
+        scene->removeObject(it->second->getId());
+        pendingDestroy[(frameCount - 1) % 3].push_back(std::move(it->second));
+        it = bulletHoles.erase(it);
+    }
+}
+
+void ClientApp::addBulletHole(const nx3d::BulletHole& hole)
+{
+    if (hole.id <= expiredBulletHoleId || !bulletHoleIds.insert(hole.id).second)
+        return;
+    auto model = std::make_shared<BulletHoleModel>(
+            renderer.getDevice(), renderer.getPhysicalDevice(), hole);
+    scene_manager.getSceneById(game_scene_id)->addObject(model);
+    bulletHoles.emplace_back(hole.id, std::move(model));
+    if (bulletHoles.size() > nx3d::kMaxBulletHoles)
+    {
+        auto& oldest = bulletHoles.front();
+        expiredBulletHoleId = std::max(expiredBulletHoleId, oldest.first);
+        bulletHoleIds.erase(oldest.first);
+        scene_manager.getSceneById(game_scene_id)->removeObject(oldest.second->getId());
+        pendingDestroy[(frameCount - 1) % 3].push_back(std::move(oldest.second));
+        bulletHoles.pop_front();
+    }
 }
 
 void ClientApp::connect(const std::string& address)
@@ -999,6 +1050,7 @@ void ClientApp::updateChatMessages()
     const auto room_id = client_api.clientRoomId();
     if (chatRoomId != room_id)
     {
+        clearBulletHoles();
         chatRoomId = room_id;
         chatMessagesConsumed = 0;
         chatMessages.clear();
@@ -1032,6 +1084,18 @@ void ClientApp::updateChatMessages()
             nx3d::economy::LauncherProjectile projectile;
             if (game_mode && nx3d::economy::decodeLauncher(payload, projectile))
                 game_mode->onLauncherFired(*this, projectile);
+        }
+        else if (event.event == "bullet_hole")
+        {
+            nx3d::BulletHole hole;
+            if (nx3d::decodeBulletHole(payload, hole))
+                addBulletHole(hole);
+        }
+        else if (event.event == "bullet_holes_clear")
+        {
+            uint64_t firstValidId = 0;
+            if (nx3d::decodeBulletHoleReset(payload, firstValidId))
+                clearBulletHolesBefore(firstValidId);
         }
         else if (event.event == "economy")
         {

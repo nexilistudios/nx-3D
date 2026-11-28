@@ -118,6 +118,7 @@ void GunGameMode::update(nexilis::server::Room& room, float dt)
     if (!restart)
         return;
 
+    newMatchStarted(room);
     const auto players = room.getClients();
     {
         std::lock_guard lock(m_progressMutex);

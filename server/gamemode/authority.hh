@@ -2,9 +2,11 @@
 #define NX3D_SERVER_GAMEMODE_AUTHORITY_HH
 
 #include <nexilis/server/room.hh>
+#include <shared/bullet_hole.hh>
 
 #include <chrono>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <mutex>
 #include <optional>
@@ -42,6 +44,8 @@ public:
             const nexilis::Vector3f& direction, uint8_t slot, uint8_t action,
             const std::string& weapon, const std::function<void()>& onAcceptedShot = {});
     void reconcile(const nexilis::server::Room& room);
+    void sendBulletHoles(nexilis::server::Room& room, uint64_t playerId);
+    void resetBulletHoles(nexilis::server::Room& room);
 
 private:
     bool m_shipment = false;
@@ -81,6 +85,8 @@ private:
     std::mutex m_mutex;
     std::unordered_map<uint64_t, PlayerState> m_players;
     std::vector<FlyingGrenade> m_flyingGrenades;
+    std::deque<nx3d::BulletHole> m_bulletHoles;
+    uint64_t m_nextBulletHoleId = 1;
     uint64_t m_spawnCounter = 0;
     std::mt19937 m_spawnRandom{std::random_device{}()};
     std::unordered_map<uint64_t, std::size_t> m_lastGunGameSpawn;

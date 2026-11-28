@@ -2,6 +2,7 @@
 #include <shared/economy.hh>
 #include <shared/bomb_sites.hh>
 #include <shared/bomb_damage.hh>
+#include <shared/bullet_hole.hh>
 #include <shared/player_rules.hh>
 #include <tests/server_event_test.hh>
 
@@ -387,6 +388,16 @@ int main()
                   bomb(newMatch).counter_terrorist_score == 0 &&
                   room->getPlayerKills(10) == 0 && room->getPlayerDeaths(20) == 0,
           "Bomb room did not start a fresh match after 15 seconds");
+    bool clearedBulletHoles = false;
+    for (const auto& event : t.consumeServerRoomEvents())
+        if (event.event == "bullet_holes_clear" && event.payload.is_string())
+        {
+            uint64_t firstValidId = 0;
+            clearedBulletHoles |= nx3d::decodeBulletHoleReset(
+                    std::string_view(event.payload.as_string().data(),
+                                     event.payload.as_string().size()), firstValidId);
+        }
+    check(clearedBulletHoles, "New Bomb match did not clear bullet holes");
 
     GameModeRegistry::clear();
     server::RoomStorage::clear();

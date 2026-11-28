@@ -6,7 +6,9 @@
 #include <nexilis/server/room.hh>
 
 #include <cstdint>
+#include <functional>
 #include <string>
+#include <utility>
 
 namespace nx3d::server::gamemode
 {
@@ -21,6 +23,11 @@ class GameMode
 {
 public:
     virtual ~GameMode() = default;
+
+    void setNewMatchHandler(std::function<void(nexilis::server::Room&)> handler)
+    {
+        m_newMatchHandler = std::move(handler);
+    }
 
     /// The gamemode identifier of the room this mode was assigned to.
     virtual nx3d::GameMode type() const = 0;
@@ -65,6 +72,16 @@ public:
         (void)room;
         (void)dt;
     }
+
+protected:
+    void newMatchStarted(nexilis::server::Room& room)
+    {
+        if (m_newMatchHandler)
+            m_newMatchHandler(room);
+    }
+
+private:
+    std::function<void(nexilis::server::Room&)> m_newMatchHandler;
 };
 
 } // namespace nx3d::server::gamemode
