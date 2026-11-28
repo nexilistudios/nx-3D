@@ -490,7 +490,9 @@ void Authority::update(nexilis::server::Room& room, float dt)
         for (auto id : room.getClients())
         {
             if (room.getPlayerHealth(id) <= 0.0f ||
-                (id != grenade.owner && room.getPlayerTeam(id) == grenade.team) ||
+                (id != grenade.owner &&
+                 room.getPlayerTeam(id) == grenade.team &&
+                 !room.isTeamDamageEnabled()) ||
                 !room.canDamage(grenade.owner, id))
                 continue;
             auto victim = nexilis::server::ClientStorage::getClientById(id);
@@ -748,7 +750,9 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
     for (auto id : room.getClients())
     {
         if (id == shooterId || room.getPlayerHealth(id) <= 0.0f ||
-            room.getPlayerTeam(id) == shooterTeam || !room.canDamage(shooterId, id))
+            (room.getPlayerTeam(id) == shooterTeam &&
+             !room.isTeamDamageEnabled()) ||
+            !room.canDamage(shooterId, id))
             continue;
         auto target = nexilis::server::ClientStorage::getClientById(id);
         if (!target)

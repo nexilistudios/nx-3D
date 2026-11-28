@@ -196,6 +196,7 @@ public:
     bool menuPopulated = false;
     nx3d::GameMode newRoomMode = nx3d::GameMode::deathmatch;
     bool newRoomShipment = true;
+    bool newRoomTeamDamage = false;
     uint32_t newRoomMaxPlayers = 8;
     std::string newRoomName;
     void showLobbyRooms();

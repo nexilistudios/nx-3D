@@ -61,6 +61,17 @@ int main()
         require(server::RoomStorage::allowsClientCreation(roomCreator,
                         RoomData(42, "Dust2 GunGame | friends", 1002, RoomData::Context::_3D, 16)),
                 "Valid Dust2 room creation was denied");
+        require(nx3d::server::allowsClientRoomCreation(
+                        RoomData(42, "Dust2 DM FF | friends", 1006, RoomData::Context::_3D, 8)) &&
+                nx3d::server::allowsClientRoomCreation(
+                        RoomData(42, "Shipment Bomb FF | friends", 1007, RoomData::Context::_3D, 8)) &&
+                !nx3d::server::allowsClientRoomCreation(
+                        RoomData(42, "Dust2 GunGame FF | friends", 1008, RoomData::Context::_3D, 8)) &&
+                nx3d::teamDamageEnabled("Dust2 DM FF | friends") &&
+                nx3d::teamDamageEnabled("Shipment Bomb FF | friends") &&
+                !nx3d::teamDamageEnabled("Dust2 DM | friends") &&
+                !nx3d::supportsTeamDamageOption(nx3d::GameMode::gungame),
+                "Room team damage configuration was not classified correctly");
         require(!server::RoomStorage::allowsClientCreation(roomCreator,
                         RoomData(42, "Shipment DM | friends", 1003, RoomData::Context::_2D, 8)) &&
                 !server::RoomStorage::allowsClientCreation(roomCreator,
@@ -108,10 +119,18 @@ int main()
         for (uint64_t id = 777; id < 780; ++id)
         {
             server::RoomStorage::add(server::Room(RoomData(
-                    10, id == 778 ? std::string(nx3d::kShipmentRoomName) : "test", id)));
+                    10, id == 778 ? std::string(nx3d::kShipmentRoomName) :
+                        id == 777 ? "Dust2 DM FF | test" : "test", id)));
             Registry::assignRoom(*server::RoomStorage::getRoomById(id), nx3d::GameMode::deathmatch);
         }
         auto room = server::RoomStorage::getRoomById(777);
+        auto noTeamDamageRoom = server::RoomStorage::getRoomById(778);
+        noTeamDamageRoom->setPlayerTeam(10, "Terrorist");
+        noTeamDamageRoom->setPlayerTeam(20, "Terrorist");
+        require(!noTeamDamageRoom->isTeamDamageEnabled() &&
+                        noTeamDamageRoom->canDamage(10, 20) &&
+                        noTeamDamageRoom->canDamage(10, 10),
+                "Default room combat policy was not configured correctly");
         require(room->allowsUser(roomCreator), "Public game room rejected a new player");
         room->joinRoom(10);
         room->joinRoom(20);
@@ -167,6 +186,18 @@ int main()
                                          event.weapon == "deagle"; }),
                     "Server did not broadcast the equipped weapon");
         }
+        room->setPlayerTeam(20, "Terrorist");
+        server::ClientStorage::getClientById(20)->getObject3D().setPosition(
+                Vector3f{-592.0f, 192.0f, 700.0f});
+        require(sendAsShooter(client::Packet::Room::Player3D::fire(
+                        shooter, Vector3f{0.0f, 0.0f, -1.0f}, 2)) ==
+                        server::CommandResult::success &&
+                        room->getPlayerHealth(20) < 100.0f,
+                "Enabled team damage did not allow a teammate bullet hit");
+        shooter.consumeDamageEvents();
+        victim.consumeDamageEvents();
+        room->setPlayerTeam(20, "Counter Terrorist");
+        room->resetPlayerHealth(20);
         shopper->getObject3D().setPosition(Vector3f{0.0f, 0.0f, 0.0f});
         require(!room->onPlayerAction(10, 13), "Remote purchase was accepted");
         const auto originalPosition = shopper->getObject3D().getPosition();
@@ -572,6 +603,14 @@ int main()
                                       gunGameStage) && gunGameStage.primary == "ak47" &&
                         gunGameStage.secondary.empty(),
                 "Gun Game kills did not advance the shooter after each kill");
+        room->setPlayerTeam(20, "Terrorist");
+        room->resetPlayerHealth(20);
+        fallingPlayer->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 700.0f});
+        require(sendAsShooter(client::Packet::Room::Player3D::fire(
+                        shooter, Vector3f{0.0f, 0.0f, -1.0f}, 1)) ==
+                        server::CommandResult::success &&
+                        room->getPlayerHealth(20) < 100.0f,
+                "Gun Game blocked damage between players on the same selected side");
         Registry::clear();
         server::RoomStorage::setClientCreationHandler({});
         server::RoomStorage::clear();

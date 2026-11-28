@@ -397,8 +397,11 @@ public:
                 continue;
             for (auto target : room.getClients())
             {
-                if ((target != grenade.owner && room.getPlayerTeam(target) == grenade.team) ||
-                    !room.canDamage(grenade.owner, target) || room.getPlayerHealth(target) <= 0.0f)
+                if ((target != grenade.owner &&
+                     room.getPlayerTeam(target) == grenade.team &&
+                     !room.isTeamDamageEnabled()) ||
+                    !room.canDamage(grenade.owner, target) ||
+                    room.getPlayerHealth(target) <= 0.0f)
                     continue;
                 auto victim = nexilis::server::ClientStorage::getClientById(target);
                 if (!victim)

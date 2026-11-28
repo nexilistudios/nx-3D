@@ -457,7 +457,8 @@ void ClientApp::showLobbyRooms()
     roomMenu->clearItems();
     roomMenu->setPosition(glm::vec2(-0.8f, 0.3f));
     for (const auto& room : rooms)
-        roomMenu->addItem(chat::sanitize(roomDisplayName(room.getName())));
+        roomMenu->addItem(chat::sanitize(roomDisplayName(room.getName())) +
+                          (nx3d::teamDamageEnabled(room.getName()) ? " [Team damage]" : ""));
     roomMenu->addItem("New Room");
     ui->statusText.setString(rooms.empty() ? "No rooms available" : "Select a room");
     ui->instructionsText.setString("Arrow keys: Navigate   |   Enter: Select   |   ESC: Quit");
@@ -474,6 +475,9 @@ void ClientApp::showCreateRoom()
                        newRoomMode == nx3d::GameMode::gungame ? "Gun Game" : "Deathmatch"));
     roomMenu->addItem(std::string("Map: ") + (newRoomShipment ? "Shipment" : "Dust2"));
     roomMenu->addItem("Max players: " + std::to_string(newRoomMaxPlayers));
+    if (nx3d::supportsTeamDamageOption(newRoomMode))
+        roomMenu->addItem(std::string("Team damage: ") +
+                          (newRoomTeamDamage ? "On" : "Off"));
     roomMenu->addItem("Create Room");
     roomMenu->addItem("Back");
     for (int i = 0; i < selected; ++i)
@@ -1435,7 +1439,10 @@ void ClientApp::run()
                             else if (row == 3)
                                 newRoomMaxPlayers = std::clamp<int>(
                                         static_cast<int>(newRoomMaxPlayers) + direction, 2, 16);
-                            else if (row == 4 && event.key.key == SDLK_RETURN)
+                            else if (nx3d::supportsTeamDamageOption(newRoomMode) && row == 4)
+                                newRoomTeamDamage = !newRoomTeamDamage;
+                            else if (row == (nx3d::supportsTeamDamageOption(newRoomMode) ? 5 : 4) &&
+                                     event.key.key == SDLK_RETURN)
                             {
                                 if (newRoomName.find_first_not_of(" \t\r\n") == std::string::npos)
                                 {
@@ -1449,6 +1456,8 @@ void ClientApp::run()
                                         std::string(newRoomShipment ? "Shipment " : "Dust2 ") +
                                         (newRoomMode == nx3d::GameMode::bomb ? "Bomb" :
                                          newRoomMode == nx3d::GameMode::gungame ? "GunGame" : "DM") +
+                                        (nx3d::supportsTeamDamageOption(newRoomMode) &&
+                                         newRoomTeamDamage ? " FF" : "") +
                                         " | " + newRoomName;
                                 tcp_client.sendMessage(packet::Room::Management::create(
                                         client_api, name, nexilis::RoomData::Context::_3D,
@@ -1460,13 +1469,14 @@ void ClientApp::run()
                                 showLobbyRooms();
                                 ui->statusText.setString("Creating room...");
                             }
-                            else if (row == 5 && event.key.key == SDLK_RETURN)
+                            else if (row == (nx3d::supportsTeamDamageOption(newRoomMode) ? 6 : 5) &&
+                                     event.key.key == SDLK_RETURN)
                             {
                                 SDL_StopTextInput(window.getSDLWindow());
                                 currentState = State::Lobby;
                                 showLobbyRooms();
                             }
-                            if (currentState == State::CreateRoom && row >= 1 && row <= 3)
+                            if (currentState == State::CreateRoom && row >= 1 && row <= 4)
                                 showCreateRoom();
                         }
                     }

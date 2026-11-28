@@ -21,8 +21,10 @@ inline bool allowsClientRoomCreation(const nexilis::RoomData& data)
     const auto configuration = name.substr(0, separator);
     const bool supported =
             configuration == "Shipment DM" || configuration == "Shipment Bomb" ||
+            configuration == "Shipment DM FF" || configuration == "Shipment Bomb FF" ||
             configuration == "Shipment GunGame" || configuration == "Dust2 DM" ||
-            configuration == "Dust2 Bomb" || configuration == "Dust2 GunGame";
+            configuration == "Dust2 Bomb" || configuration == "Dust2 GunGame" ||
+            configuration == "Dust2 DM FF" || configuration == "Dust2 Bomb FF";
     const auto displayName = name.substr(separator + 3);
     return supported && !displayName.empty() &&
            std::any_of(displayName.begin(), displayName.end(),

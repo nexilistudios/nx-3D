@@ -89,6 +89,20 @@ inline GameMode gameModeFromName(const std::string& roomName)
     return GameMode::deathmatch;
 }
 
+inline constexpr bool supportsTeamDamageOption(GameMode mode)
+{
+    return mode == GameMode::deathmatch || mode == GameMode::bomb;
+}
+
+inline bool teamDamageEnabled(const std::string& roomName)
+{
+    if (!supportsTeamDamageOption(gameModeFromName(roomName)))
+        return false;
+    const auto separator = roomName.find(" | ");
+    return separator != std::string::npos &&
+           roomName.substr(0, separator).ends_with(" FF");
+}
+
 inline std::string roomDisplayName(const std::string& roomName)
 {
     const auto separator = roomName.find(" | ");
