@@ -35,6 +35,7 @@ struct NXObjectCombat
     float reloadSeconds = 0.0f;
     float damage = 0.0f;
     bool automatic = false;
+    float headDamage = 0.0f;
 };
 
 struct NXObjectEffect
@@ -66,22 +67,22 @@ struct NXObject
 inline constexpr std::array<NXObject, 14> kNXObjects{{
     {"ak47", "AK-47", NXObjectKind::firearm, 1, 14, 2700, "Terrorist",
      {"weapons/ak47.obj", "weapons/ak47.mtl", "weapons/ak47.obj", "weapons/ak47.mtl", 7.4f, .50f, {0,-.05f,.20f}, {.68f,-.58f,2.25f}, {-10,33,-12}, {1,4.4f,11.7f}},
-     {600,30,3,2.5f,35,true}},
+     {600,30,3,2.5f,35,true,200}},
     {"m16", "M16", NXObjectKind::firearm, 1, 15, 2900, "Counter Terrorist",
      {"weapons/m16.obj", "weapons/m16.mtl", "weapons/m16.obj", "weapons/m16.mtl", 7.3f, .50f, {0,-.05f,.30f}, {.70f,-.59f,2.30f}, {-9,35,-11}, {1,4.2f,11.7f}},
-     {800,30,3,2.5f,35,true}},
+     {800,30,3,2.5f,35,true,200}},
     {"glock", "Glock", NXObjectKind::firearm, 2, 10, 400, "Terrorist",
      {"weapons/glock.obj", "weapons/glock.mtl", "weapons/glock.obj", "weapons/glock.mtl", 8, .70f, {0,-.15f,.10f}, {.72f,-.66f,2.05f}, {-10,33,-12}, {1,3,6}},
-     {400,20,3,2.0f,24,false}},
+     {400,20,3,2.0f,24,false,100}},
     {"usp", "USP", NXObjectKind::firearm, 2, 11, 500, "Counter Terrorist",
      {"weapons/usp.obj", "weapons/usp.mtl", "weapons/usp.obj", "weapons/usp.mtl", 8, .70f, {0,-.15f,.10f}, {.72f,-.66f,2.05f}, {-10,33,-12}, {1,3,6}},
-     {350,12,3,2.1f,30,false}},
+     {350,12,3,2.1f,30,false,100}},
     {"deagle", "Desert Eagle", NXObjectKind::firearm, 2, 12, 700, "",
      {"weapons/deagle.obj", "weapons/deagle.mtl", "weapons/deagle.obj", "weapons/deagle.mtl", 8, .70f, {0,-.15f,.10f}, {.72f,-.66f,2.05f}, {-10,33,-12}, {1,3,6}},
-     {260,7,3,2.2f,35,false}},
+     {260,7,3,2.2f,35,false,100}},
     {"mp5", "MP5", NXObjectKind::firearm, 1, 13, 1500, "",
      {"weapons/mp5.obj", "weapons/mp5.mtl", "weapons/mp5.obj", "weapons/mp5.mtl", 7.8f, .56f, {0,-.08f,.20f}, {.68f,-.59f,2.22f}, {-10,33,-12}, {1,3.8f,10}},
-     {800,30,3,2.4f,26,true}},
+     {800,30,3,2.4f,26,true,100}},
     {"launcher", "Grenade Launcher", NXObjectKind::firearm, 1, 21, 3200, "",
      {"weapons/launcher.obj", "weapons/launcher.mtl", "weapons/launcher.obj", "weapons/launcher.mtl", 7.5f, .52f, {0,-.08f,.18f}, {.68f,-.59f,2.25f}, {-10,33,-12}, {1.5f,4.0f,10}},
      {75,1,5,2.8f,0,false}, {1,0,0,190,90}},

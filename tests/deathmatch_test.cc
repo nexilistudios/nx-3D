@@ -188,14 +188,16 @@ int main()
         }
         room->setPlayerTeam(20, "Terrorist");
         server::ClientStorage::getClientById(20)->getObject3D().setPosition(
-                Vector3f{-592.0f, 192.0f, 700.0f});
+                Vector3f{-592.0f, 215.0f, 700.0f});
         require(sendAsShooter(client::Packet::Room::Player3D::fire(
                         shooter, Vector3f{0.0f, 0.0f, -1.0f}, 2)) ==
                         server::CommandResult::success &&
                         room->getPlayerHealth(20) < 100.0f,
                 "Enabled team damage did not allow a teammate bullet hit");
         shooter.consumeDamageEvents();
-        victim.consumeDamageEvents();
+        const auto bodyDamage = victim.consumeDamageEvents();
+        require(bodyDamage.size() == 1 && bodyDamage.front().damage == 35.0f,
+                "Desert Eagle body hit changed damage");
         room->setPlayerTeam(20, "Counter Terrorist");
         room->resetPlayerHealth(20);
         shopper->getObject3D().setPosition(Vector3f{0.0f, 0.0f, 0.0f});
@@ -584,12 +586,17 @@ int main()
         room->resetPlayerHealth(20);
         shopper->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
         fallingPlayer->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
+        shooter.consumeDamageEvents();
+        victim.consumeDamageEvents();
         const auto gunGameKills = room->getPlayerKills(10);
         require(sendAsShooter(client::Packet::Room::Player3D::fire(
                         shooter, Vector3f{0.0f, 0.0f, -1.0f}, 1)) ==
                         server::CommandResult::success &&
                         room->getPlayerHealth(20) < 100.0f,
                 "Gun Game starter weapon did not damage an opponent");
+        auto gunGameDamage = victim.consumeDamageEvents();
+        require(gunGameDamage.size() == 1 && gunGameDamage.front().damage == 100.0f,
+                "Glock headshot did not deal 100 damage");
         for (int kill = 1; kill <= 2; ++kill)
         {
             for (int shot = 0; shot < 5 && room->getPlayerHealth(20) > 0.0f; ++shot)
@@ -599,6 +606,12 @@ int main()
                         "Gun Game kill shot was rejected");
             require(room->getPlayerHealth(20) == 0.0f,
                     "Gun Game starter weapon could not kill an opponent");
+            if (kill == 2)
+            {
+                gunGameDamage = victim.consumeDamageEvents();
+                require(gunGameDamage.size() == 1 && gunGameDamage.front().damage == 100.0f,
+                        "MP5 headshot did not deal 100 damage");
+            }
             require(room->getPlayerKills(10) == gunGameKills + kill,
                     "Gun Game kill did not reach the leaderboard");
             if (kill == 1)
@@ -622,6 +635,9 @@ int main()
                         server::CommandResult::success &&
                         room->getPlayerHealth(20) < 100.0f,
                 "Gun Game blocked damage between players on the same selected side");
+        gunGameDamage = victim.consumeDamageEvents();
+        require(gunGameDamage.size() == 1 && gunGameDamage.front().damage == 200.0f,
+                "AK-47 headshot did not deal 200 damage");
         Registry::clear();
         server::RoomStorage::setClientCreationHandler({});
         server::RoomStorage::clear();

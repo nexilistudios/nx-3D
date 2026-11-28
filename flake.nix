@@ -8,7 +8,7 @@
     # GitHub archives carry no submodules, so the flake fetches them itself.
     # After bumping a submodule, update its rev here and run `nix flake lock`.
     nexilis = {
-      url = "github:nexilistudios/nexilis/23b89c068cbeee6ac87141d6b5ecbf91d073c47a";
+      url = "github:nexilistudios/nexilis/9ae9382ccfc90125ad016ba909d4c8bc8700469c";
       flake = false;
     };
     spear = {

@@ -353,6 +353,7 @@ void publishAnimation(nexilis::server::Room& room, nexilis::server::User& user,
 struct WeaponRule
 {
     float damage;
+    float headDamage;
     float roundsPerMinute;
     int magazine;
     int reserveMagazines;
@@ -367,7 +368,7 @@ std::optional<WeaponRule> weaponRule(const std::string& type)
                     object->kind != nx3d::NXObjectKind::melee))
         return std::nullopt;
     const auto& combat = object->combat;
-    return WeaponRule{combat.damage, combat.roundsPerMinute,
+    return WeaponRule{combat.damage, combat.headDamage, combat.roundsPerMinute,
                       combat.magazineSize, combat.reserveMagazines,
                       combat.reloadSeconds,
                       object->kind == nx3d::NXObjectKind::melee ? 100.0f : 5000.0f};
@@ -747,6 +748,7 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
     const float range = launcher ? 1200.0f : rule->range;
     float closest = range;
     uint64_t targetId = 0;
+    bool hitHead = false;
     for (auto id : room.getClients())
     {
         if (id == shooterId || room.getPlayerHealth(id) <= 0.0f ||
@@ -764,14 +766,15 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
             if (auto it = m_players.find(id); it != m_players.end())
                 targetCrouched = it->second.crouched;
         }
-        const float distance = nx3d::playerHitDistance(origin, aim, asGlm(position),
-                                                       target->getObject3D().getYaw(),
-                                                       targetCrouched ? nx3d::kCrouchingEyeHeight
-                                                                      : nx3d::kStandingEyeHeight);
-        if (distance < closest)
+        const auto hit = nx3d::playerHit(origin, aim, asGlm(position),
+                                        target->getObject3D().getYaw(),
+                                        targetCrouched ? nx3d::kCrouchingEyeHeight
+                                                       : nx3d::kStandingEyeHeight);
+        if (hit.distance < closest)
         {
-            closest = distance;
+            closest = hit.distance;
             targetId = id;
+            hitHead = hit.head;
         }
     }
     if (launcher)
@@ -791,7 +794,8 @@ std::optional<nexilis::server::Room::ShotHit> Authority::fire(
     }
     if (!targetId || mapPhysics(m_shipment).blocks(origin, origin + aim * closest))
         return std::nullopt;
-    return nexilis::server::Room::ShotHit{targetId, rule->damage};
+    return nexilis::server::Room::ShotHit{
+            targetId, hitHead && rule->headDamage > 0.0f ? rule->headDamage : rule->damage};
 }
 
 void Authority::reconcile(const nexilis::server::Room& room)

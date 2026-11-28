@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 
 namespace nx3d
@@ -45,9 +46,15 @@ inline float rayBoxDistance(const glm::vec3& origin, const glm::vec3& direction,
 // The player mesh is drawn around eye height. Its arms, torso, head and legs
 // occupy different widths, so one full-width box registers hits in empty air.
 // Crouching scales the rendered mesh vertically around the eye position.
-inline float playerHitDistance(const glm::vec3& origin, const glm::vec3& direction,
-                               const glm::vec3& playerPosition, float yaw,
-                               float eyeHeight = kStandingEyeHeight)
+struct PlayerHit
+{
+    float distance = std::numeric_limits<float>::infinity();
+    bool head = false;
+};
+
+inline PlayerHit playerHit(const glm::vec3& origin, const glm::vec3& direction,
+                           const glm::vec3& playerPosition, float yaw,
+                           float eyeHeight = kStandingEyeHeight)
 {
     const float c = std::cos(yaw);
     const float s = std::sin(yaw);
@@ -62,8 +69,8 @@ inline float playerHitDistance(const glm::vec3& origin, const glm::vec3& directi
         glm::vec3 min, max;
     };
     constexpr std::array<Box, 8> boxes{{
-            {{-8.0f, -2.0f, -8.0f}, {8.0f, 12.0f, 8.0f}},     // head
-            {{-15.0f, -12.0f, -9.0f}, {15.0f, -2.0f, 9.0f}},  // shoulders
+            {{-8.0f, -7.0f, -8.0f}, {8.0f, 12.0f, 8.0f}},     // head, including face
+            {{-15.0f, -12.0f, -9.0f}, {15.0f, -7.0f, 9.0f}},  // shoulders and throat
             {{-15.0f, -34.0f, -9.0f}, {15.0f, -12.0f, 9.0f}}, // torso
             {{-11.0f, -41.0f, -9.0f}, {11.0f, -34.0f, 9.0f}}, // hips
             {{-19.0f, -46.0f, -9.0f}, {-8.0f, -10.0f, 9.0f}}, // left arm
@@ -72,14 +79,27 @@ inline float playerHitDistance(const glm::vec3& origin, const glm::vec3& directi
             {{0.5f, -64.0f, -9.0f}, {11.0f, -41.0f, 9.0f}}    // right leg
     }};
     const float heightScale = eyeHeight / kStandingEyeHeight;
-    float nearest = std::numeric_limits<float>::infinity();
-    for (const auto& box : boxes)
+    PlayerHit hit;
+    for (std::size_t index = 0; index < boxes.size(); ++index)
     {
+        const auto& box = boxes[index];
         const glm::vec3 min(box.min.x, box.min.y * heightScale, box.min.z);
         const glm::vec3 max(box.max.x, box.max.y * heightScale, box.max.z);
-        nearest = std::min(nearest, detail::rayBoxDistance(localOrigin, localDirection, min, max));
+        const float distance = detail::rayBoxDistance(localOrigin, localDirection, min, max);
+        if (distance < hit.distance)
+        {
+            hit.distance = distance;
+            hit.head = index == 0;
+        }
     }
-    return nearest;
+    return hit;
+}
+
+inline float playerHitDistance(const glm::vec3& origin, const glm::vec3& direction,
+                               const glm::vec3& playerPosition, float yaw,
+                               float eyeHeight = kStandingEyeHeight)
+{
+    return playerHit(origin, direction, playerPosition, yaw, eyeHeight).distance;
 }
 
 } // namespace nx3d
