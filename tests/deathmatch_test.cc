@@ -424,6 +424,21 @@ int main()
         Registry::update(projectile.flightSeconds + 0.01f);
         require(room->getPlayerHealth(20) < 100.0f,
                 "Launcher projectile did not explode on arrival");
+        require(room->getPlayerHealth(10) < 100.0f,
+                "Own launcher projectile did not cause self damage");
+
+        room->resetPlayerHealth(10);
+        shopper->getObject3D().setPosition(Vector3f{-592.0f, 192.0f, 764.0f});
+        require(room->onPlayerAction(10, 19) &&
+                        room->onPlayerAction(10, nx3d::economy::kThrowGrenadeAction),
+                "HE grenade could not be bought and thrown");
+        nx3d::economy::GrenadeThrow ownGrenade;
+        require(nx3d::economy::decodeGrenade(latestServerEvent(shooter, "grenade"), ownGrenade),
+                "HE grenade event was not broadcast");
+        shopper->getObject3D().setPosition(Vector3f{ownGrenade.endX, 192.0f, ownGrenade.endZ});
+        Registry::update(nx3d::economy::kGrenadeFuseSeconds + 0.01f);
+        require(room->getPlayerHealth(10) < 100.0f,
+                "Own HE grenade did not cause self damage");
 
         nx3d::server::gamemode::GunGameMode gunGame;
         gunGame.onTeamSelected(*room, 10);

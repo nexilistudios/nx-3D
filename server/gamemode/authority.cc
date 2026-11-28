@@ -489,8 +489,9 @@ void Authority::update(nexilis::server::Room& room, float dt)
             continue;
         for (auto id : room.getClients())
         {
-            if (id == grenade.owner || room.getPlayerHealth(id) <= 0.0f ||
-                room.getPlayerTeam(id) == grenade.team || !room.canDamage(grenade.owner, id))
+            if (room.getPlayerHealth(id) <= 0.0f ||
+                (id != grenade.owner && room.getPlayerTeam(id) == grenade.team) ||
+                !room.canDamage(grenade.owner, id))
                 continue;
             auto victim = nexilis::server::ClientStorage::getClientById(id);
             if (!victim)
@@ -513,7 +514,7 @@ void Authority::update(nexilis::server::Room& room, float dt)
             room.broadcastToAll(nexilis::server::Command::createRoomCommand(
                     room.getId(), *owner, damageData, params, 0));
             if (killed)
-                room.onPlayerDied(grenade.owner, id);
+                room.onPlayerDied(id == grenade.owner ? 0 : grenade.owner, id);
         }
     }
     // A slow tick previously discarded everything beyond 50 ms, which made

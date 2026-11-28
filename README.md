@@ -97,7 +97,7 @@ docker compose up --build -d
 
 Use `docker compose logs -f server` to view its output and `docker compose down` to stop it. Compose uses host networking on Linux and a named volume for `/app/tls`, so the generated TLS identity and its pin survive container recreation. Remote clients need the configured authentication TCP, session TCP, and gameplay UDP ports. Allow these ports through the host firewall and forward them on the router when hosting behind NAT. The client accepts an IPv4 address or hostname in `-server`. The server currently has hardcoded credentials (`password` for players and `root` for administration); change them in `server/server.cc` before exposing it publicly.
 
-The client initially asks for a server address and username. Enter an IPv4 address or domain name (for example, `game.example.com`); the default is `127.0.0.1`. You can also start it with `-server <address> -username <name>` to connect immediately. Select a room with the arrow keys and Enter, then click a team to join. Players can create public Shipment or Dust II rooms for Deathmatch, Bomb, or Gun Game, with 2–16 players.
+The client initially asks for a server address and username. Enter an IPv4 address or domain name (for example, `game.example.com`); the default is `127.0.0.1`. You can also start it with `-server <address> -username <name>` to connect immediately. Select a room with the arrow keys and Enter, then click a team to join. Players can create public Shipment or Dust II rooms for Deathmatch, Bomb, or Gun Game, with 2–16 players. HE grenades and grenade launcher blasts can damage their owner in every mode.
 
 ### Nix
 

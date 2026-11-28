@@ -397,7 +397,7 @@ public:
                 continue;
             for (auto target : room.getClients())
             {
-                if (target == grenade.owner || room.getPlayerTeam(target) == grenade.team ||
+                if ((target != grenade.owner && room.getPlayerTeam(target) == grenade.team) ||
                     !room.canDamage(grenade.owner, target) || room.getPlayerHealth(target) <= 0.0f)
                     continue;
                 auto victim = nexilis::server::ClientStorage::getClientById(target);
@@ -422,7 +422,7 @@ public:
                 room.broadcastToAll(nexilis::server::Command::createRoomCommand(
                         room.getId(), *owner, damageData, params, 0));
                 if (killed)
-                    room.onPlayerDied(grenade.owner, target);
+                    room.onPlayerDied(target == grenade.owner ? 0 : grenade.owner, target);
             }
         }
     }
