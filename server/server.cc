@@ -18,6 +18,7 @@
 #include <server/gamemode/game_mode_registry.hh>
 #include <server/gun/gun_manager.hh>
 #include <server/room_policy.hh>
+#include <server/room_admission.hh>
 #include <server/tls_identity.hh>
 
 #include <shared/gamemode.hh>
@@ -147,6 +148,7 @@ int main(int argc, char* argv[])
     RoomStorage::setCreateHandler([](Room& room)
     {
         gamemode::GameModeRegistry::assignRoom(room, nx3d::gameModeFromName(room.getName()));
+        nx3d::server::admitConnectedClientsToRoom(room);
     });
 
     nexilis::ProtocolManager protocolManager;
@@ -183,6 +185,7 @@ int main(int argc, char* argv[])
         const auto now = std::chrono::steady_clock::now();
         const float dt = std::chrono::duration<float>(now - lastTick).count();
         lastTick = now;
+        nx3d::server::admitConnectedClientsToRooms();
         gunManager.update(dt);
         gamemode::GameModeRegistry::update(dt);
         return true;

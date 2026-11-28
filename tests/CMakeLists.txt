@@ -21,6 +21,11 @@ target_include_directories(deathmatch_test PRIVATE ${BULLET_INCLUDE_DIRS})
 target_link_libraries(deathmatch_test PRIVATE Nexilis::nexilis Boost::json ${BULLET_LIBRARIES} glm::glm)
 add_test(NAME deathmatch COMMAND deathmatch_test)
 
+add_executable(room_admission_test room_admission_test.cc)
+target_include_directories(room_admission_test PRIVATE ..)
+target_link_libraries(room_admission_test PRIVATE Nexilis::nexilis Boost::json)
+add_test(NAME room_admission COMMAND room_admission_test)
+
 add_executable(chat_text_test chat_text_test.cc)
 target_include_directories(chat_text_test PRIVATE ..)
 add_test(NAME chat_text COMMAND chat_text_test)

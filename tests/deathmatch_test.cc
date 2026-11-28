@@ -131,7 +131,8 @@ int main()
                         noTeamDamageRoom->canDamage(10, 20) &&
                         noTeamDamageRoom->canDamage(10, 10),
                 "Default room combat policy was not configured correctly");
-        require(room->allowsUser(roomCreator), "Public game room rejected a new player");
+        room->addAdmittedUser(roomCreator.getId());
+        require(room->allowsUser(roomCreator), "Admitted game room rejected a new player");
         room->joinRoom(10);
         room->joinRoom(20);
         require(room->canBroadcast(10, "hello", false), "Player chat was rejected");
